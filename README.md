@@ -1,220 +1,108 @@
 # LH_cooking
 
-A voice cooking coach for people cooking at home. The cook props up their
-phone, opens a web page, and talks to it: "let's start", "next", "is this
-done?", "can I use linguine instead?". The coach walks them through a recipe
-step by step, answers questions grounded in recipe notes, and can look through
-the phone camera with a vision-language model (VLM).
+A voice cooking coach for people cooking at home. The cook props up a phone,
+opens the web page, and talks to it: "let's start", "next", "is this done?",
+"can I use linguine instead?". The coach walks them through a recipe step by
+step and can look through the phone camera.
 
-Forked from PAL_OP (the Ocean Park guide) on 2026-11-02. The retrieval,
-conversation-memory and grounding design carried over; the zoo content, the
-YOLO/VGG16 vision service, the ESP32 firmware and the server-side speech
-stack did not. This repository starts from a single commit; PAL_OP's history
-stays in PAL_OP.
-
----
-
-## How it fits together
+## How it works now
 
 ```
-phone browser (chatbot/static/index.html)
-  camera  -> JPEG frame, attached to each question
-  mic     -> Web Speech API -> text
-  speaker <- speechSynthesis
-      |  wss://<domain>/ws   {"type": "ask", "message": "...", "image": "data:image/jpeg;base64,..."}
-      v
-chatbot (FastAPI, cook_api.py)
-  cook_main.py        one turn: onboarding -> look -> context -> model -> record
-  vision.py           VLM provider (none | openai_compatible | azure)
-  context_builder.py  step navigation, subject resolution, layered prompt
-  knowledge_base.py   recipes.yaml + glossary.yaml -> knowledge.db
-  conversation_state  memory.db: session profile, recipe + step, turns, ledger
-  streaming_openai.py personas: step | help | safety  -> gpt-5-mini (Azure)
-      ^
-Caddy (HTTPS) on Tencent Cloud Lighthouse
+Phone browser (chatbot/static/index.html)
+  mic -> speech-to-text in the browser
+  camera frame + question text
+        |
+        v
+Server (chatbot/cook_api.py, Python/FastAPI)
+  1. recipe notes  -> current step + relevant facts   (recipes.yaml, glossary.yaml)
+  2. VISION SLOT   -> describes the camera frame      (only for "is this done?"-type questions)
+  3. CHAT SLOT     -> writes the spoken reply
+        |
+        v
+Phone speaks the reply (text-to-speech in the browser)
 ```
 
-Speech runs in the browser, so the server only ever handles text and an
-optional frame. A phone only allows camera and microphone access over HTTPS
-(localhost is the one exception), which is why production sits behind Caddy
-with a real domain.
+Already working, tested locally:
 
-### One turn
+- First-run questions (name, experience, allergies, what are you cooking)
+- Step navigation by voice or buttons: start, next, back, repeat, "step 4"
+- Recipe questions answered from the notes (ingredients, substitutions, safety...)
+- Step timers, hands-free mode, camera preview
+- Runs with **no keys at all**: replies are then the recipe notes read back
+  word for word
 
-1. **Onboarding** (first four answers of a session, no model call): name,
-   kitchen experience, allergies / foods avoided, and what they're cooking.
-   The dish answer is resolved to a recipe if one matches.
-2. **Navigation** is decided by pattern, not by the model: `start`, `next`,
-   `go back`, `repeat`, `step 4`, `stop cooking`. It moves the step pointer
-   before the prompt is built. "Is it done?" is a doneness question, not
-   "next".
-3. **Look** -- only if a VLM is configured, the phone attached a frame, and
-   the question needs eyes ("is this done?", "does this look right?", a
-   safety question). The observation goes into the prompt; it never answers
-   the cook directly.
-4. **Context** is rendered as labelled layers: `[COOK] [RECIPE] [NOW]
-   [RECENT] [FACTS] [QUESTION]`. `[RECIPE]` carries the current step and its
-   "done when" cue, so the model and the camera judge against the same
-   target.
-5. **Persona**: `step` for navigation, `safety` for a safety facet or a
-   hazard the camera saw, `help` otherwise.
+## What's missing
 
-The recipe and step pointer live on the session, not on the current topic,
-so "what does emulsify mean?" in the middle of step 6 doesn't lose the
-cook's place.
+- [ ] **Chat model**: none connected yet. Fill in slot 1.
+- [ ] **Vision model**: none connected yet. Fill in slot 2.
+- [ ] **Recipes**: only 3 starter recipes, written as placeholders and marked
+      `starter:unverified`. They need checking and more need adding
+      (`chatbot/recipes.yaml`).
+- [ ] **Phone testing over the internet**: phones only allow camera and mic on
+      HTTPS, so testing on a real phone needs the Tencent Cloud deployment
+      (not set up yet). On a laptop, `localhost` works fine.
+- [ ] Replies are spoken only after the whole answer arrives (no streaming yet).
 
-## The two slots
+## Where to fill the slots
 
-Everything model-related lives in **one file, `chatbot/.env`** (template:
-`chatbot/.env.example`). Whoever picks the models fills in two slots and
-restarts the server; no code changes.
+Everything goes in **one file: `chatbot/.env`**. Copy `chatbot/.env.example`
+to `chatbot/.env` and fill it in. No code changes needed.
 
-| Slot | What it does | Variables |
-|---|---|---|
-| 1. Chat model | writes every reply | `OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_DEPLOYMENT_NAME` |
-| 2. Vision model | describes the camera frame when a question needs it | `VLM_PROVIDER`, `VLM_MODEL` (+ `VLM_BASE_URL`, `VLM_API_KEY` for non-Azure) |
+### Slot 1: chat model (writes the replies)
 
-Both on the university's Azure: fill slot 1, then set `VLM_PROVIDER=azure`
-and `VLM_MODEL=<an image-capable deployment>`. The VLM reuses slot 1's
-endpoint and key.
+```
+OPENAI_API_KEY=<Azure subscription key>
+AZURE_OPENAI_ENDPOINT=https://hkust.azure-api.net
+AZURE_DEPLOYMENT_NAME=gpt-5-mini        # or another deployment, e.g. gpt-4o-mini
+AZURE_OPENAI_API_VERSION=2024-10-21     # keep this for the HKUST endpoint
+```
 
-**Both slots can stay empty.** The coach then runs in *notes-only* mode:
-onboarding, step navigation, timers and retrieval all work, and replies are
-the recipe notes read back verbatim instead of model-written answers. Good
-enough to test the app before any model is chosen.
+### Slot 2: vision model (looks at the camera)
 
-`GET /health` shows what is live: `model.configured`, the deployment, and the
-vision provider.
+Using a model on the same Azure account (reuses slot 1's key):
 
-The coach's standing instructions (tone, length, grounding rules, the
-`step` / `help` / `safety` personas) are plain text in
-`chatbot/streaming_openai.py`, in `system_prompts`. They don't depend on which
-model is chosen.
+```
+VLM_PROVIDER=azure
+VLM_MODEL=<name of an Azure deployment that accepts images, e.g. gpt-4o>
+```
 
-> A variable set in the OS environment outranks `chatbot/.env`. On the
-> development PC an old `OPENAI_API_KEY` from PAL_OP is set as a Windows user
-> variable; while it exists, the coach uses that (expired) key instead of
-> notes-only mode. Remove it under *System Properties > Environment
-> Variables* if PAL_OP no longer needs it.
->
-> The repository-root `.env` is a PAL_OP leftover and is not read by anything.
+Using a model somewhere else (any OpenAI-style API):
 
-## Running it
+```
+VLM_PROVIDER=openai_compatible
+VLM_BASE_URL=<API base URL>
+VLM_API_KEY=<key>
+VLM_MODEL=<model name>
+```
 
-### Locally (recommended for testing)
+Leave `VLM_PROVIDER=none` to run without vision.
 
-```bash
+## Run it locally
+
+```
 cd chatbot
-python -m venv .venv && .venv/Scripts/activate      # or source .venv/bin/activate
+python -m venv .venv
+.venv\Scripts\activate          (Mac/Linux: source .venv/bin/activate)
 pip install -r requirements.txt
 python cook_api.py
 ```
 
-Open <http://localhost:8000> in a desktop browser (Chrome or Edge for voice
-input). Camera and microphone work on `localhost` without HTTPS, so a laptop
-webcam stands in for the phone. A phone on the same Wi-Fi can open the page
-but won't get camera or mic over plain `http://`; that needs HTTPS, which the
-Lighthouse deployment provides.
+Open http://localhost:8000 in Chrome or Edge.
 
-### Docker
+## Check your setup
 
-```bash
-make up        # docker compose up -d, coach on :8000
-make test      # scripted cooking session against the real model
-```
+- http://localhost:8000/health shows which chat model and vision model are
+  live (`"configured": false` means slot 1 is still empty).
+- To test the vision model on a single photo without the app, send a POST to
+  `/api/vision/test` with `{"image": "data:image/jpeg;base64,...", "question": "is this done?"}`.
+- `python scripts/check_model.py` checks that the chat model in slot 1 answers.
 
-### Tencent Cloud Lighthouse (later)
+## Good to know
 
-Not deployed yet. When it is, the same two slots go in `.env.lighthouse`
-instead of `chatbot/.env`:
-
-```bash
-cp .env.lighthouse.example .env.lighthouse         # DOMAIN, plus the two slots
-make lighthouse-up
-```
-
-- Point the domain's DNS at the Lighthouse public IP and open ports 80/443 in
-  the Lighthouse firewall; Caddy fetches the certificate itself.
-- A **mainland China** region requires ICP filing for a domain served from it.
-  Hong Kong and overseas regions do not.
-- The browser's speech recognition uses Google's service on Chrome/Android
-  and Apple's on Safari/iOS. Chrome's will not work for users inside mainland
-  China; if that audience matters, add Tencent ASR server-side.
-- Container names are prefixed `lh_cooking_`, so this stack can share a host
-  with PAL_OP, but only one Caddy can own ports 80/443.
-
-## The vision model
-
-Chosen by environment variable; nothing else changes:
-
-| `VLM_PROVIDER` | Needs | Use for |
-|---|---|---|
-| `none` (default) | -- | no camera understanding; the preview still shows |
-| `openai_compatible` | `VLM_BASE_URL`, `VLM_API_KEY`, `VLM_MODEL` | Tencent Hunyuan, Qwen-VL, OpenAI, a self-hosted vLLM -- anything speaking OpenAI chat completions with `image_url` parts |
-| `azure` | `VLM_MODEL` (deployment; defaults to the chat one) | an image-capable deployment on the HKUST Azure endpoint |
-
-`VLM_MODE=auto` (default) only calls the VLM when the question needs it;
-`always` sends every frame. The VLM is asked for JSON:
-`{summary, items[], state, hazards[]}`; a reply that isn't JSON is still
-used as a plain summary.
-
-Try a provider without the app:
-
-```bash
-curl -X POST localhost:8000/api/vision/test -H 'content-type: application/json' \
-     -d @frame.json      # {"image": "data:image/jpeg;base64,...", "question": "is this done?"}
-```
-
-A provider that fits neither shape is one subclass of `VisionProvider` in
-`chatbot/vision.py`: implement `_complete(image, mime, request)` and register
-it in `PROVIDERS`.
-
-Frames are held in memory for one request and never written to disk or
-logged. Only the text observation is stored with the turn.
-
-## The cooking knowledge
-
-| File | Role |
-|---|---|
-| `chatbot/recipes.yaml` | recipes: ingredients, ordered steps with `done_when` and `timer_seconds`, and facts |
-| `chatbot/glossary.yaml` | techniques, ingredients and kitchen topics (safety, storage) |
-| `chatbot/knowledge.db` | **built** from the two YAML files; gitignored, rebuilt in the Docker build |
-| `chatbot/memory.db` | runtime: session profile, recipe + step, turns, delivered-fact ledger |
-
-Each fact is one finished sentence with a facet: `overview ingredients
-technique doneness heat timing substitution safety equipment storage tip`.
-A recipe's `techniques:` list links it to glossary entries, so a technique
-question asked mid-recipe reaches the technique's own facts.
-
-**The current content is starter material** -- three recipes and about
-twenty glossary entries, all marked `source: starter:unverified`. Review the
-quantities, times and safety figures before anyone cooks from them.
-
-After editing either YAML file:
-
-```bash
-cd chatbot && python knowledge_base.py --rebuild
-python knowledge_base.py --ask "can I use linguine instead" --recipe "aglio olio"
-```
-
-Debug endpoints: `GET /health` (live model + vision provider),
-`/api/recipes`, `/api/knowledge` (facts per facet), `/api/context/{client_id}`,
-`/api/retrieve?q=...&recipe=...` (retrieval without a model call).
-
-## The chat model
-
-Unchanged from PAL_OP: **gpt-5-mini** on the HKUST Azure proxy, set by
-`AZURE_DEPLOYMENT_NAME`. `config.completion_kwargs()` emits the right
-parameters for gpt-5 vs gpt-4o; never pass `max_tokens` or `temperature` at
-a call site. `python scripts/check_model.py` verifies a deployment and exits
-non-zero on failure. gpt-5 gotchas: `temperature` must be 1, the api-version
-must stay `2024-10-21`, and a small completion budget returns an empty string
-rather than an error.
-
-## Known gaps
-
-- Replies are not streamed to the phone; it speaks once the whole answer
-  arrives.
-- "What do I do next time?" is read as "next step". Navigation patterns live
-  in `context_builder.NAV_PATTERNS`.
-- `docs/` still describes the zoo system and has not been rewritten.
+- An `OPENAI_API_KEY` set in your computer's environment variables overrides
+  `chatbot/.env`. If the server uses the wrong key, check there.
+- `chatbot/.env` is never committed to git. Don't put keys anywhere else.
+- The coach's instructions (tone, length, safety rules) are in
+  `chatbot/streaming_openai.py` under `system_prompts`.
+- More detail: `docs/technical-notes.md`. The other files in `docs/` describe
+  the older zoo project this was forked from.
