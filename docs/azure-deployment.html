@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="PAL_OP chatbot on Azure App Service (Linux, Python, no containers) - what was provisioned, the exact commands, the code changes required, and the traps found along the way.">
+<title>PAL_OP — Azure Deployment Runbook</title>
+<style>
+  /* --- reset --- */
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; }
+  img, svg { display: block; max-width: 100%; }
+  table { border-collapse: collapse; }
+  button { font: inherit; color: inherit; }
+
+  :root {
+    --ground:#E9EDEF; --surface:#FFFFFF; --surface-2:#F3F6F7;
+    --ink:#0F1A21; --ink-soft:#566874; --ink-faint:#8195A1;
+    --rule:#CFD9DF; --rule-soft:#E1E8EC;
+    --accent:#0B6575; --accent-soft:#DCEDF0;
+    --ok:#2C6E52; --ok-bg:#DDEDE4;
+    --warn:#9A6410; --warn-bg:#F6E9D2;
+    --hot:#A4382A; --hot-bg:#F6DFDB;
+    --shadow:0 1px 2px rgba(15,26,33,.06), 0 8px 24px -12px rgba(15,26,33,.18);
+    --sans: system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono: ui-monospace,"Cascadia Mono","SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --measure: 68ch;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#0B1216; --surface:#121E24; --surface-2:#16242B;
+      --ink:#DFE8EC; --ink-soft:#90A4AF; --ink-faint:#6A7F8B;
+      --rule:#23343C; --rule-soft:#1B2A31;
+      --accent:#56C2D2; --accent-soft:#12333A;
+      --ok:#63B58C; --ok-bg:#163025;
+      --warn:#DCA847; --warn-bg:#33290F;
+      --hot:#E47964; --hot-bg:#3A1F1A;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0B1216; --surface:#121E24; --surface-2:#16242B;
+    --ink:#DFE8EC; --ink-soft:#90A4AF; --ink-faint:#6A7F8B;
+    --rule:#23343C; --rule-soft:#1B2A31;
+    --accent:#56C2D2; --accent-soft:#12333A;
+    --ok:#63B58C; --ok-bg:#163025;
+    --warn:#DCA847; --warn-bg:#33290F;
+    --hot:#E47964; --hot-bg:#3A1F1A;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+  }
+
+  body { background:var(--ground); color:var(--ink); font-family:var(--sans);
+         font-size:16px; line-height:1.6; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:1040px; margin:0 auto; padding:48px 24px 96px;
+          display:flex; flex-direction:column; gap:40px; }
+
+  h1,h2,h3 { text-wrap:balance; margin:0; letter-spacing:-.02em; }
+  h1 { font-size:clamp(2rem,5vw,3rem); font-weight:760; line-height:1.08; }
+  h2 { font-size:1.5rem; font-weight:700; }
+  h3 { font-size:1.0625rem; font-weight:680; }
+  p { margin:0; max-width:var(--measure); }
+  .eyebrow { font-family:var(--mono); font-size:.6875rem; font-weight:600;
+             letter-spacing:.16em; text-transform:uppercase; color:var(--accent); }
+  .lede { font-size:1.125rem; color:var(--ink-soft); max-width:62ch; }
+  .note { font-size:.875rem; color:var(--ink-soft); }
+  code { font-family:var(--mono); font-size:.8125em; background:var(--surface-2);
+         border:1px solid var(--rule-soft); border-radius:3px; padding:.1em .35em;
+         word-break:break-word; }
+  a { color:var(--accent); }
+  a:focus-visible, summary:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:3px; }
+
+  pre { margin:0; background:var(--surface-2); border:1px solid var(--rule);
+        border-radius:8px; padding:16px; overflow-x:auto; font-family:var(--mono);
+        font-size:.8125rem; line-height:1.55; }
+  pre code { background:none; border:none; padding:0; font-size:inherit; }
+  .cmt { color:var(--ink-faint); }
+
+  .panel { background:var(--surface); border:1px solid var(--rule); border-radius:10px;
+           padding:24px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:16px; }
+  .flat { box-shadow:none; background:var(--surface-2); }
+  .callout { border-left:3px solid var(--hot); background:var(--hot-bg);
+             border-radius:0 8px 8px 0; padding:20px 22px;
+             display:flex; flex-direction:column; gap:12px; }
+  .callout.warn { border-left-color:var(--warn); background:var(--warn-bg); }
+  .callout.good { border-left-color:var(--ok); background:var(--ok-bg); }
+  .callout p, .callout li { max-width:74ch; }
+
+  .steps { display:flex; flex-direction:column; gap:0; }
+  .step { display:grid; grid-template-columns:80px 1fr; gap:20px; padding:22px 0;
+          border-top:1px solid var(--rule-soft); align-items:start; }
+  .step:first-child { border-top:none; }
+  .n { font-family:var(--mono); font-size:.6875rem; text-transform:uppercase;
+       letter-spacing:.1em; color:var(--ink-faint); padding-top:4px; }
+  .n b { display:block; font-size:1.375rem; color:var(--ink); font-weight:700; text-transform:none; }
+  .sbody { display:flex; flex-direction:column; gap:12px; min-width:0; }
+
+  .scroll { overflow-x:auto; border:1px solid var(--rule); border-radius:8px; }
+  table { width:100%; font-size:.875rem; min-width:560px; }
+  th,td { text-align:left; padding:10px 14px; border-bottom:1px solid var(--rule-soft); vertical-align:top; }
+  thead th { font-family:var(--mono); font-size:.6875rem; text-transform:uppercase;
+             letter-spacing:.1em; color:var(--ink-soft); background:var(--surface-2);
+             border-bottom:1px solid var(--rule); white-space:nowrap; }
+  tbody tr:last-child td { border-bottom:none; }
+  td.mono { font-family:var(--mono); font-size:.8125rem; white-space:nowrap; }
+
+  .pill { display:inline-block; font-family:var(--mono); font-size:.6875rem; font-weight:600;
+          padding:2px 8px; border-radius:999px; white-space:nowrap; }
+  .p-ok{background:var(--ok-bg);color:var(--ok)} .p-warn{background:var(--warn-bg);color:var(--warn)}
+  .p-hot{background:var(--hot-bg);color:var(--hot)} .p-flat{background:var(--surface-2);color:var(--ink-soft);border:1px solid var(--rule)}
+
+  ul,ol { margin:0; padding-left:20px; display:flex; flex-direction:column; gap:8px; }
+  li { max-width:var(--measure); }
+  hr { border:none; border-top:1px solid var(--rule); margin:0; }
+  footer { color:var(--ink-faint); font-size:.8125rem; display:flex; flex-direction:column; gap:6px; }
+
+  .theme-toggle { position:fixed; top:16px; right:16px; z-index:50; display:inline-flex;
+    align-items:center; gap:7px; padding:7px 13px; background:var(--surface); color:var(--ink-soft);
+    border:1px solid var(--rule); border-radius:999px; font-family:var(--mono); font-size:.6875rem;
+    letter-spacing:.08em; text-transform:uppercase; cursor:pointer; box-shadow:var(--shadow); }
+  .theme-toggle:hover { color:var(--ink); border-color:var(--ink-faint); }
+  .theme-toggle .dot { width:9px; height:9px; border-radius:50%; background:var(--accent); flex:none; }
+
+  @media print { .theme-toggle{display:none} body{background:#fff;color:#000}
+    .panel{box-shadow:none;break-inside:avoid} }
+  @media (max-width:640px){ .step{grid-template-columns:1fr;gap:10px} .n{padding-top:0}
+    .n b{display:inline;font-size:1.125rem;margin-left:8px} }
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" id="themeToggle" type="button"><span class="dot"></span><span id="themeLabel">Theme</span></button>
+
+<div class="wrap">
+
+  <header style="display:flex;flex-direction:column;gap:16px">
+    <div style="font-family:var(--mono);font-size:.75rem;color:var(--ink-faint)">
+      PAL_OP · chatbot service · Azure for Students (sfengam) · Switzerland North · updated 2026-08-11
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="eyebrow">Azure App Service · Linux · Python · no containers</div>
+      <h1>Deployment runbook</h1>
+    </div>
+    <p class="lede">
+      What was provisioned, the exact commands that did it, the four code changes the platform
+      required, and the traps that would have failed silently in production.
+    </p>
+  </header>
+
+  <section class="callout good">
+    <div class="eyebrow" style="color:var(--ok)">Status · live</div>
+    <h3>Deployed and serving</h3>
+    <p>
+      <strong><a href="https://palop-chatbot-hk.azurewebsites.net">https://palop-chatbot-hk.azurewebsites.net</a></strong>
+    </p>
+    <p>Verified end to end from a client: WebSocket connect, then a real model reply in 3.01 s.</p>
+<pre><code>GET /health   → 200  {"status":"healthy","components":{"openai":true,
+                       "tts":"elevenlabs","stt":"google","database":true}}
+
+wss://palop-chatbot-hk.azurewebsites.net/ws
+  [0.00s] &lt;- system    "Welcome to Ocean Park! I'm your zoo guide!"
+  [0.29s] &lt;- thinking  "Let me check..."
+  [3.01s] &lt;- response  "King penguins are the second largest penguin
+                        species and can weigh up to 17.3 kilograms!"</code></pre>
+    <p class="note">
+      Two of those health fields double as proof that the code fixes below took effect on the real
+      platform: <code>"stt":"google"</code> means speech recognition survived without <code>pyaudio</code>,
+      and <code>"database":true</code> means <code>zoo.db</code> was found despite the working directory
+      not being the code directory.
+    </p>
+  </section>
+
+  <section class="panel">
+    <div><div class="eyebrow">Inventory</div><h2 style="margin-top:6px">What exists in Azure now</h2></div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Resource</th><th>Name</th><th>Detail</th></tr></thead>
+        <tbody>
+          <tr><td>Subscription</td><td class="mono">Azure for Students<br>sfengam@connect.ust.hk</td><td class="mono">1605ab78-e2a6-4a7d-8198-7cffb175ff48</td></tr>
+          <tr><td>Resource group</td><td class="mono">palop-rg</td><td>Switzerland North — <span class="pill p-warn">not Asia; see trap 04</span></td></tr>
+          <tr><td>App Service plan</td><td class="mono">palop-plan</td><td>F1 / Free / Linux — <span class="pill p-ok">no cost</span></td></tr>
+          <tr><td>Web app</td><td class="mono">palop-chatbot-hk</td><td>PYTHON|3.12, Running</td></tr>
+          <tr><td>App settings</td><td class="mono">15</td><td>secrets from <code>.env</code>, never committed</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">
+      Nothing else was provisioned. Postgres, Redis, Qdrant and mediamtx from <code>docker-compose.yml</code>
+      have <strong>no Azure equivalent here on purpose</strong> — no code in <code>chatbot/</code> imports a
+      client for any of them, and <code>DATABASE_URL</code>/<code>REDIS_URL</code> are injected by compose but
+      never read. Six services became one.
+    </p>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:8px">
+    <div class="eyebrow">Reproducible</div>
+    <h2>The commands, in order</h2>
+    <p class="note">Every one of these was actually run. Re-runnable from scratch on any subscription without a region policy.</p>
+  </section>
+
+  <div class="panel steps">
+
+    <div class="step">
+      <div class="n">Step<b>01</b></div>
+      <div class="sbody">
+        <h3>Pick a subscription that allows your region</h3>
+<pre><code>az account set --subscription 1605ab78-e2a6-4a7d-8198-7cffb175ff48
+
+<span class="cmt"># check for a region allow-list policy BEFORE provisioning</span>
+az policy assignment list \
+  --query "[?displayName=='Allowed resource deployment regions'].parameters.listOfAllowedLocations.value" -o json</code></pre>
+        <p class="note">
+          This check is not optional — see <a href="#trap-region">the region traps</a>. An empty result
+          means no restriction. On Azure for Students it returns five European/African regions and
+          <strong>no Asian region at all</strong>.
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="n">Step<b>02</b></div>
+      <div class="sbody">
+        <h3>Resource group, plan, web app</h3>
+<pre><code>az group create -n palop-rg -l switzerlandnorth
+
+az appservice plan create -g palop-rg -n palop-plan --is-linux --sku F1 -l switzerlandnorth
+
+az webapp create -g palop-rg -p palop-plan -n palop-chatbot-hk --runtime "PYTHON:3.12"
+
+<span class="cmt"># ALWAYS check this - a plan can create fine while the app lands stopped</span>
+az webapp show -g palop-rg -n palop-chatbot-hk --query state</code></pre>
+        <p class="note">
+          App names are globally unique. Check first with the
+          <code>checknameavailability</code> ARM endpoint rather than discovering it on failure.
+        </p>
+        <p class="note">
+          Expect intermittent <code>ResourceNotFound</code> from <code>az webapp show</code> and
+          <code>config set</code> for a minute or two after creation — ARM propagation lag, not a
+          real failure. Retry rather than recreating.
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="n">Step<b>03</b></div>
+      <div class="sbody">
+        <h3>Runtime, startup command, WebSockets</h3>
+<pre><code>az webapp config set -g palop-rg -n palop-chatbot-hk \
+  --linux-fx-version "PYTHON|3.12" \
+  --startup-file "gunicorn -w 2 -k uvicorn.workers.UvicornWorker \
+                  -b 0.0.0.0:8000 --timeout 600 zoo_api:app" \
+  --web-sockets-enabled true</code></pre>
+        <p>
+          Three things here are load-bearing. <code>az webapp create</code> returned an
+          <strong>empty</strong> <code>linuxFxVersion</code> despite the <code>--runtime</code> flag, so it is
+          set again explicitly. <code>--timeout 600</code> is included because Microsoft's own documented
+          command omits it, which silently drops you to Gunicorn's 30-second default. And
+          <code>--web-sockets-enabled</code> is set rather than assumed: Microsoft documents no default value
+          for it anywhere.
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="n">Step<b>04</b></div>
+      <div class="sbody">
+        <h3>App settings — secrets and platform flags</h3>
+<pre><code>az webapp config appsettings set -g palop-rg -n palop-chatbot-hk --settings \
+  AZURE_OPENAI_ENDPOINT=... AZURE_OPENAI_API_VERSION=... AZURE_DEPLOYMENT_NAME=... \
+  OPENAI_API_KEY=... ELEVENLABS_API_KEY=... ELEVENLABS_VOICE=... \
+  TTS_PROVIDER=elevenlabs \
+  SCM_DO_BUILD_DURING_DEPLOYMENT=1 \
+  WEBSITES_CONTAINER_STOP_TIME_LIMIT=120 \
+  PYTHONUNBUFFERED=1</code></pre>
+        <p>
+          <code>SCM_DO_BUILD_DURING_DEPLOYMENT=1</code> is what makes Oryx run
+          <code>pip install -r requirements.txt</code> at all — without it, zip deploy ships your code with
+          no dependencies. <code>WEBSITES_CONTAINER_STOP_TIME_LIMIT=120</code> raises the graceful-shutdown
+          window from its 5-second default, which is far too short to close WebSockets cleanly on a restart.
+        </p>
+        <p class="note">
+          Secrets go here, never into the deployment package — <code>.env</code> is deliberately excluded
+          from the zip in the next step.
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="n">Step<b>05</b></div>
+      <div class="sbody">
+        <h3>Deploy</h3>
+<pre><code><span class="cmt"># zip the CONTENTS of chatbot/ — requirements.txt must be at the package root,</span>
+<span class="cmt"># excluding .env, __pycache__, logs/, memory.db</span>
+az webapp deploy -g palop-rg -n palop-chatbot-hk \
+  --src-path palop-deploy.zip --type zip</code></pre>
+        <p>
+          Oryx detects <code>requirements.txt</code> <strong>only in the package root</strong>, which is why
+          the zip contains the contents of <code>chatbot/</code> rather than the repository root.
+          Expect <code>"status": "RuntimeSuccessful"</code>.
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="n">Step<b>06</b></div>
+      <div class="sbody">
+        <h3>Verify, and stream logs if it fails</h3>
+<pre><code>curl -s https://palop-chatbot-hk.azurewebsites.net/health
+
+az webapp log tail -g palop-rg -n palop-chatbot-hk
+
+<span class="cmt"># shell onto the instance to inspect the real filesystem</span>
+<span class="cmt"># https://palop-chatbot-hk.scm.azurewebsites.net/webssh/host</span></code></pre>
+      </div>
+    </div>
+
+  </div>
+
+  <section style="display:flex;flex-direction:column;gap:8px">
+    <div class="eyebrow">Required before it would run at all</div>
+    <h2>Code changes the platform forced</h2>
+  </section>
+
+  <section class="callout">
+    <div class="eyebrow" style="color:var(--hot)">Trap 01 · would crash on the TTS hot path</div>
+    <h3>No ffmpeg — and the obvious workaround does not work</h3>
+    <p>
+      <code>pydub.AudioSegment.from_mp3()</code> shells out to an <strong>ffmpeg binary</strong>. The App
+      Service Python image ships neither ffmpeg nor ffprobe, and there is no root to <code>apt-get</code> them.
+    </p>
+    <p>
+      The usual fix — <code>pip install imageio-ffmpeg</code> and set <code>AudioSegment.converter</code> —
+      <strong>still fails</strong>, because <code>from_mp3()</code> spawns <strong>ffprobe first</strong> to sniff
+      the format, and imageio-ffmpeg ships ffmpeg only. Worse, the widely-copied
+      <code>AudioSegment.ffprobe = "..."</code> line is a <strong>silent no-op</strong>: pydub has no such
+      attribute, so Python just creates an unused one and the decode still raises.
+    </p>
+    <p>
+      <strong>Fix applied:</strong> replaced the decode with <code>miniaudio</code>, which does MP3 decode,
+      stereo→mono downmix and the 16 kHz resample in one in-process C call. A 200 KB wheel instead of an
+      80 MB binary, and no subprocess per phrase.
+    </p>
+<pre><code>decoded = miniaudio.decode(mp3_audio,
+                           output_format=miniaudio.SampleFormat.SIGNED16,
+                           nchannels=1, sample_rate=16000)</code></pre>
+    <p class="note">
+      Verified locally against a real 21,696-byte MP3 → 16 kHz mono s16, 2.71 s, valid RIFF/WAVE header
+      matching the ESP32 I2S contract.
+    </p>
+  </section>
+
+  <section class="callout">
+    <div class="eyebrow" style="color:var(--hot)">Trap 02 · would have failed silently</div>
+    <h3>One import killed speech recognition entirely</h3>
+    <p>
+      <code>speech_recognition</code> and <code>pyaudio</code> shared a <code>try</code> block. PyAudio needs
+      <code>portaudio19-dev</code>, which cannot be installed on App Service — so its <code>ImportError</code>
+      set <code>HAS_SPEECH_RECOGNITION = False</code>.
+    </p>
+    <p>
+      The failure mode is the dangerous kind: the service boots, passes health checks, accepts WebSockets, and
+      simply <strong>never transcribes anything</strong>. <code>gtts</code> was gated the same way through
+      <code>pygame.mixer.init()</code>.
+    </p>
+    <p>
+      <strong>Fix applied:</strong> split the imports so <code>pygame</code> and <code>pyaudio</code> are
+      independently optional. Neither is needed server-side — one is local playback, the other live microphone
+      capture, and this server does neither.
+    </p>
+  </section>
+
+  <section class="callout warn">
+    <div class="eyebrow" style="color:var(--warn)">Trap 03 · startup crash loop</div>
+    <h3>A relative path that only resolves on your laptop</h3>
+    <p>
+      <code>zoo_api.py</code> checked <code>os.path.exists("zoo.db")</code> — relative to the working
+      directory. Under App Service build automation the app is served from <code>/tmp/&lt;uid&gt;</code>, not the
+      code directory, so that check reports <em>missing</em> and the next line imports
+      <code>create_zoo_database</code> — <strong>a module that does not exist anywhere in this repo</strong>.
+      A false negative becomes <code>ModuleNotFoundError</code> in a restart loop.
+    </p>
+    <p>
+      <strong>Fix applied:</strong> resolve against <code>__file__</code> and log rather than import. Also
+      <code>uvicorn.run(port=8000)</code> now reads <code>$PORT</code>.
+    </p>
+  </section>
+
+  <section class="callout warn" id="trap-region">
+    <div class="eyebrow" style="color:var(--warn)">Trap 04 · blocked provisioning outright</div>
+    <h3>Azure for Students bans every Asian region</h3>
+    <p>
+      The first attempt targeted the Students subscription. Creating the plan failed with
+      <code>RequestDisallowedByAzure</code>. Its policy allows only:
+    </p>
+<pre><code>austriaeast · switzerlandnorth · southafricanorth
+germanywestcentral · italynorth</code></pre>
+    <p>
+      No Asian region at all. For a product serving Hong Kong Ocean Park that is a real cost —
+      <strong>measured at 3.01 s to first response from Switzerland versus 1.63 s from East Asia</strong>,
+      so roughly 1.4 s handed back. The app lives on Students for account-ownership reasons, so this is
+      accepted for now. Two ways out: raise an Azure support request to add <code>eastasia</code> to the
+      Students allow-list, or move to an Asian region on a different subscription before real users.
+    </p>
+  </section>
+
+  <section class="callout warn">
+    <div class="eyebrow" style="color:var(--warn)">Trap 05 · app created, then silently stopped</div>
+    <h3>Free-tier capacity is per REGION, and B1 quota is zero</h3>
+    <p>
+      The first Students attempt used <code>germanywestcentral</code>. The resource group and the F1 plan
+      both created cleanly — and then the web app sat in state <code>QuotaExceeded</code>, refusing every
+      request with <code>403 · This web app is stopped</code>. Every usage counter read <code>0</code>
+      against a limit of <code>-1</code>, so it was not consumption; that region is simply out of free-tier
+      capacity.
+    </p>
+    <p>
+      Upgrading was not an escape either — <code>az appservice plan update --sku B1</code> returned
+      <strong>Current Limit (B1 VMs): 0</strong>. Azure for Students carries no Basic quota at all.
+    </p>
+    <p>
+      <strong>How it was diagnosed:</strong> create a throwaway F1 app in a different allowed region and
+      compare. The probe in <code>switzerlandnorth</code> came up <code>Running</code>, proving the block was
+      regional rather than subscription-wide. Rebuilding there worked.
+    </p>
+<pre><code><span class="cmt"># a plan creating successfully proves nothing - always check the APP state</span>
+az webapp show -g palop-rg -n &lt;app&gt; --query state
+<span class="cmt"># "Running" = good.  "QuotaExceeded" = pick another region.</span></code></pre>
+  </section>
+
+  <section class="panel">
+    <div><div class="eyebrow">Dependencies</div><h2 style="margin-top:6px">requirements.txt, trimmed</h2></div>
+    <p>Removed — none of these are imported anywhere in <code>chatbot/</code>:</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Removed</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">torch, transformers</td><td>Imported nowhere. ~2 GB through a build that has a time limit.</td></tr>
+          <tr><td class="mono">pyttsx3</td><td>Imported nowhere.</td></tr>
+          <tr><td class="mono">PyAudio</td><td>Needs <code>portaudio19-dev</code>; cannot build on App Service. Live-mic only.</td></tr>
+          <tr><td class="mono">pygame</td><td>Local speaker playback. A server never plays audio.</td></tr>
+          <tr><td class="mono">pi</td><td>Appears to have been added by accident.</td></tr>
+          <tr><td class="mono">dotenv</td><td>Wrong package — <code>from dotenv import load_dotenv</code> needs <code>python-dotenv</code>.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Added: <code>miniaudio</code> (MP3 decode without a binary) and <code>gunicorn</code> (the startup command).</p>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:16px">
+    <div><div class="eyebrow">Not done yet</div><h2>What is still open</h2></div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Item</th><th>Why it matters</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>F1 caps at 5 WebSockets</strong></td>
+            <td>Linux Free allows 5 concurrent sockets, and has no Always On — the app unloads after 20 min idle, dropping every ESP32 connection. <strong>The usual fix is blocked here:</strong> Azure for Students has a B1 VM quota of 0, so <code>--sku B1</code> fails outright.</td>
+            <td>Request a Basic quota increase for the Students subscription, or move to a subscription that has one</td>
+          </tr>
+          <tr>
+            <td><strong>Region is Switzerland, not Asia</strong></td>
+            <td>Students bans every Asian region. Measured 3.01 s to first response versus 1.63 s from East Asia — about 1.4 s of the latency work handed back.</td>
+            <td>Support request to allow <code>eastasia</code>, or relocate before real users</td>
+          </tr>
+          <tr>
+            <td><strong>4-minute idle timeout</strong></td>
+            <td>Azure Load Balancer tears down idle connections at ~240 s and it is <em>not configurable</em>. The ESP32 already pings every 15 s, so it is covered — but the server ignores those pings.</td>
+            <td>Handle <code>ping</code> server-side</td>
+          </tr>
+          <tr>
+            <td><strong><code>memory.db</code> is ephemeral</strong></td>
+            <td>Written relative to a working directory under <code>/tmp/&lt;uid&gt;</code>. Only <code>/home</code> persists, so conversation memory is lost on every restart.</td>
+            <td>Write under <code>/home</code></td>
+          </tr>
+          <tr>
+            <td><strong>Inference service not deployed</strong></td>
+            <td>torch + ultralytics + opencv + a 512 MB checkpoint will not fit an Oryx build, and it pulls RTSP, which does not work from Azure regardless.</td>
+            <td>Keep on-prem near the cameras</td>
+          </tr>
+          <tr>
+            <td><strong>Sync OpenAI client</strong></td>
+            <td>Blocks the event loop for the whole generation, so the sentence-boundary TTS streaming cannot overlap.</td>
+            <td><code>AsyncAzureOpenAI</code></td>
+          </tr>
+          <tr>
+            <td><strong>ElevenLabs key rotation</strong></td>
+            <td><code>sk_9f2d33…</code> is still public in iteration 1's <code>.env.example</code>.</td>
+            <td>Rotate in the dashboard</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <hr>
+
+  <footer>
+    <div>Azure facts verified against current Microsoft documentation (learn.microsoft.com, the Oryx repository, and the live control plane), not recalled.</div>
+    <div>Commands shown are the ones actually executed. Deployment status: <code>RuntimeSuccessful</code>, 1 instance, 0 failed.</div>
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    var root = document.documentElement,
+        btn = document.getElementById('themeToggle'),
+        label = document.getElementById('themeLabel'),
+        order = ['system','light','dark'], saved = 'system';
+    function apply(m){ if(m==='system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme',m);
+      label.textContent=m; btn.setAttribute('aria-label','Colour theme: '+m+'. Click to change.'); }
+    try { saved = localStorage.getItem('palop-theme') || 'system'; } catch(e){}
+    if (order.indexOf(saved)===-1) saved='system';
+    apply(saved);
+    btn.addEventListener('click', function(){
+      saved = order[(order.indexOf(saved)+1)%order.length];
+      try { localStorage.setItem('palop-theme', saved); } catch(e){}
+      apply(saved);
+    });
+  })();
+</script>
+</body>
+</html>

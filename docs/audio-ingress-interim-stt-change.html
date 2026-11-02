@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PAL_OP Audio Ingress: Interim STT Change</title>
+<style>
+  :root { --ink:#17252d; --muted:#596a73; --ground:#edf2f3; --paper:#fff; --rule:#cbd8dc; --accent:#086b77; --accent-bg:#dff0f2; --warn:#815411; --warn-bg:#fbf0dc; --old:#9b3c31; --old-bg:#f9e4e1; --code:#122127; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--ground); color:var(--ink); font:16px/1.6 Georgia, "Times New Roman", serif; }
+  main { width:min(1060px, calc(100% - 32px)); margin:0 auto; padding:52px 0 88px; }
+  header { border-bottom:4px solid var(--accent); padding-bottom:28px; margin-bottom:32px; }
+  h1, h2, h3 { font-family:"Segoe UI", Arial, sans-serif; line-height:1.16; margin:0; }
+  h1 { font-size:clamp(2rem, 5vw, 3.25rem); max-width:17ch; }
+  h2 { font-size:1.55rem; margin-bottom:14px; }
+  h3 { font-size:1.08rem; }
+  .eyebrow { color:var(--accent); font:700 .75rem/1.3 Consolas, monospace; letter-spacing:.12em; text-transform:uppercase; margin-bottom:12px; }
+  .lede { max-width:70ch; color:var(--muted); font-size:1.12rem; margin:16px 0 0; }
+  section { background:var(--paper); border:1px solid var(--rule); border-radius:8px; padding:28px; margin-top:20px; }
+  p, li { max-width:78ch; }
+  p { margin:0 0 14px; }
+  ul, ol { margin:0; padding-left:22px; }
+  li + li { margin-top:8px; }
+  code { font-family:Consolas, "Cascadia Mono", monospace; font-size:.9em; background:#e9f0f1; padding:.1em .3em; border-radius:3px; }
+  pre { overflow:auto; margin:14px 0 0; padding:18px; background:var(--code); color:#e6f3f5; border-radius:6px; font:13px/1.5 Consolas, "Cascadia Mono", monospace; }
+  .tag { display:inline-block; border-radius:3px; padding:2px 7px; font:700 .72rem/1.35 Consolas, monospace; letter-spacing:.04em; text-transform:uppercase; }
+  .old { background:var(--old-bg); color:var(--old); } .new { background:var(--accent-bg); color:var(--accent); } .warn { background:var(--warn-bg); color:var(--warn); }
+  .grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:20px; }
+  .box { border:1px solid var(--rule); border-radius:6px; padding:18px; }
+  .chain { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:8px; margin-top:16px; }
+  .step { background:#eff5f6; border:1px solid var(--rule); border-radius:5px; padding:11px; font:700 .76rem/1.35 "Segoe UI", Arial, sans-serif; text-align:center; }
+  .step strong { color:var(--accent); display:block; font:700 1rem Consolas, monospace; margin-bottom:3px; }
+  .callout { border-left:4px solid var(--warn); background:var(--warn-bg); padding:18px 20px; margin-top:16px; }
+  @media (max-width:720px) { main { width:min(100% - 20px, 1060px); padding-top:28px; } section { padding:20px; } .grid, .chain { grid-template-columns:1fr; } pre { font-size:12px; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">PAL_OP / chatbot / change record</div>
+    <h1>Audio ingress interim STT</h1>
+    <p class="lede">A code-level record of the change in <code>chatbot/audio_receiver.py</code>. It adds progressive speech-to-text updates while preserving <code>audio_complete</code> as the boundary that creates one final chatbot response.</p>
+  </header>
+
+  <section>
+    <h2>Current ingress chain</h2>
+    <div class="chain">
+      <div class="step"><strong>1</strong>ESP32 sends<br><code>audio_chunk</code></div>
+      <div class="step"><strong>2</strong>Receiver decodes Base64<br>and queues bytes</div>
+      <div class="step"><strong>3</strong>Queue worker appends<br>to utterance buffer</div>
+      <div class="step"><strong>4</strong>Rolling WAV snapshot<br>goes to gSTT</div>
+      <div class="step"><strong>5</strong><code>COMPLETE</code> runs final STT,<br>then OpenAI/TTS</div>
+    </div>
+    <p>The socket reader in <code>_handle_audio_stream()</code> remains the ingress point. For every <code>audio_chunk</code>, it decodes <code>message["audio"]</code> and appends the resulting bytes to <code>self.audio_queues[client_id]</code>. The worker <code>_process_audio_queue()</code> owns utterance assembly and recognition.</p>
+  </section>
+
+  <section>
+    <h2>Behavior before the change</h2>
+    <span class="tag old">Previous behavior</span>
+    <p>Each received packet was stored, but no STT call occurred until the client supplied <code>{"type": "audio_complete"}</code>. The complete marker was appended as the string <code>"COMPLETE"</code>.</p>
+    <pre>elif msg_type == "audio_complete":
+    if client_id in self.audio_queues:
+        self.audio_queues[client_id].append("COMPLETE")
+
+# _process_audio_queue()
+if item == "COMPLETE":
+    if len(audio_chunks) &gt; 0:
+        combined_wav = self._combine_to_proper_wav(audio_chunks, client_id)
+        text = await self._google_stt(combined_wav)
+        await self._process_with_openai_and_stream(text, client_id, websocket, ...)
+
+if isinstance(item, bytes):
+    audio_chunks.append(item)</pre>
+    <p>That ordering creates a strict batch boundary: microphone capture, transport, queueing, WAV assembly, and gSTT all wait for <code>COMPLETE</code>. The response path then starts only after final recognition returns.</p>
+  </section>
+
+  <section>
+    <h2>Code added</h2>
+    <span class="tag new">Current behavior</span>
+    <div class="grid">
+      <div class="box">
+        <h3>Per-client state</h3>
+        <pre>self.interim_stt_tasks: Dict[str, asyncio.Task] = {}
+self.interim_stt_pending: Dict[str, bool] = {}
+self.last_interim_text: Dict[str, str] = {}</pre>
+        <p><code>interim_stt_tasks</code> limits each client to one ongoing HTTP recognition request. <code>interim_stt_pending</code> coalesces packets received during that request. <code>last_interim_text</code> suppresses duplicate UI updates.</p>
+      </div>
+      <div class="box">
+        <h3>New call after each chunk</h3>
+        <pre>if isinstance(item, bytes):
+    audio_chunks.append(item)
+    self._start_interim_stt(audio_chunks, client_id, websocket)</pre>
+        <p>This call runs after the chunk enters the utterance buffer. It does not remove chunks and does not invoke OpenAI or TTS.</p>
+      </div>
+    </div>
+    <pre>def _start_interim_stt(self, audio_chunks, client_id, websocket):
+    task = self.interim_stt_tasks.get(client_id)
+    if task and not task.done():
+        self.interim_stt_pending[client_id] = True
+        return
+
+    self.interim_stt_pending[client_id] = False
+    self.interim_stt_tasks[client_id] = asyncio.create_task(
+        self._recognize_interim_snapshot(audio_chunks, client_id, websocket)
+    )
+
+async def _recognize_interim_snapshot(self, chunks, client_id, websocket):
+    wav_bytes = self._combine_to_proper_wav(list(chunks), client_id)
+    if not wav_bytes or len(wav_bytes) &lt; 10000:
+        return
+
+    text = await self._google_stt(wav_bytes)
+    if text and text != self.last_interim_text.get(client_id):
+        self.last_interim_text[client_id] = text
+        await websocket.send_json({
+            "type": "stt_interim", "text": text, "client_id": client_id,
+        })
+
+    # In finally: schedule a fresh snapshot after any queued chunks.
+    if self.interim_stt_pending.pop(client_id, False):
+        asyncio.get_running_loop().call_soon(
+            self._start_interim_stt, chunks, client_id, websocket
+        )</pre>
+  </section>
+
+  <section>
+    <h2>Rationale</h2>
+    <ol>
+      <li><strong>Raw chunks are not safe STT input.</strong> Individual packets can be raw PCM or fragments of WAV data. <code>_combine_to_proper_wav()</code> normalizes the accumulated bytes into a complete WAV container using the client sample rate and channel settings.</li>
+      <li><strong>The installed gSTT adapter is batch-only.</strong> <code>optimized_voice.py</code> writes its input to a temporary WAV file and calls <code>recognizer.recognize_google(...)</code>. It cannot keep a single recognition session open while new audio arrives.</li>
+      <li><strong>Snapshots provide progressive feedback without invalid audio.</strong> The receiver makes an asynchronous request using the audio captured so far. The client receives changed results as <code>stt_interim</code>.</li>
+      <li><strong>One in-flight request avoids request storms.</strong> If packets arrive faster than gSTT replies, the receiver marks the latest state pending rather than starting a request per packet. Once the current task ends, it processes the newest buffer.</li>
+      <li><strong><code>COMPLETE</code> remains the turn boundary.</strong> Interim text is display-only. The existing final STT call and <code>_process_with_openai_and_stream()</code> remain in the <code>COMPLETE</code> branch, so the assistant does not answer multiple times while the user is speaking.</li>
+    </ol>
+    <div class="callout">
+      <h3>Not true bidirectional streaming STT</h3>
+      <p>This reduces perceived transcription latency, but it is not word-by-word Google Cloud streaming recognition. For that, replace <code>SpeechRecognition.recognize_google()</code> in <code>optimized_voice.py</code> with a provider SDK that supports a persistent streaming connection, then feed the raw PCM frames to that session and consume interim/final events from it.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Protocol and lifecycle effects</h2>
+    <ul>
+      <li>No ESP32 ingress message changes are required. Existing <code>audio_chunk</code> and <code>audio_complete</code> messages are retained.</li>
+      <li>Clients that display partial transcription should handle <code>stt_interim</code>. Existing handling of <code>stt_result</code> remains the final transcript.</li>
+      <li>Connection cleanup cancels the interim task and removes pending/transcript state, alongside the existing queue and processing-task cleanup.</li>
+      <li>The minimum snapshot threshold remains 10,000 bytes because <code>_google_stt()</code> rejects smaller inputs; early packets below that size incur no network recognition request.</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

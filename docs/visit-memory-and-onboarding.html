@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="PAL_OP visit onboarding and conversation-memory reference.">
+<title>PAL_OP - Visit Memory and Onboarding</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+  body{margin:0}table{border-collapse:collapse}
+  :root{
+    --ground:#e9edef;--surface:#fff;--surface-2:#f3f6f7;
+    --ink:#0f1a21;--ink-soft:#566874;--ink-faint:#8195a1;
+    --rule:#cfd9df;--rule-soft:#e1e8ec;
+    --accent:#0b6575;--accent-soft:#dcedf0;
+    --ok:#2c6e52;--ok-bg:#ddede4;--warn:#9a6410;--warn-bg:#f6e9d2;
+    --shadow:0 1px 2px rgba(15,26,33,.06),0 8px 24px -12px rgba(15,26,33,.18);
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,"Cascadia Mono","SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --measure:72ch;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --ground:#0b1216;--surface:#121e24;--surface-2:#16242b;
+    --ink:#dfe8ec;--ink-soft:#90a4af;--ink-faint:#6a7f8b;
+    --rule:#23343c;--rule-soft:#1b2a31;
+    --accent:#56c2d2;--accent-soft:#12333a;
+    --ok:#63b58c;--ok-bg:#163025;--warn:#dca847;--warn-bg:#33290f;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -14px rgba(0,0,0,.7)}}
+  :root[data-theme="dark"]{
+    --ground:#0b1216;--surface:#121e24;--surface-2:#16242b;
+    --ink:#dfe8ec;--ink-soft:#90a4af;--ink-faint:#6a7f8b;
+    --rule:#23343c;--rule-soft:#1b2a31;
+    --accent:#56c2d2;--accent-soft:#12333a;
+    --ok:#63b58c;--ok-bg:#163025;--warn:#dca847;--warn-bg:#33290f;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -14px rgba(0,0,0,.7)}
+  body{background:var(--ground);color:var(--ink);font:16px/1.6 var(--sans);
+       -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1060px;margin:0 auto;padding:48px 24px 96px;display:flex;
+        flex-direction:column;gap:40px}
+  h1,h2,h3{margin:0;letter-spacing:-.02em;text-wrap:balance}
+  h1{font-size:clamp(2rem,5vw,3rem);line-height:1.08}h2{font-size:1.5rem}h3{font-size:1.05rem}
+  p{margin:0;max-width:var(--measure)}a{color:var(--accent)}
+  code{font:inherit;font-family:var(--mono);font-size:.84em;background:var(--surface-2);
+       border:1px solid var(--rule-soft);border-radius:3px;padding:.1em .35em;word-break:break-word}
+  pre{margin:0;padding:16px;overflow-x:auto;border:1px solid var(--rule);border-radius:8px;
+      background:var(--surface-2);font: .82rem/1.5 var(--mono)}
+  pre code{background:none;border:none;padding:0;font-size:inherit}
+  .eyebrow,.where{font-family:var(--mono);font-size:.7rem;font-weight:600;letter-spacing:.14em;
+                   text-transform:uppercase;color:var(--accent)}
+  .lede{font-size:1.125rem;color:var(--ink-soft);max-width:64ch}.note{font-size:.9rem;color:var(--ink-soft)}
+  .panel{padding:24px;border:1px solid var(--rule);border-radius:10px;background:var(--surface);
+         box-shadow:var(--shadow);display:flex;flex-direction:column;gap:16px}
+  .callout{padding:20px 22px;border-left:3px solid var(--accent);border-radius:0 8px 8px 0;
+           background:var(--accent-soft);display:flex;flex-direction:column;gap:10px}
+  .callout.good{border-left-color:var(--ok);background:var(--ok-bg)}
+  .callout.warn{border-left-color:var(--warn);background:var(--warn-bg)}
+  ul,ol{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:7px}li{max-width:var(--measure)}
+  li::marker{color:var(--ink-faint)}
+  .scroll{overflow-x:auto;border:1px solid var(--rule);border-radius:8px}
+  table{width:100%;min-width:620px;font-size:.9rem}
+  th,td{text-align:left;vertical-align:top;padding:10px 14px;border-bottom:1px solid var(--rule-soft)}
+  th{font:600 .7rem var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);
+     background:var(--surface-2);white-space:nowrap}tbody tr:last-child td{border-bottom:none}
+  .flow{display:grid;grid-template-columns:64px 1fr;gap:18px;padding:18px 0;border-top:1px solid var(--rule-soft)}
+  .flow:first-of-type{border-top:none}.n{font:700 1.25rem var(--mono);color:var(--accent)}
+  .body{display:flex;flex-direction:column;gap:8px;min-width:0}
+  .pill{display:inline-block;width:max-content;padding:2px 8px;border-radius:99px;background:var(--accent-soft);
+        color:var(--accent);font:600 .7rem var(--mono)}
+  .theme-toggle{position:fixed;top:16px;right:16px;z-index:2;padding:7px 13px;border:1px solid var(--rule);
+    border-radius:999px;background:var(--surface);color:var(--ink-soft);box-shadow:var(--shadow);
+    font:600 .7rem var(--mono);letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
+  .theme-toggle:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  footer{font-size:.82rem;color:var(--ink-faint)}
+  @media print{.theme-toggle{display:none}body{background:#fff;color:#000}.panel{box-shadow:none}}
+  @media (max-width:640px){.flow{grid-template-columns:1fr;gap:7px}.wrap{padding:32px 16px 64px}}
+</style>
+</head>
+<body>
+<button class="theme-toggle" id="themeToggle" type="button">Theme</button>
+<main class="wrap">
+  <header style="display:flex;flex-direction:column;gap:16px">
+    <div class="note" style="font-family:var(--mono)">PAL_OP / visit memory / updated 2026-09-03</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="eyebrow">Offline reference</div>
+      <h1>Visit onboarding and conversation memory</h1>
+    </div>
+    <p class="lede">
+      PAL_OP personalizes one park visit without creating a cross-visit user account.
+      The guide collects a small visit profile before normal conversation, then uses
+      visit, episode, turn, and fact-ledger state to build each model request.
+    </p>
+  </header>
+
+  <section class="callout good">
+    <div class="eyebrow" style="color:var(--ok)">Design decision</div>
+    <h3>All current memory is local, visit-scoped SQLite state</h3>
+    <p>
+      There is no PostgreSQL, Redis, external profile store, account, or tour mode.
+      Every visitor starts in a free visit. The profile is attached to one visit and
+      is not used to identify or personalize a later visitor.
+    </p>
+  </section>
+
+  <section class="panel">
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div class="eyebrow">The model</div>
+      <h2>Profile, visit, episode, and turn</h2>
+    </div>
+    <pre><code>VISIT PROFILE     name, exact age, derived audience mode, interests, language
+       |
+       +-- VISIT      one park trip for one device/client identifier
+       |     |
+       |     +-- EPISODE   coherent discussion of one animal, exhibit, or park subject
+       |     |     |
+       |     |     +-- TURN  one visitor utterance and one guide response
+       |     |
+       |     +-- DELIVERED FACTS  facts already used during this visit</code></pre>
+    <p>
+      The profile changes <em>how</em> the guide explains. Episodes and facts record
+      <em>what</em> has already been discussed. The system stores the complete visit
+      history but retrieves only the small, relevant subset needed by the next prompt.
+    </p>
+  </section>
+
+  <section class="panel">
+    <div class="eyebrow">Before normal chat</div>
+    <h2>Onboarding flow</h2>
+    <p>
+      On a browser connection or ESP32 audio registration, the application starts or
+      resumes the active visit and asks the next unanswered profile question. These
+      questions are deterministic responses from the application; they do not call
+      GPT or retrieve park facts.
+    </p>
+    <div>
+      <div class="flow">
+        <div class="n">1</div><div class="body"><span class="where">Name</span>
+          <h3>Ask for a name</h3><p>The stored value is used only within the current visit.</p></div>
+      </div>
+      <div class="flow">
+        <div class="n">2</div><div class="body"><span class="where">Exact age</span>
+          <h3>Ask "How old are you?"</h3><p>An age from 1 to 120 is required as a number. The code derives an internal audience mode: <code>early_child</code> (1-5), <code>child</code> (6-8), <code>older_child</code> (9-12), <code>teen</code> (13-17), or <code>adult</code> (18+).</p></div>
+      </div>
+      <div class="flow">
+        <div class="n">3</div><div class="body"><span class="where">Interests</span>
+          <h3>Ask what they want to see</h3><p>This is free text, for example "marine animals" or "rides".</p></div>
+      </div>
+      <div class="flow">
+        <div class="n">4</div><div class="body"><span class="where">Reply language</span>
+          <h3>Ask for Mandarin or English</h3><p>The answer sets the visit language to <code>zh</code> or <code>en</code>. Once chosen, it takes precedence over automatic language detection for the rest of the visit.</p></div>
+      </div>
+      <div class="flow">
+        <div class="n">5</div><div class="body"><span class="where">Guide conversation</span>
+          <h3>Enable normal questions</h3><p>Only after step 4 is complete can the request reach subject resolution, fact retrieval, and GPT.</p></div>
+      </div>
+    </div>
+    <p class="note">There is deliberately no <code>visit_mode</code> or tour-route field. The current product behavior is always a free visit.</p>
+  </section>
+
+  <section class="panel">
+    <div class="eyebrow">Persistence</div>
+    <h2>What is in <code>memory.db</code></h2>
+    <p>
+      <code>ConversationStore</code> opens SQLite at <code>MEMORY_DB_PATH</code>, or
+      <code>memory.db</code> when that environment variable is not set. It applies a
+      migration at startup so databases created before onboarding gain the new visit
+      profile columns automatically.
+    </p>
+    <div class="scroll"><table>
+      <thead><tr><th>Table</th><th>Scope</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>visits</code></td><td>One park trip</td><td>Client identifier, timestamps, language, profile values, onboarding state, and total turns.</td></tr>
+        <tr><td><code>episodes</code></td><td>Within a visit</td><td>Current subject identity, how it was chosen (camera, named, carried), timestamps, turn count, and facets already discussed.</td></tr>
+        <tr><td><code>turns</code></td><td>Within an episode/visit</td><td>Visitor text, guide response, facet, language, source, and the retrieved fact IDs.</td></tr>
+        <tr><td><code>delivered_facts</code></td><td>Within a visit</td><td>Fact IDs already supplied to the guide so a repeated "tell me more" can retrieve fresh material.</td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout warn">
+      <h3>The 30-minute boundary starts a new visit; it does not delete rows</h3>
+      <p>
+        After <code>SESSION_IDLE_SECONDS</code> (30 minutes by default), the same device/client ID receives a fresh visit and must complete onboarding again. Existing rows remain in the SQLite file until an operator removes the file or a future retention job deletes them. Where Docker stores the file determines whether it survives a container restart: the production compose configuration mounts <code>/app/data/memory.db</code> in a named volume.
+      </p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="eyebrow">Episode memory</div>
+    <h2>How an animal discussion stays coherent</h2>
+    <p>
+      An episode is the active discussion of a subject such as a Red Panda, an exhibit,
+      or a park-level topic. It preserves the subject and facets already covered while
+      the visitor continues asking related questions. The active episode is reused for
+      the same subject within eight minutes by default.
+    </p>
+    <div class="scroll"><table>
+      <thead><tr><th>Visitor wording</th><th>Resolution</th><th>Why episode state matters</th></tr></thead>
+      <tbody>
+        <tr><td>"What do they eat?"</td><td>Anaphoric marker - use the active episode subject.</td><td>The camera can drift without changing what "they" means.</td></tr>
+        <tr><td>"What animal is this?"</td><td>Demonstrative marker - prefer the current camera detection.</td><td>The visitor is pointing at the animal in front of them, not necessarily the previous subject.</td></tr>
+        <tr><td>"Tell me more"</td><td>Follow-up marker - retain the episode subject.</td><td>The delivered-fact ledger excludes facts already used in the visit.</td></tr>
+        <tr><td>"Tell me about capybaras"</td><td>Explicitly named subject - start or switch to its episode.</td><td>A named animal outranks the camera label.</td></tr>
+      </tbody>
+    </table></div>
+    <p class="note">
+      The current implementation carries the active episode and lists prior subjects
+      in the visit summary. It does not yet implement semantic retrieval of arbitrary
+      older episodes such as "compare this with the animal from an hour ago"; that is a
+      future enhancement, not a behavior this document promises today.
+    </p>
+  </section>
+
+  <section class="panel">
+    <div class="eyebrow">Per-request context</div>
+    <h2>What reaches GPT on a normal turn</h2>
+    <p>
+      GPT API calls are stateless, so the application builds a compact prompt context
+      every time. It does not send all rows from the visit database.
+    </p>
+    <pre><code>[VISITOR]  Name, exact age with derived audience mode, interests.
+[VISIT]    Selected language, visit duration, question count, earlier subjects.
+[NOW]      Resolved subject, source of resolution, zone, active episode summary, facet.
+[RECENT]   Up to 3 previous exchanges, oldest first; guide replies are clipped to 160 characters.
+[FACTS]    Up to 4 retrieved, grounded facts not already delivered this visit.
+[QUESTION] The incoming visitor utterance.</code></pre>
+    <p>
+      The model uses this context to write the answer. The application remains
+      responsible for subject choice, local fact retrieval, language choice, and
+      profile/episode persistence.
+    </p>
+  </section>
+
+  <section class="panel">
+    <div class="eyebrow">Request paths</div>
+    <h2>Browser and ESP32 behavior</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>Client</th><th>First prompt</th><th>Profile state in the UI</th></tr></thead>
+      <tbody>
+        <tr><td>Browser WebSocket <code>/ws</code></td><td>The server sends the first profile question immediately after connection.</td><td>The animal quick-question buttons remain hidden until profile completion. Each server response carries non-sensitive onboarding state and the next question.</td></tr>
+        <tr><td>ESP32 audio WebSocket</td><td>On <code>register</code>, the audio receiver synthesizes and streams the first profile question before the visitor records a reply.</td><td>Subsequent spoken answers pass through the same onboarding gate as typed browser answers.</td></tr>
+        <tr><td>Direct message call without a prior start</td><td>The first call returns the first profile question rather than treating the utterance as a guide question.</td><td>This prevents normal retrieval and episode creation before the profile flow has started.</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="panel">
+    <div class="eyebrow">Operational reference</div>
+    <h2>Relevant implementation files</h2>
+    <ul>
+      <li><code>chatbot/conversation_state.py</code> - SQLite schema, migration, visit profile, onboarding state, episodes, turns, and fact ledger.</li>
+      <li><code>chatbot/context_builder.py</code> - subject resolution and rendering of the five prompt layers.</li>
+      <li><code>chatbot/zoo_main.py</code> - gates both standard and streaming model paths behind onboarding.</li>
+      <li><code>chatbot/zoo_api.py</code> - starts onboarding for browser WebSocket connections and returns UI state.</li>
+      <li><code>chatbot/audio_receiver.py</code> - speaks the first profile question to registered ESP32 audio clients.</li>
+      <li><code>chatbot/static/zoo_index.html</code> - browser onboarding presentation and quick-question gating.</li>
+    </ul>
+  </section>
+
+  <footer>
+    <div>PAL_OP visit memory and onboarding reference.</div>
+    <div>Source of truth: the implementation in <code>chatbot/</code>.</div>
+  </footer>
+</main>
+<script>
+  const root = document.documentElement;
+  const toggle = document.getElementById("themeToggle");
+  const saved = localStorage.getItem("palop-docs-theme");
+  if (saved) root.dataset.theme = saved;
+  toggle.addEventListener("click", () => {
+    const next = root.dataset.theme === "dark" ? "light" : "dark";
+    root.dataset.theme = next;
+    localStorage.setItem("palop-docs-theme", next);
+  });
+</script>
+</body>
+</html>

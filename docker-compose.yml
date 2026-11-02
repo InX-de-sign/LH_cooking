@@ -1,0 +1,29 @@
+# Local development: the cooking coach on http://localhost:8000
+#
+# The source is bind-mounted, so Python edits apply on restart. After editing
+# recipes.yaml or glossary.yaml, rebuild the index:
+#   docker compose exec chatbot python knowledge_base.py --rebuild
+
+name: lh_cooking
+
+services:
+  chatbot:
+    build:
+      context: ./chatbot
+      dockerfile: Dockerfile
+    container_name: lh_cooking_chatbot
+    ports:
+      - "8000:8000"
+    # The model slots come from chatbot/.env, which config.py reads from the
+    # bind mount below. They are deliberately not listed here: compose would
+    # fill them from the repository-root .env instead.
+    environment:
+      - MEMORY_DB_PATH=/app/data/memory.db
+    volumes:
+      - ./chatbot:/app
+      - chatbot_data:/app/data
+    restart: unless-stopped
+    command: python cook_api.py
+
+volumes:
+  chatbot_data:

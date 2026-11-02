@@ -1,0 +1,263 @@
+# glossary.yaml - cooking terms, ingredients and kitchen topics.
+#
+# Built into knowledge.db alongside recipes.yaml. A recipe's `techniques:`
+# list links to entries here by name, so a technique question asked in the
+# middle of a recipe can be answered from the technique's own facts.
+#
+# Each entry:
+#   name     what the coach calls it, spoken aloud
+#   kind     technique | ingredient | topic
+#   aliases  other ways a cook might say it (and labels a VLM may emit)
+#   facts    finished sentences, each tagged with a facet:
+#            overview technique doneness heat timing safety substitution
+#            equipment storage tip
+#
+# STARTER CONTENT, marked `starter:unverified`. Review before relying on it.
+
+# --- techniques -----------------------------------------------------------
+
+- name: "stir-fry"
+  kind: technique
+  aliases: ["stir fry", "stir frying", "stir-frying", "wok fry"]
+  facts:
+    - facet: overview
+      text: "Stir-frying means cooking small pieces of food quickly in a little oil over high heat, moving them constantly."
+      source: "starter:unverified"
+    - facet: technique
+      text: "Have every ingredient cut and ready before the pan goes on, because stir-frying moves too fast to chop as you go."
+      source: "starter:unverified"
+    - facet: heat
+      text: "Stir-fry over medium-high to high heat; if food starts steaming instead of sizzling, the pan is overcrowded or not hot enough."
+      source: "starter:unverified"
+
+- name: "sauté"
+  kind: technique
+  aliases: ["saute", "sauteing", "sautéing", "sauteed", "sautéed", "pan fry", "pan-fry"]
+  facts:
+    - facet: overview
+      text: "To sauté is to cook food in a small amount of fat in a shallow pan over medium to medium-high heat, stirring or tossing now and then."
+      source: "starter:unverified"
+    - facet: tip
+      text: "Spread food in a single layer when sautéing; a crowded pan traps steam and the food goes soft instead of browning."
+      source: "starter:unverified"
+
+- name: "sear"
+  kind: technique
+  aliases: ["searing", "seared", "brown the meat", "browning"]
+  facts:
+    - facet: overview
+      text: "Searing means browning the surface of food in a very hot pan to build colour and flavour."
+      source: "starter:unverified"
+    - facet: technique
+      text: "Dry the surface first and do not move the food while it sears; it lets go of the pan once a crust has formed."
+      source: "starter:unverified"
+
+- name: "simmer"
+  kind: technique
+  aliases: ["simmering", "gentle boil", "low boil"]
+  facts:
+    - facet: overview
+      text: "A simmer is a gentle cook just below boiling, with small bubbles rising lazily and breaking at the surface."
+      source: "starter:unverified"
+    - facet: heat
+      text: "To hold a simmer, bring the liquid to a boil, then turn the heat down until only small bubbles appear."
+      source: "starter:unverified"
+
+- name: "boil pasta"
+  kind: technique
+  aliases: ["cook pasta", "boiling pasta", "pasta water", "salting the water", "salt the water"]
+  facts:
+    - facet: technique
+      text: "Cook pasta in plenty of rapidly boiling, well-salted water, and stir during the first minute so the strands do not stick together."
+      source: "starter:unverified"
+    - facet: tip
+      text: "Pasta water should taste noticeably salty; a common guide is about one tablespoon of salt for every four litres of water."
+      source: "starter:unverified"
+    - facet: tip
+      text: "Save some of the starchy pasta water before draining; it helps sauces cling to the pasta."
+      source: "starter:unverified"
+
+- name: "al dente"
+  kind: technique
+  aliases: ["aldente", "to the tooth", "firm to the bite"]
+  facts:
+    - facet: overview
+      text: "Al dente means pasta that is cooked through but still has a slight firmness in the centre when you bite it."
+      source: "starter:unverified"
+    - facet: doneness
+      text: "To check al dente, bite a piece: you want no chalky white core, just a thin firm line at the centre."
+      source: "starter:unverified"
+
+- name: "blanch"
+  kind: technique
+  aliases: ["blanching", "blanched", "parboil", "parboiling"]
+  facts:
+    - facet: overview
+      text: "Blanching means cooking food briefly in boiling water, then stopping the cooking in cold or iced water."
+      source: "starter:unverified"
+    - facet: timing
+      text: "Most green vegetables need only one to three minutes of blanching, until they turn bright green."
+      source: "starter:unverified"
+
+- name: "beat eggs"
+  kind: technique
+  aliases: ["beating eggs", "whisk eggs", "whisking eggs", "scramble", "scrambled"]
+  facts:
+    - facet: technique
+      text: "Beat eggs with a fork or chopsticks until the whites and yolks are fully mixed and no clear streaks remain."
+      source: "starter:unverified"
+
+- name: "slice garlic"
+  kind: technique
+  aliases: ["mince garlic", "mincing garlic", "chop garlic", "peel garlic"]
+  facts:
+    - facet: technique
+      text: "To peel garlic quickly, press the clove flat with the side of a knife; the skin cracks and slides off."
+      source: "starter:unverified"
+    - facet: doneness
+      text: "Garlic burns fast. Take it off the heat at pale gold, because dark brown garlic tastes bitter."
+      source: "starter:unverified"
+
+- name: "emulsify"
+  kind: technique
+  aliases: ["emulsion", "emulsifying", "bring the sauce together"]
+  facts:
+    - facet: overview
+      text: "Emulsifying means combining fat and water into a smooth sauce that does not separate."
+      source: "starter:unverified"
+    - facet: technique
+      text: "For a pasta sauce, toss the pasta hard with oil and starchy pasta water over heat; the starch binds them into a glossy coating."
+      source: "starter:unverified"
+
+- name: "rest meat"
+  kind: technique
+  aliases: ["resting", "let it rest", "resting meat", "rest the meat", "rest the chicken"]
+  facts:
+    - facet: overview
+      text: "Resting means leaving cooked meat on a board for a few minutes before cutting, so the juices settle instead of running out."
+      source: "starter:unverified"
+    - facet: timing
+      text: "Rest chicken breasts or steaks for about five minutes before slicing."
+      source: "starter:unverified"
+
+- name: "pound to even thickness"
+  kind: technique
+  aliases: ["pound the chicken", "flatten", "butterfly", "even thickness"]
+  facts:
+    - facet: technique
+      text: "Put the meat between two sheets of baking paper or cling film and tap the thick end with a rolling pin until it matches the thin end."
+      source: "starter:unverified"
+
+- name: "season to taste"
+  kind: technique
+  aliases: ["seasoning", "season", "to taste", "adjust the salt", "how much salt"]
+  facts:
+    - facet: technique
+      text: "Season to taste means tasting near the end and adding salt a little at a time until the flavour is bright but not salty."
+      source: "starter:unverified"
+
+# --- heat and doneness -----------------------------------------------------
+
+- name: "hot oil"
+  kind: topic
+  aliases: ["is the oil hot", "oil hot enough", "shimmering oil", "smoke point", "oil smoking"]
+  facts:
+    - facet: doneness
+      text: "Oil is hot enough to cook in when it shimmers and flows easily when you tilt the pan."
+      source: "starter:unverified"
+    - facet: safety
+      text: "If oil starts to smoke heavily, turn the heat down or move the pan off the burner; smoking oil is close to catching fire."
+      source: "starter:unverified"
+
+# --- ingredients -----------------------------------------------------------
+
+- name: "garlic"
+  kind: ingredient
+  aliases: ["garlic clove", "garlic cloves", "cloves of garlic"]
+  facts:
+    - facet: substitution
+      text: "If you have no fresh garlic, about one eighth of a teaspoon of garlic powder stands in for one clove."
+      source: "starter:unverified"
+
+- name: "spring onion"
+  kind: ingredient
+  aliases: ["spring onions", "scallion", "scallions", "green onion", "green onions"]
+  facts:
+    - facet: technique
+      text: "The white parts of spring onion are firmer and go into the pan early; the green parts are milder and are added at the end."
+      source: "starter:unverified"
+
+- name: "egg"
+  kind: ingredient
+  aliases: ["eggs"]
+  facts:
+    - facet: safety
+      text: "Wash your hands after cracking raw eggs, and do not let raw egg drip onto food that will not be cooked."
+      source: "starter:unverified"
+
+- name: "chicken"
+  kind: ingredient
+  aliases: ["raw chicken", "poultry"]
+  facts:
+    - facet: safety
+      text: "Do not wash raw chicken under the tap; splashing spreads bacteria around the sink, and cooking kills them anyway."
+      source: "starter:unverified"
+    - facet: doneness
+      text: "Cooked chicken is opaque white all the way through, and the juices run clear rather than pink."
+      source: "starter:unverified"
+
+- name: "olive oil"
+  kind: ingredient
+  aliases: ["extra virgin olive oil", "evoo"]
+  facts:
+    - facet: substitution
+      text: "Any neutral oil such as sunflower or canola can replace olive oil for cooking, though the flavour is milder."
+      source: "starter:unverified"
+
+# --- kitchen safety ----------------------------------------------------------
+
+- name: "grease fire"
+  kind: topic
+  aliases: ["oil fire", "pan on fire", "fire in the pan", "pan fire", "flames"]
+  facts:
+    - facet: safety
+      text: "If oil in a pan catches fire, turn off the heat and cover the pan with a metal lid or baking tray. Never pour water on it."
+      source: "starter:unverified"
+    - facet: safety
+      text: "If a fire does not go out once covered, leave the kitchen, close the door and call the emergency services."
+      source: "starter:unverified"
+
+- name: "cross-contamination"
+  kind: topic
+  aliases: ["cross contamination", "raw meat board", "cutting board", "chopping board"]
+  facts:
+    - facet: safety
+      text: "Keep raw meat away from ready-to-eat food, and use a separate board for raw meat or wash the board in hot soapy water before reusing it."
+      source: "starter:unverified"
+
+- name: "knife safety"
+  kind: topic
+  aliases: ["knife", "cutting", "chopping", "claw grip", "cut myself"]
+  facts:
+    - facet: safety
+      text: "Hold food with a claw grip, fingertips curled under, so the side of the blade rests against your knuckles instead of your fingertips."
+      source: "starter:unverified"
+    - facet: safety
+      text: "A damp cloth under the chopping board stops it sliding while you cut."
+      source: "starter:unverified"
+
+- name: "burns"
+  kind: topic
+  aliases: ["burn", "burned myself", "burnt myself", "scald", "scalded"]
+  facts:
+    - facet: safety
+      text: "For a minor burn, hold it under cool running water for about twenty minutes. Get medical help for large, deep or blistering burns."
+      source: "starter:unverified"
+
+- name: "leftovers"
+  kind: topic
+  aliases: ["storing leftovers", "fridge", "reheat", "reheating"]
+  facts:
+    - facet: storage
+      text: "Refrigerate cooked food within two hours, and reheat leftovers until they are steaming hot all the way through."
+      source: "starter:unverified"

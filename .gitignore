@@ -1,0 +1,49 @@
+# --- Secrets -----------------------------------------------------------
+# NOTE: patterns must NOT be quoted. Quoting them (".env") makes git treat
+# the quote marks as part of the filename, which is how iteration 1 leaked
+# live API keys into public history.
+.env
+*.env
+!*.env.example
+
+# --- Python ------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+env/
+
+# --- Runtime state (auto-created, not source) --------------------------
+chatbot/memory.db
+chatbot/logs/
+*.log
+*.db-journal
+*.db-wal
+*.db-shm
+
+# knowledge.db is derived: knowledge_base.py rebuilds it from
+# park_knowledge.py plus species.yaml. Committing it would let the two drift.
+# The sources are both text and both tracked, so nothing is lost.
+chatbot/knowledge.db
+chatbot/knowledge.db.backup
+
+# --- Large model checkpoints -------------------------------------------
+# The VGG16 environment classifier is ~512 MB, over GitHub's 100 MB
+# per-file hard limit. Fetch it with scripts/fetch_models.ps1 (or .sh).
+# The YOLO *.onnx models stay in the repo via Git LFS - see .gitattributes.
+*.pth.tar
+*.pth
+
+# --- Editor / OS -------------------------------------------------------
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Archives / backups ------------------------------------------------
+_Archived/
+archived_chatbot/
+archived_esp32/
+*.backup
+*.backup.txt

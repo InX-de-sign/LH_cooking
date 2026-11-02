@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PAL_OP Agent Prompt and Workflow Guide</title>
+<style>
+:root { --ink:#162127; --muted:#52636b; --canvas:#e9f0ef; --paper:#fff; --line:#c9d8d5; --teal:#006c72; --soft:#dcefed; --gold:#925d09; --gold-soft:#fff1d7; --rose:#8c3b35; --rose-soft:#f9e6e3; --code:#10252a; }
+* { box-sizing:border-box; }
+body { margin:0; color:var(--ink); background:var(--canvas); font:16px/1.65 Georgia, "Times New Roman", serif; }
+main { width:min(1080px, calc(100% - 32px)); margin:0 auto; padding:50px 0 84px; }
+header { border-bottom:4px solid var(--teal); padding-bottom:28px; }
+h1, h2, h3, th { font-family:"Segoe UI", Arial, sans-serif; line-height:1.2; }
+h1 { margin:0; font-size:clamp(2.15rem, 5vw, 3.4rem); max-width:19ch; }
+h2 { font-size:1.6rem; margin:0 0 14px; }
+h3 { font-size:1.05rem; margin:0 0 7px; }
+p { max-width:82ch; margin:0 0 14px; }
+section { margin-top:20px; padding:28px; background:var(--paper); border:1px solid var(--line); border-radius:8px; }
+.eyebrow { margin:0 0 12px; color:var(--teal); font:700 .75rem/1.3 Consolas, monospace; letter-spacing:.12em; text-transform:uppercase; }
+.lede { margin-top:16px; max-width:72ch; color:var(--muted); font-size:1.13rem; }
+.grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:18px; }
+.flow { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:9px; margin:16px 0 4px; }
+.step, .panel { border:1px solid var(--line); border-radius:6px; padding:16px; }
+.step { background:#f3f8f7; font:700 .83rem/1.4 "Segoe UI", Arial, sans-serif; text-align:center; }
+.step strong { display:block; margin-bottom:5px; color:var(--teal); font:700 1.1rem Consolas, monospace; }
+.panel { background:#f8fbfa; }
+.tag { display:inline-block; margin-bottom:9px; padding:2px 7px; border-radius:3px; font:700 .72rem/1.35 Consolas, monospace; letter-spacing:.04em; text-transform:uppercase; }
+.current { color:var(--rose); background:var(--rose-soft); }
+.target { color:var(--teal); background:var(--soft); }
+code { padding:.1em .3em; border-radius:3px; background:#e8efed; font:.9em Consolas, monospace; }
+pre { overflow:auto; margin:14px 0 0; padding:18px; color:#e7f3f0; background:var(--code); border-radius:6px; font:13px/1.55 Consolas, monospace; white-space:pre-wrap; }
+ul, ol { margin:0; padding-left:23px; }
+li + li { margin-top:8px; }
+table { width:100%; border-collapse:collapse; font-size:.94rem; }
+th, td { padding:11px 10px; vertical-align:top; border-bottom:1px solid var(--line); text-align:left; }
+th { color:var(--teal); font-size:.8rem; letter-spacing:.04em; text-transform:uppercase; }
+.callout { margin-top:16px; padding:18px 20px; border-left:4px solid var(--gold); background:var(--gold-soft); }
+@media (max-width:760px) { main { width:min(100% - 20px, 1080px); padding-top:28px; } section { padding:20px; } .grid, .flow { grid-template-columns:1fr; } pre { font-size:12px; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="eyebrow">PAL_OP / product behavior guide</p>
+    <h1>Child-friendly prompts and a coherent agent workflow</h1>
+    <p class="lede">A practical design target for a playful Ocean Park companion. The goal is not merely correct facts: each turn should feel immediate, curious, kind, and connected to what the child sees or says.</p>
+  </header>
+  <section>
+    <h2>Why the agent can feel too formal</h2>
+    <div class="grid">
+      <div class="panel"><span class="tag current">Current pattern</span><p>Browser text and ESP32 voice use different prompt builders. Each contains strict rules such as one sentence, 15-20 words, no questions, and repeated priority instructions.</p><p>The result is concise and safer, but it can read like an exhibit label or school explanation instead of a companion sharing a discovery.</p></div>
+      <div class="panel"><span class="tag target">Design target</span><p>Use one core personality and one shared context format for every channel. Let the delivery channel decide response length and speech pacing, not the identity of the guide.</p><p>Answer directly, add one vivid detail, and use clear human language. A short invitation is welcome when it naturally moves the visit forward.</p></div>
+    </div>
+    <div class="callout"><strong>Voice design:</strong> describe the personality by traits rather than imitating a named fictional character. This keeps the product voice original and easier to tune.</div>
+  </section>
+  <section>
+    <h2>Current and target request paths</h2>
+    <p>The application currently has browser-text and ESP32-audio paths. They meet in <code>zoo_main.py</code>, but take different Azure prompt routes afterwards.</p>
+    <div class="flow"><div class="step"><strong>1</strong>Browser text<br>or ESP32 audio</div><div class="step"><strong>2</strong>STT for audio<br>and CV detection</div><div class="step"><strong>3</strong>Shared visit<br>session context</div><div class="step"><strong>4</strong>Intent route<br>then response</div></div>
+    <table>
+      <thead><tr><th>Channel</th><th>Current route</th><th>Risk</th><th>Target route</th></tr></thead>
+      <tbody>
+        <tr><td>Browser text</td><td><code>/ws</code> -> <code>process_message()</code> -> <code>process_query_with_openai()</code></td><td>Uses <code>enhanced_rag_openai.py</code> prompts, not the spoken prompt.</td><td>Build a <code>TurnContext</code>, run the intent router, then use the shared prompt builder.</td></tr>
+        <tr><td>ESP32 voice</td><td><code>/ws/esp32/audio/{client_id}</code> -> STT -> <code>stream_message()</code> -> <code>stream_query_with_openai()</code></td><td>Uses <code>streaming_openai.py</code> prompts and streams directly to TTS.</td><td>Use the same response plan as browser text, then stream the selected spoken response.</td></tr>
+        <tr><td>ESP32 camera</td><td><code>/vision/*</code> -> YOLO -> <code>/cv/detection</code> -> short-lived detection map</td><td>Camera and microphone need the same visit/session identifier. Raw client IDs can drift.</td><td>Attach a common <code>session_id</code> to camera and audio events, including detection age and confidence.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section>
+    <h2>Recommended decision workflow</h2>
+    <ol>
+      <li><strong>Normalize the turn.</strong> Record child text, source channel, selected STT language, <code>session_id</code>, and timestamp.</li>
+      <li><strong>Build compact context.</strong> Include explicit animal, recent camera subject with age/confidence, current topic, last two turns, and verified park facts.</li>
+      <li><strong>Route deterministic actions first.</strong> Directions, topic rejection, simple location lookup, and error responses should come from local data.</li>
+      <li><strong>Use Azure for open conversation.</strong> Pass compact structured context and one canonical system prompt. Avoid duplicated rule blocks.</li>
+      <li><strong>Deliver by channel.</strong> Browser receives complete text. ESP32 receives sentence-sized TTS phrases as early as possible.</li>
+      <li><strong>Persist only useful state.</strong> Keep current topic, explicit likes/dislikes, and recent turns. Do not preserve every animal mentioned once as a long-term preference.</li>
+    </ol>
+  </section>
+  <section>
+    <h2>Shared turn context</h2>
+    <p>Create one context object before any prompt is assembled. It removes the browser-versus-voice personality split and makes decisions observable in logs.</p>
+    <pre>TurnContext(
+    session_id="esp32_1",
+    channel="voice",
+    language="en-US",
+    child_text="Can we see the pandas?",
+    explicit_subject="giant panda",
+    camera_subject="panda",
+    camera_age_seconds=8,
+    current_topic="giant panda",
+    intent="location_request",
+    recent_turns=[...],
+    verified_facts=[...],
+    route=None,
+)</pre>
+    <p>An explicit animal name must override the camera subject. A camera subject may help with vague phrases such as “this one” only when it is recent, confident, and from the same session.</p>
+  </section>
+  <section>
+    <h2>Canonical personality prompt</h2>
+    <p>Keep this prompt in one module and call it from both <code>process_message()</code> and <code>stream_message()</code>. Use a delivery parameter for browser or TTS response length.</p>
+    <pre>You are PAL, a warm, playful Ocean Park companion for children aged 6-10.
+Answer the actual request first, then add one vivid true detail when it helps.
+Make discoveries feel nearby and shared, like a helpful friend at the park.
+Use simple natural language, never brochure language or classroom lectures.
+Be encouraging, never patronizing, and use {language} exactly.
+Trust VERIFIED_FACTS and ROUTE only; never invent facts, locations, or rules.
+Subject precedence: explicit request, recent camera subject, then current topic.
+For a fact: direct answer plus one lively detail.
+For directions: destination and next useful landmark.
+For topic changes: acknowledge and release the old topic.
+For uncertainty: state what is known and offer one practical next step.
+Spoken replies: one or two short sentences. Browser: up to three short sentences.</pre>
+  </section>
+  <section>
+    <h2>Response plans before language generation</h2>
+    <table>
+      <thead><tr><th>Intent</th><th>Local data needed</th><th>Expected answer shape</th></tr></thead>
+      <tbody>
+        <tr><td>Animal fact</td><td>Verified animal facts</td><td>Direct answer plus one surprising detail.</td></tr>
+        <tr><td>Direction</td><td>Destination and route landmarks</td><td>Destination and the next useful landmark or transport choice.</td></tr>
+        <tr><td>“Lead me there”</td><td>Current topic and route</td><td>Resolve destination from current topic before calling Azure.</td></tr>
+        <tr><td>Topic rejection</td><td>Current topic</td><td>Acknowledge, clear topic, and let the child choose what is next.</td></tr>
+        <tr><td>Ambiguous camera question</td><td>Recent detection with confidence</td><td>Name the animal only if the detection belongs to this session and is still recent.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section>
+    <h2>Implementation order</h2>
+    <ol>
+      <li>Extract prompt construction into one shared module, for example <code>chatbot/prompting.py</code>.</li>
+      <li>Add a small intent/result layer that returns structured direction, topic-reset, fact, or open-chat plans.</li>
+      <li>Pass a shared <code>session_id</code> from paired camera and audio devices through YOLO, <code>/cv/detection</code>, WebSocket audio, memory, and logs.</li>
+      <li>Make STT language an explicit session setting. Do not make the language model guess it again.</li>
+      <li>Replace duplicate prompts in <code>streaming_openai.py</code> and <code>enhanced_rag_openai.py</code> with the canonical prompt.</li>
+      <li>Add scripted behavior tests before making further wording changes.</li>
+    </ol>
+  </section>
+  <section>
+    <h2>Behavior rehearsal set</h2>
+    <p>Run each script in browser text and ESP32 voice. Record transcript, intent, camera subject, and final answer.</p>
+    <pre>1. “Tell me about pandas.” -> warm fact, not a formal exhibit paragraph.
+2. “Lead me there.” -> route to the current panda destination using a practical landmark.
+3. “I am not interested in pandas anymore.” -> clear topic; do not repeat panda facts next turn.
+4. Camera sees red panda; “What is this one?” -> use that recent detection for this session only.
+5. Camera sees panda; “What do penguins eat?” -> answer penguins; explicit request wins.
+6. Cantonese, Mandarin, or English question -> STT and response use selected session language.</pre>
+  </section>
+  <section>
+    <h2>Source map</h2>
+    <ul>
+      <li><code>chatbot/zoo_main.py</code>: turn orchestration, topic state, and local direction handling.</li>
+      <li><code>chatbot/streaming_openai.py</code>: voice-stream prompt and Azure streaming client.</li>
+      <li><code>chatbot/enhanced_rag_openai.py</code>: browser/non-streaming prompt, RAG, and local fallback.</li>
+      <li><code>chatbot/zoo_api.py</code>: browser and ESP32 WebSocket endpoints; recent CV detection store.</li>
+      <li><code>chatbot/audio_receiver.py</code>: ESP32 audio queue, STT-to-LLM-to-TTS streaming pipeline.</li>
+      <li><code>chatbot/optimized_voice.py</code>: Google STT language selection and TTS support.</li>
+      <li><code>chatbot/memory_tracker.py</code>: history, current topic, and persistent conversation records.</li>
+      <li><code>inference/model_api.py</code>: camera inference and <code>/cv/detection</code> callbacks.</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

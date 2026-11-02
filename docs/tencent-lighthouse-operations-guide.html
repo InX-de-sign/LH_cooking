@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PAL_OP Tencent Lighthouse Operations Guide</title>
+<style>
+:root { --ink:#192128; --muted:#52616d; --canvas:#eaf0f2; --paper:#fff; --line:#cad7dc; --blue:#075f83; --blue-soft:#dceef5; --gold:#8c5c0a; --gold-soft:#fff1d8; --rose:#913d38; --rose-soft:#fae7e4; --code:#12242e; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--canvas); color:var(--ink); font:16px/1.65 Georgia, "Times New Roman", serif; }
+main { width:min(1080px, calc(100% - 32px)); margin:0 auto; padding:50px 0 84px; }
+header { border-bottom:4px solid var(--blue); padding-bottom:28px; }
+h1, h2, h3, th { font-family:"Segoe UI", Arial, sans-serif; line-height:1.2; }
+h1 { margin:0; max-width:19ch; font-size:clamp(2.1rem, 5vw, 3.4rem); }
+h2 { margin:0 0 14px; font-size:1.6rem; }
+h3 { margin:0 0 8px; font-size:1.05rem; }
+p { margin:0 0 14px; max-width:82ch; }
+section { margin-top:20px; padding:28px; background:var(--paper); border:1px solid var(--line); border-radius:8px; }
+.eyebrow { margin:0 0 12px; color:var(--blue); font:700 .75rem/1.3 Consolas, monospace; letter-spacing:.12em; text-transform:uppercase; }
+.lede { margin-top:16px; max-width:72ch; color:var(--muted); font-size:1.13rem; }
+.grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:18px; }
+.panel { padding:17px; border:1px solid var(--line); border-radius:6px; background:#f7fafb; }
+.flow { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:9px; margin:16px 0 4px; }
+.step { padding:12px; border:1px solid var(--line); border-radius:6px; background:#f1f7f9; font:700 .8rem/1.38 "Segoe UI", Arial, sans-serif; text-align:center; }
+.step strong { display:block; margin-bottom:4px; color:var(--blue); font:700 1.1rem Consolas, monospace; }
+.tag { display:inline-block; margin-bottom:9px; padding:2px 7px; border-radius:3px; font:700 .72rem/1.35 Consolas, monospace; letter-spacing:.04em; text-transform:uppercase; }
+.windows { color:var(--blue); background:var(--blue-soft); } .ubuntu { color:#367243; background:#e3f3e5; } .container { color:var(--gold); background:var(--gold-soft); } .warning { color:var(--rose); background:var(--rose-soft); }
+code { padding:.1em .3em; border-radius:3px; background:#e9eff2; font:.9em Consolas, monospace; }
+pre { overflow:auto; margin:12px 0 0; padding:17px; border-radius:6px; color:#e7f2f5; background:var(--code); font:13px/1.55 Consolas, monospace; white-space:pre-wrap; }
+ul, ol { margin:0; padding-left:23px; } li + li { margin-top:8px; }
+table { width:100%; border-collapse:collapse; font-size:.94rem; } th, td { padding:11px 10px; vertical-align:top; border-bottom:1px solid var(--line); text-align:left; } th { color:var(--blue); font-size:.8rem; letter-spacing:.04em; text-transform:uppercase; }
+.callout { margin-top:16px; padding:18px 20px; border-left:4px solid var(--gold); background:var(--gold-soft); }
+@media (max-width:760px) { main { width:min(100% - 20px, 1080px); padding-top:28px; } section { padding:20px; } .grid, .flow { grid-template-columns:1fr; } pre { font-size:12px; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="eyebrow">PAL_OP / production runbook</p>
+    <h1>Tencent Lighthouse setup and day-to-day operations</h1>
+    <p class="lede">A safe operating guide for the Ubuntu host, Docker deployment, Azure OpenAI connectivity, and the distinction between Windows commands and commands run inside the Lighthouse server.</p>
+  </header>
+  <section>
+    <h2>System at a glance</h2>
+    <div class="flow"><div class="step"><strong>1</strong>Visitor browser<br>or ESP32</div><div class="step"><strong>2</strong>DuckDNS domain<br>and HTTPS</div><div class="step"><strong>3</strong>Caddy reverse<br>proxy</div><div class="step"><strong>4</strong>Chatbot and YOLO<br>containers</div><div class="step"><strong>5</strong>Azure OpenAI<br>over HTTPS</div></div>
+    <p>The public host is Tencent Lighthouse in Hong Kong. Caddy is the only public container: it listens on ports 80 and 443, issues TLS certificates, routes <code>/vision/*</code> to YOLO, and sends all other requests to the chatbot. Azure OpenAI remains an external model provider.</p>
+    <p>The chatbot uses the internal application network for YOLO and MediaMTX plus an outbound <code>egress</code> network for Azure DNS and HTTPS. This separation is intentional: the chatbot must reach Azure, but neither chatbot nor YOLO needs a public port.</p>
+  </section>
+  <section>
+    <h2>Where to run commands</h2>
+    <table>
+      <thead><tr><th>Place</th><th>Prompt looks like</th><th>Use it for</th><th>Rationale</th></tr></thead>
+      <tbody>
+        <tr><td>Windows PowerShell or VS Code integrated PowerShell</td><td><code>PS F:\_VScode2\PAL_OP&gt;</code></td><td><code>git</code>, <code>scp</code>, local editing, and starting SSH.</td><td>These commands use Windows paths and the local SSH private key.</td></tr>
+        <tr><td>Ubuntu shell after SSH</td><td><code>ubuntu@VM-...:~$</code></td><td>Docker Compose, Linux files, server logs, and <code>.env.lighthouse</code>.</td><td>These resources exist on Lighthouse, not on Windows. This is the normal operation path.</td></tr>
+        <tr><td>Tencent Lighthouse web console</td><td>Browser terminal</td><td>Emergency access when local SSH fails.</td><td>It connects through Tencent instead of the local network. Use it for recovery, then return to SSH.</td></tr>
+        <tr><td>Inside Docker container</td><td><code>root@container:/app#</code></td><td>Targeted runtime diagnostics such as DNS or Azure SDK tests.</td><td>A host test can succeed while a container fails because Docker DNS and networks are separate.</td></tr>
+      </tbody>
+    </table>
+    <div class="callout"><strong>Practical rule:</strong> VS Code terminal and standalone Windows PowerShell are both fine. The important distinction is the prompt. Once <code>ssh</code> succeeds and the prompt begins with <code>ubuntu@</code>, all following commands are Linux commands on the server.</div>
+  </section>
+  <section>
+    <h2>Accessing the Ubuntu host</h2>
+    <div class="grid">
+      <div class="panel"><span class="tag windows">Run in Windows PowerShell</span><h3>Normal SSH access</h3><pre>ssh -i "$HOME\.ssh\pal-op-lighthouse" ubuntu@YOUR_LIGHTHOUSE_IP</pre><p>Use a VS Code integrated PowerShell terminal when editing code because it can also run <code>scp</code> from the repository. A standalone PowerShell terminal works equally well.</p></div>
+      <div class="panel"><span class="tag windows">Run in Windows PowerShell</span><h3>Copy one local file</h3><pre>scp -i "$HOME\.ssh\pal-op-lighthouse" "F:\_VScode2\PAL_OP\docker-compose.lighthouse.yml" ubuntu@YOUR_LIGHTHOUSE_IP:~/pal-op/</pre><p>Use <code>scp</code> for a focused emergency deployment. Prefer <code>git pull</code> on the server for a normal published release.</p></div>
+      <div class="panel"><span class="tag ubuntu">Run after SSH connects</span><h3>Enter the project directory</h3><pre>cd ~/pal-op
+pwd</pre><p>The expected directory is <code>/home/ubuntu/pal-op</code>. Linux uses forward slashes and <code>~/pal-op</code>, not a Windows drive letter.</p></div>
+      <div class="panel"><span class="tag ubuntu">Console fallback</span><h3>When SSH fails</h3><p>Open the instance in the Tencent Lighthouse console and choose the browser login/terminal option. Use it to inspect firewall, network, or SSH setup, then return to normal SSH access when possible.</p></div>
+    </div>
+  </section>
+  <section>
+    <h2>One-time server setup</h2>
+    <ol>
+      <li>Create an Ubuntu Lighthouse instance with enough CPU/RAM for CPU inference. GPU is not required by the current YOLO deployment.</li>
+      <li>Configure a DNS <code>A</code> record for the chosen domain to the Lighthouse public IPv4 address. Caddy needs DNS to point at the host before it can obtain a TLS certificate.</li>
+      <li>Allow inbound TCP ports <code>22</code>, <code>80</code>, and <code>443</code> in the Lighthouse firewall. Keep inference and database ports private.</li>
+      <li>Install Docker and Docker Compose, then clone the repository into <code>~/pal-op</code>.</li>
+      <li>Create <code>.env.lighthouse</code> from <code>.env.lighthouse.example</code>, populate it only on the server, and never commit it.</li>
+    </ol>
+    <span class="tag ubuntu">Run after SSH connects</span>
+    <pre>sudo apt-get update
+sudo apt-get install -y ca-certificates curl git
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker "$USER"
+newgrp docker
+docker compose version
+
+git clone https://github.com/InX-de-sign/PAL_OP.git ~/pal-op
+cd ~/pal-op
+cp .env.lighthouse.example .env.lighthouse
+nano .env.lighthouse</pre>
+    <p>Store the Azure key only in <code>.env.lighthouse</code>. Do not paste it into source files, screenshots, Git commits, or chat.</p>
+  </section>
+  <section>
+    <h2>Environment file and line endings</h2>
+    <p>Linux shell files can fail when copied from Windows with <code>CRLF</code> line endings. A broken <code>.env.lighthouse</code> often causes confusing <code>command not found</code> errors when it is loaded.</p>
+    <span class="tag ubuntu">Run after SSH connects</span>
+    <pre>cd ~/pal-op
+cp .env.lighthouse .env.lighthouse.before-line-ending-fix
+sed -i 's/\r$//' .env.lighthouse
+set -a; . ./.env.lighthouse; set +a
+test -n "$OPENAI_API_KEY" && echo "OPENAI_API_KEY=set" || echo "OPENAI_API_KEY=MISSING"</pre>
+    <p>The <code>sed</code> command removes only carriage-return characters; it does not reveal or change a secret value.</p>
+  </section>
+  <section>
+    <h2>Deploy and update</h2>
+    <div class="grid">
+      <div class="panel"><span class="tag ubuntu">Run after SSH connects</span><h3>Full initial deployment</h3><pre>cd ~/pal-op
+docker compose --env-file .env.lighthouse -f docker-compose.lighthouse.yml up -d --build
+docker compose --env-file .env.lighthouse -f docker-compose.lighthouse.yml ps</pre></div>
+      <div class="panel"><span class="tag ubuntu">Run after SSH connects</span><h3>Update from GitHub</h3><pre>cd ~/pal-op
+git pull origin main
+docker compose --env-file .env.lighthouse -f docker-compose.lighthouse.yml up -d --build</pre></div>
+      <div class="panel"><span class="tag ubuntu">Run after SSH connects</span><h3>Recreate only chatbot</h3><pre>cd ~/pal-op
+docker compose --env-file .env.lighthouse -f docker-compose.lighthouse.yml up -d --build --force-recreate chatbot</pre><p>Use this after changing chatbot source, environment, or Docker network. <code>--force-recreate</code> guarantees a new container receives the change.</p></div>
+      <div class="panel"><span class="tag ubuntu">Run after SSH connects</span><h3>Check logs and health</h3><pre>docker compose --env-file .env.lighthouse -f docker-compose.lighthouse.yml logs --tail=100 chatbot
+curl -fsS https://YOUR_DOMAIN/health
+curl -fsS https://YOUR_DOMAIN/vision/health</pre></div>
+    </div>
+  </section>
+  <section>
+    <h2>Azure OpenAI checks</h2>
+    <p>Check Azure from both the host and container when diagnosing a connectivity issue. A host can resolve an address while a container cannot.</p>
+    <span class="tag ubuntu">Run after SSH connects</span>
+    <pre>cd ~/pal-op
+set -a; . ./.env.lighthouse; set +a
+url="${AZURE_OPENAI_ENDPOINT%/}/openai/deployments/${AZURE_DEPLOYMENT_NAME}/chat/completions?api-version=${AZURE_OPENAI_API_VERSION}"
+curl -sS -o /dev/null -w 'api-key=%{http_code}\n' --connect-timeout 10 --max-time 30 -H "Content-Type: application/json" -H "api-key: $OPENAI_API_KEY" --data '{"messages":[{"role":"user","content":"Reply only with OK"}],"max_tokens":2}' "$url"</pre>
+    <span class="tag container">Run on the Ubuntu host; Docker executes inside chatbot</span>
+    <pre>docker compose --env-file .env.lighthouse -f docker-compose.lighthouse.yml exec chatbot python -c 'import socket; socket.getaddrinfo("hkust.azure-api.net", 443); print("AZURE_DNS_OK")'
+docker compose --env-file .env.lighthouse -f docker-compose.lighthouse.yml exec chatbot python -c 'from config import load_azure_openai_config; from openai import AzureOpenAI; c=load_azure_openai_config(); r=AzureOpenAI(api_key=c.api_key, api_version=c.api_version, azure_endpoint=c.azure_endpoint, timeout=30, max_retries=0).chat.completions.create(model=c.deployment_name, messages=[{"role":"user","content":"Reply only with OK"}], max_tokens=2); print("AZURE_COMPLETION_OK" if r.choices else "AZURE_COMPLETION_EMPTY")'</pre>
+    <p><code>api-key=200</code> and <code>AZURE_COMPLETION_OK</code> mean endpoint, deployment, credentials, DNS, container networking, and model access are working. Do not switch headers unless the gateway owner explicitly requires it.</p>
+  </section>
+  <section>
+    <h2>Troubleshooting map</h2>
+    <table>
+      <thead><tr><th>Symptom</th><th>Likely cause</th><th>First check</th><th>Fix direction</th></tr></thead>
+      <tbody>
+        <tr><td>Website does not load</td><td>DNS, firewall, Caddy, or TLS issue</td><td><code>docker compose ... logs --tail=100 caddy</code></td><td>Confirm DNS A record, inbound 80/443, and Caddyfile domain.</td></tr>
+        <tr><td><code>/health</code> works but chat uses fallback</td><td>Azure call did not reach or authenticate</td><td>Run host then container Azure checks.</td><td>Fix egress/DNS, endpoint/deployment, or key. Do not guess a new header.</td></tr>
+        <tr><td><code>Temporary failure in name resolution</code> in chatbot</td><td>Container lacks usable outbound DNS/network</td><td>Run <code>AZURE_DNS_OK</code> command.</td><td>Ensure chatbot has Compose <code>egress</code> network and force recreate it.</td></tr>
+        <tr><td><code>. ./.env.lighthouse</code> says command not found</td><td>Windows CRLF line endings</td><td><code>sed -i 's/\r$//' .env.lighthouse</code></td><td>Normalize on Ubuntu, then reload the environment.</td></tr>
+        <tr><td>Latest local code absent from server</td><td>File not uploaded, Git commit not pushed, or container reused</td><td><code>git log -1 --oneline</code> and <code>grep</code> for the change.</td><td>Use <code>git pull</code> after push, or focused <code>scp</code>, then rebuild/recreate.</td></tr>
+        <tr><td>Git push fails from Windows</td><td>Firewall, proxy, VPN, or network route cannot reach GitHub HTTPS</td><td><code>Test-NetConnection github.com -Port 443</code></td><td>Restore network access, then run <code>git push origin main</code>. The local commit remains safe until pushed.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section>
+    <h2>Operations checklist</h2>
+    <ol>
+      <li>Before update: confirm <code>git status</code> locally; never overwrite <code>.env.lighthouse</code> with a repository file.</li>
+      <li>Deploy: update source, rebuild affected service, and check <code>docker compose ... ps</code>.</li>
+      <li>Validate: check public <code>/health</code>, chatbot logs, then one browser or ESP32 interaction.</li>
+      <li>After infrastructure changes: verify host and container Azure access separately.</li>
+      <li>Before major upgrades: back up the <code>chatbot_data</code> Docker volume, which contains SQLite memory.</li>
+      <li>Keep public exposure minimal: only SSH, HTTP, and HTTPS. Leave chatbot, YOLO, MediaMTX, and databases private unless hardware requires otherwise.</li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>

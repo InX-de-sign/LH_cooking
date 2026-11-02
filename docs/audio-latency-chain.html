@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="Stage-by-stage trace of the PAL_OP audio latency chain, mic to speaker, with exact file:line citations and a ranked fix list.">
+<title>PAL_OP — Audio Latency Chain</title>
+<style>
+
+  /* --- reset (the artifact host supplied one; standalone needs its own) --- */
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; }
+  img, svg { display: block; max-width: 100%; }
+  table { border-collapse: collapse; }
+  button { font: inherit; color: inherit; }
+
+  :root {
+    --ground:      #E9EDEF;
+    --surface:     #FFFFFF;
+    --surface-2:   #F3F6F7;
+    --ink:         #0F1A21;
+    --ink-soft:    #566874;
+    --ink-faint:   #8195A1;
+    --rule:        #CFD9DF;
+    --rule-soft:   #E1E8EC;
+    --accent:      #0B6575;
+    --accent-soft: #DCEDF0;
+    --ok:          #2C6E52;
+    --ok-bg:       #DDEDE4;
+    --warn:        #9A6410;
+    --warn-bg:     #F6E9D2;
+    --hot:         #A4382A;
+    --hot-bg:      #F6DFDB;
+    --shadow:      0 1px 2px rgba(15,26,33,.06), 0 8px 24px -12px rgba(15,26,33,.18);
+
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+    --measure: 68ch;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #0B1216;
+      --surface:     #121E24;
+      --surface-2:   #16242B;
+      --ink:         #DFE8EC;
+      --ink-soft:    #90A4AF;
+      --ink-faint:   #6A7F8B;
+      --rule:        #23343C;
+      --rule-soft:   #1B2A31;
+      --accent:      #56C2D2;
+      --accent-soft: #12333A;
+      --ok:          #63B58C;
+      --ok-bg:       #163025;
+      --warn:        #DCA847;
+      --warn-bg:     #33290F;
+      --hot:         #E47964;
+      --hot-bg:      #3A1F1A;
+      --shadow:      0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:      #0B1216;
+    --surface:     #121E24;
+    --surface-2:   #16242B;
+    --ink:         #DFE8EC;
+    --ink-soft:    #90A4AF;
+    --ink-faint:   #6A7F8B;
+    --rule:        #23343C;
+    --rule-soft:   #1B2A31;
+    --accent:      #56C2D2;
+    --accent-soft: #12333A;
+    --ok:          #63B58C;
+    --ok-bg:       #163025;
+    --warn:        #DCA847;
+    --warn-bg:     #33290F;
+    --hot:         #E47964;
+    --hot-bg:      #3A1F1A;
+    --shadow:      0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 48px 24px 96px;
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+  }
+
+  /* ---- type ---- */
+  h1, h2, h3 { text-wrap: balance; margin: 0; letter-spacing: -.02em; }
+  h1 { font-size: clamp(2rem, 5vw, 3rem); font-weight: 760; line-height: 1.08; }
+  h2 { font-size: 1.5rem; font-weight: 700; }
+  h3 { font-size: 1.0625rem; font-weight: 680; letter-spacing: -.01em; }
+  p  { margin: 0; max-width: var(--measure); }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: .6875rem;
+    font-weight: 600;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .lede { font-size: 1.125rem; color: var(--ink-soft); max-width: 62ch; }
+  .note { font-size: .875rem; color: var(--ink-soft); }
+
+  code, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  code {
+    font-size: .8125em;
+    background: var(--surface-2);
+    border: 1px solid var(--rule-soft);
+    border-radius: 3px;
+    padding: .1em .35em;
+    word-break: break-word;
+  }
+
+  a { color: var(--accent); }
+  a:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  /* ---- header ---- */
+  header { display: flex; flex-direction: column; gap: 16px; }
+  .titlebar { display: flex; flex-direction: column; gap: 10px; }
+  .subject {
+    font-family: var(--mono);
+    font-size: .75rem;
+    color: var(--ink-faint);
+    letter-spacing: .04em;
+  }
+
+  /* ---- panels ---- */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 24px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .panel.flat { box-shadow: none; background: var(--surface-2); }
+
+  .callout {
+    border-left: 3px solid var(--hot);
+    background: var(--hot-bg);
+    border-radius: 0 8px 8px 0;
+    padding: 20px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .callout.warn { border-left-color: var(--warn); background: var(--warn-bg); }
+  .callout h3 { color: inherit; }
+  .callout p, .callout li { max-width: 74ch; }
+
+  /* ---- meter ---- */
+  .meter {
+    display: flex;
+    width: 100%;
+    height: 46px;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--rule);
+    background: var(--surface-2);
+  }
+  .seg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: .6875rem;
+    font-weight: 600;
+    color: #fff;
+    letter-spacing: .02em;
+    white-space: nowrap;
+    overflow: hidden;
+    min-width: 0;
+  }
+  .seg-capture { background: #A4382A; flex: 5.00; }
+  .seg-upload  { background: #B4703A; flex: 0.25; }
+  .seg-stt     { background: #9A6410; flex: 1.15; }
+  .seg-llm     { background: #4C6B33; flex: 1.10; }
+  .seg-tts     { background: #1F6E6B; flex: 1.00; }
+  .seg-play    { background: #0B6575; flex: 0.38; }
+
+  .meter-key {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+    font-family: var(--mono);
+    font-size: .75rem;
+    color: var(--ink-soft);
+  }
+  .meter-key span { display: inline-flex; align-items: center; gap: 7px; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+
+  /* ---- chain ---- */
+  .chain { display: flex; flex-direction: column; gap: 0; }
+  .link {
+    display: grid;
+    grid-template-columns: 88px 1fr;
+    gap: 20px;
+    padding: 22px 0;
+    border-top: 1px solid var(--rule-soft);
+    align-items: start;
+  }
+  .link:first-child { border-top: none; }
+  .stage {
+    font-family: var(--mono);
+    font-size: .6875rem;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--ink-faint);
+    padding-top: 4px;
+  }
+  .stage b {
+    display: block;
+    font-size: 1.375rem;
+    letter-spacing: -.02em;
+    color: var(--ink);
+    font-weight: 700;
+    text-transform: none;
+  }
+  .link-body { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .link-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; }
+
+  /* ---- tables ---- */
+  .scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: .875rem; min-width: 620px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
+  thead th {
+    font-family: var(--mono);
+    font-size: .6875rem;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--ink-soft);
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--rule);
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.ref { font-family: var(--mono); font-size: .75rem; color: var(--ink-soft); white-space: nowrap; }
+
+  /* ---- pills ---- */
+  .pill {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: .6875rem;
+    font-weight: 600;
+    letter-spacing: .04em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .p-hot  { background: var(--hot-bg);  color: var(--hot); }
+  .p-warn { background: var(--warn-bg); color: var(--warn); }
+  .p-ok   { background: var(--ok-bg);   color: var(--ok); }
+  .p-flat { background: var(--surface-2); color: var(--ink-soft); border: 1px solid var(--rule); }
+
+  ul, ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+  li { max-width: var(--measure); }
+
+  details {
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--surface);
+    padding: 0;
+  }
+  summary {
+    cursor: pointer;
+    padding: 14px 18px;
+    font-weight: 620;
+    font-size: .9375rem;
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; font-family: var(--mono); color: var(--ink-faint); font-size: 1.125rem; }
+  details[open] summary::after { content: "\2212"; }
+  details[open] summary { border-bottom: 1px solid var(--rule-soft); }
+  .details-body { padding: 16px 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+
+  hr { border: none; border-top: 1px solid var(--rule); margin: 0; }
+
+  footer { color: var(--ink-faint); font-size: .8125rem; display: flex; flex-direction: column; gap: 6px; }
+
+  @media (max-width: 640px) {
+    .link { grid-template-columns: 1fr; gap: 10px; }
+    .stage { padding-top: 0; }
+    .stage b { display: inline; font-size: 1.125rem; margin-left: 8px; }
+  }
+
+  /* --- theme toggle (standalone only: no host to stamp data-theme) --- */
+  .theme-toggle {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 50;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 13px;
+    background: var(--surface);
+    color: var(--ink-soft);
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: .6875rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+  }
+  .theme-toggle:hover { color: var(--ink); border-color: var(--ink-faint); }
+  .theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .theme-toggle .dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--accent); flex: none;
+  }
+  @media print {
+    .theme-toggle { display: none; }
+    body { background: #fff; color: #000; }
+    .panel, details { box-shadow: none; break-inside: avoid; }
+    details { border: 1px solid #ccc; }
+    details > div { display: block !important; }
+  }
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" id="themeToggle" type="button" aria-live="polite">
+  <span class="dot" aria-hidden="true"></span><span id="themeLabel">Theme</span>
+</button>
+<div class="wrap">
+
+  <header>
+    <div class="subject mono">PAL_OP · iteration 2 · commit d0bd442 · traced 2026-08-10</div>
+    <div class="titlebar">
+      <div class="eyebrow">Audio pipeline · latency audit</div>
+      <h1>Where the seconds go</h1>
+    </div>
+    <p class="lede">
+      A child presses the button and waits somewhere between seven and ten seconds to hear a reply.
+      This traces every millisecond of that path — mic to speaker — against the code that causes it.
+    </p>
+  </header>
+
+  <section class="panel">
+    <div>
+      <div class="eyebrow">Time to first audible sound</div>
+      <h2 style="margin-top:6px">The budget</h2>
+    </div>
+    <div class="meter" role="img" aria-label="Latency budget: capture 5.0 seconds, upload 0.25, speech-to-text 0.5 to 1.8, language model 0.6 to 1.6, text-to-speech 0.5 to 1.5, playback pre-roll 0.38">
+      <div class="seg seg-capture">CAPTURE 5.00s</div>
+      <div class="seg seg-upload"></div>
+      <div class="seg seg-stt">STT</div>
+      <div class="seg seg-llm">LLM</div>
+      <div class="seg seg-tts">TTS</div>
+      <div class="seg seg-play"></div>
+    </div>
+    <div class="meter-key">
+      <span><i class="swatch" style="background:#A4382A"></i>Capture · 5.00s fixed</span>
+      <span><i class="swatch" style="background:#B4703A"></i>Upload · 0.25s fixed</span>
+      <span><i class="swatch" style="background:#9A6410"></i>STT · 0.5–1.8s</span>
+      <span><i class="swatch" style="background:#4C6B33"></i>LLM · 0.6–1.6s</span>
+      <span><i class="swatch" style="background:#1F6E6B"></i>TTS · 0.5–1.5s</span>
+      <span><i class="swatch" style="background:#0B6575"></i>Pre-roll · 0.38s</span>
+    </div>
+    <p class="note">
+      Roughly <strong>5.3 seconds is fixed cost</strong> during which nothing is being transcribed, generated or spoken —
+      it is the device waiting on constants. The variable legs (STT, LLM, TTS) are network round trips whose
+      wall-clock values are <em>estimates</em>; see <a href="#confidence">what is measured</a>.
+    </p>
+  </section>
+
+  <section class="callout">
+    <div class="eyebrow" style="color:var(--hot)">Finding 01 · blocks everything downstream</div>
+    <h3>The streaming client is synchronous, so nothing overlaps</h3>
+    <p>
+      <code>chatbot/streaming_openai.py:5</code> imports the <strong>sync</strong> <code>AzureOpenAI</code>.
+      A repo-wide search for <code>AsyncAzureOpenAI</code> returns nothing. Line 97 calls
+      <code>client.chat.completions.create(..., stream=True)</code> with no <code>await</code>, and line 112 drains
+      the response with a plain <code>for chunk in stream:</code>. Between lines 97 and 118 there is not a single
+      <code>await</code>.
+    </p>
+    <p>
+      The event loop is therefore frozen for the <em>entire generation</em>, not merely time-to-first-token.
+      This nullifies the sentence-boundary TTS streaming committed in <code>d0bd442</code>:
+      <code>asyncio.create_task()</code> at <code>audio_receiver.py:574</code> only <em>schedules</em> the synthesis,
+      and nothing can run it until the blocking loop returns. The measured 1.73s saving came from a mock that used a
+      genuine async generator — against the real client the overlap is approximately zero.
+    </p>
+    <p>
+      <strong>The fix is small.</strong> <code>AsyncAzureOpenAI</code> + <code>async for</code> is a drop-in swap that
+      the SDK already ships, and it needs no change to <code>produce()</code>/<code>consume()</code>. Note the correct
+      pattern already exists in this codebase — <code>enhanced_rag_openai.py:566–593</code> wraps its call in
+      <code>run_in_executor</code>. It is only on the <em>non-streaming</em> path, which the voice loop never takes.
+    </p>
+  </section>
+
+  <section class="callout">
+    <div class="eyebrow" style="color:var(--hot)">Finding 02 · gets worse with multi-phrase audio</div>
+    <h3>The firmware waits a full phrase-length of dead air after every phrase</h3>
+    <p>
+      <code>zoo_esp32/audio_tailscale copy.ino:759</code> computes
+      <code>drainDelay = (samples * 1000 / SAMPLE_RATE) + 2000</code> — the phrase's own duration, plus two seconds —
+      and refuses to advance the queue until it elapses. But <code>i2s_write(..., portMAX_DELAY)</code> on line 748 has
+      <em>already</em> blocked until the DMA accepted every byte. The only genuine residue is the DMA ring itself:
+      <code>dma_buf_count = 8 × dma_buf_len = 1024</code> (lines 847–848) ≈ 512 ms.
+    </p>
+    <p>
+      So each phrase costs <strong>its own duration + 2.0s of silence</strong> before the next one starts.
+      A 3-second phrase produces a 5-second gap. Under the single-utterance design that was one trailing pause nobody
+      noticed. <strong>With sentence-boundary streaming it becomes a gap in the middle of every sentence</strong> —
+      five phrases means five gaps. Until this line is fixed, <code>d0bd442</code> makes the experience on real
+      hardware worse, not better.
+    </p>
+    <p>
+      Replacing the formula with a fixed ~600 ms recovers <em>phrase duration + 1.4s per phrase</em>.
+      This is the single largest avoidable constant anywhere in the chain.
+    </p>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:8px">
+    <div class="eyebrow">Mic to speaker</div>
+    <h2>The chain, stage by stage</h2>
+    <p class="note">Every citation below was opened and verified by a second pass; line numbers are exact.</p>
+  </section>
+
+  <div class="panel chain">
+
+    <div class="link">
+      <div class="stage">Stage<b>01</b></div>
+      <div class="link-body">
+        <div class="link-head">
+          <h3>Capture — ESP32 microphone</h3>
+          <span class="pill p-hot">5.00s fixed</span>
+        </div>
+        <p>
+          A falling edge on <code>BUTTON_PIN</code> (<code>ino:928</code>) triggers <code>record_audio()</code>.
+          It allocates 160,000 bytes in PSRAM (<code>ino:581</code>) — exactly
+          <code>RECORD_DURATION_SEC(5) × 16000 Hz × 2 bytes</code> (<code>ino:273–276</code>) — then makes
+          <strong>one blocking call</strong>: <code>i2s_read(..., AUDIO_BUFFER_SIZE, portMAX_DELAY)</code>
+          at <code>ino:589</code>. There is no VAD, no silence detection, no early stop.
+        </p>
+        <p>
+          Nothing services the WebSocket during this window — <code>webSocket.loop()</code> appears only at
+          <code>ino:916</code>. Inbound frames pile up in LwIP for the whole 5 seconds.
+        </p>
+        <p class="note">
+          <strong>Stale-audio defect:</strong> the RX driver is installed at <code>ino:835</code> and never stopped
+          or flushed — a search for <code>i2s_zero_dma_buffer</code>/<code>i2s_start</code>/<code>i2s_stop</code>
+          returns zero hits. Every recording therefore begins with audio captured <em>before</em> the press and ends
+          short by the same amount. One-line fix: flush before the read.
+        </p>
+      </div>
+    </div>
+
+    <div class="link">
+      <div class="stage">Stage<b>02</b></div>
+      <div class="link-body">
+        <div class="link-head">
+          <h3>Uplink — base64 JSON over WebSocket</h3>
+          <span class="pill p-warn">0.25s fixed</span>
+          <span class="pill p-flat">+33% wire</span>
+        </div>
+        <p>
+          The buffer is copied again into a 160,044-byte send buffer with a RIFF header (<code>ino:609–616</code>),
+          split into 20 chunks of 8192 bytes (<code>ino:620–621</code>), each base64-encoded (<code>ino:630</code>),
+          wrapped in JSON (<code>ino:633</code>) and sent as a <strong>text</strong> frame (<code>ino:652</code>).
+        </p>
+        <p>
+          Base64 inflates 160,044 bytes to 213,420 characters. <code>sendBIN</code> is never called anywhere in the
+          firmware, and the server has no binary branch — it decodes <code>message["audio"]</code> at
+          <code>audio_receiver.py:253</code> — so cutting that third off the wire needs both ends changed.
+        </p>
+        <p class="note">
+          Fixed pacing: <code>delay(10)</code> × 20 chunks = 200 ms (<code>ino:661</code>), plus
+          <code>delay(50)</code> before <code>audio_complete</code> (<code>ino:665</code>). Both are defensive;
+          TCP already guarantees ordering. Replacing the first with <code>webSocket.loop()</code> would also fix the
+          RX starvation above.
+        </p>
+      </div>
+    </div>
+
+    <div class="link">
+      <div class="stage">Stage<b>03</b></div>
+      <div class="link-body">
+        <div class="link-head">
+          <h3>Ingress — the batch barrier</h3>
+          <span class="pill p-warn">0–50ms poll</span>
+        </div>
+        <p>
+          Chunks land in a per-client <code>deque(maxlen=100)</code> (<code>audio_receiver.py:258</code>).
+          <code>_process_audio_queue</code> polls it with <code>await asyncio.sleep(0.05)</code> when empty
+          (<code>line 307</code>) and only enters the STT block inside
+          <code>if item == "COMPLETE":</code> (<code>line 324</code>).
+        </p>
+        <p>
+          <strong>The docstring at lines 293–294 is false.</strong> It claims "starts STT as soon as first chunk
+          arrives"; the first-chunk branch (313–322) only sends a status frame and does no STT. Nothing is
+          transcribed until all 5 seconds have arrived.
+        </p>
+        <p class="note">
+          The <code>maxlen=100</code> deque is silent lossy backpressure — overflow evicts from the left with no log,
+          and the consumer blocks for seconds inside the response pipeline (<code>line 370</code>). A second
+          utterance can push away the start of the first.
+        </p>
+      </div>
+    </div>
+
+    <div class="link">
+      <div class="stage">Stage<b>04</b></div>
+      <div class="link-body">
+        <div class="link-head">
+          <h3>Speech to text — up to three sequential HTTP calls</h3>
+          <span class="pill p-hot">0.5–1.8s</span>
+        </div>
+        <p>
+          Chunks are reassembled into a WAV (<code>audio_receiver.py:686</code>), written to a
+          <strong>temp file on disk</strong> (<code>optimized_voice.py:237</code>), re-read, and handed to
+          <code>speech_recognition</code>'s <code>recognize_google</code> — the free Chromium endpoint, over
+          <strong>plain HTTP</strong>, with a shared hardcoded key.
+        </p>
+        <p>
+          Each attempt FLAC-encodes the clip at <code>--best</code>: <strong>measured 0.140s / 0.148s / 0.230s</strong>
+          on this machine. The code then tries up to three languages <em>sequentially</em>
+          (<code>optimized_voice.py:257</code>) with <strong>en-US last</strong>, so an English speaker routinely pays
+          three encodes and three round trips.
+        </p>
+        <p class="note">
+          <code>adjust_for_ambient_noise(source, duration=0.3)</code> at <code>optimized_voice.py:251</code>
+          discards <strong>0.256s from the start of every utterance</strong> — and the threshold it computes is only
+          consulted by <code>listen()</code>, which this path never calls. It is pure accuracy loss. Separately,
+          <code>operation_timeout</code> is never set (<code>line 93</code>), so a stalled request pins one of only
+          <strong>two</strong> executor threads indefinitely; the <code>wait_for(timeout=30.0)</code> at
+          <code>audio_receiver.py:718</code> gives the illusion of a bound but cannot reclaim the thread.
+        </p>
+      </div>
+    </div>
+
+    <div class="link">
+      <div class="stage">Stage<b>05</b></div>
+      <div class="link-body">
+        <div class="link-head">
+          <h3>Language model — blocking, and mostly ignored context</h3>
+          <span class="pill p-hot">blocks loop</span>
+        </div>
+        <p>
+          Retrieval runs first and synchronously: <code>zoo_main.py:146–175</code> opens sqlite connections
+          (<code>lines 245</code>, <code>278</code>, <code>301</code>) on the event-loop thread. There is
+          <strong>no vector store</strong> despite the RAG naming — retrieval is <code>LIKE '%name%'</code> over an
+          8-row, unindexed table, so it costs milliseconds. Only its blocking-ness is a problem, not its ordering.
+        </p>
+        <p>
+          Then the sync client call described in Finding 01. With <code>openai==1.101.0</code>, no timeout override
+          means the SDK default of <strong>600 seconds</strong> applies — a hung gateway blocks every other
+          websocket client for ten minutes.
+        </p>
+        <p class="note">
+          <strong>Work paid for and discarded:</strong> <code>_build_short_prompt</code>
+          (<code>streaming_openai.py:127–152</code>) reads only <code>detected_animal</code> and
+          <code>local_database</code>. So <code>cv_instruction</code>, <code>conversation_history</code>,
+          <code>conversation_responses</code> and <code>user_context</code> are all assembled and silently dropped —
+          <strong>the voice path has no conversational memory</strong> even though a DB query loaded it. The
+          streaming prompts also carry <em>no language rule</em>, unlike the non-streaming ones
+          (<code>enhanced_rag_openai.py:70–74</code>), so a Cantonese question gets no instruction to answer in
+          Cantonese.
+        </p>
+      </div>
+    </div>
+
+    <div class="link">
+      <div class="stage">Stage<b>06</b></div>
+      <div class="link-body">
+        <div class="link-head">
+          <h3>Text to speech and downlink</h3>
+          <span class="pill p-warn">0.17s / phrase</span>
+        </div>
+        <p>
+          Each phrase goes to ElevenLabs, returns MP3, and is decoded to 16 kHz mono WAV by pydub in an executor
+          (<code>audio_receiver.py:492</code> — correctly off the event loop). Framing per phrase:
+          <code>audio_start</code>, a fixed <code>sleep(0.1)</code> (<code>line 517</code>), 4096-byte binary chunks
+          each followed by <code>sleep(0.001)</code> (<code>line 521</code>), then <code>sleep(0.05)</code> before
+          <code>audio_complete</code> (<code>line 523</code>).
+        </p>
+        <p class="note">
+          The 0.1s exists so the ESP32 can allocate a queue slot — but the firmware already has an auto-allocate
+          fallback at <code>ino:537–544</code>, so it is redundant padding. Synthesis concurrency is capped at
+          <code>MAX_CONCURRENT_TTS = 3</code> (<code>line 421</code>) against the device's 5-slot queue.
+        </p>
+      </div>
+    </div>
+
+    <div class="link">
+      <div class="stage">Stage<b>07</b></div>
+      <div class="link-body">
+        <div class="link-head">
+          <h3>Playback — pre-roll and the drain stall</h3>
+          <span class="pill p-hot">+2s / phrase</span>
+        </div>
+        <p>
+          Playback will not begin until <code>stream->size &gt; 8192</code> (<code>ino:559</code>). Because the server
+          sends 4096-byte chunks, that strict <code>&gt;</code> only passes on the <em>third</em> chunk — 383 ms of
+          audio buffered where <code>&gt;=</code> would have started at 255 ms.
+        </p>
+        <p>
+          Then the drain stall of Finding 02. Also note <code>i2s_write(..., portMAX_DELAY)</code> at
+          <code>ino:748</code> blocks the main loop for up to 64 ms at a time, so <code>webSocket.loop()</code> is
+          serviced only every 32–64 ms <em>during</em> playback — throttling the very downlink that is feeding it.
+        </p>
+      </div>
+    </div>
+
+  </div>
+
+  <section style="display:flex;flex-direction:column;gap:16px">
+    <div>
+      <div class="eyebrow">Ordered by saving ÷ effort</div>
+      <h2>What to fix</h2>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Fix</th><th>Where</th><th>Saves</th><th>Effort</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Replace <code>drainDelay</code> formula with a fixed ~600 ms</td>
+            <td class="ref">ino:759, :732</td>
+            <td class="num">phrase + 1.4s<br><span class="note">per phrase</span></td>
+            <td><span class="pill p-ok">one line</span></td>
+          </tr>
+          <tr>
+            <td>Swap to <code>AsyncAzureOpenAI</code> + <code>async for</code></td>
+            <td class="ref">streaming_openai.py:5, 97, 112</td>
+            <td class="num">restores<br>TTS overlap</td>
+            <td><span class="pill p-ok">drop-in</span></td>
+          </tr>
+          <tr>
+            <td>Try <code>en-US</code> first, or fire the three languages concurrently</td>
+            <td class="ref">optimized_voice.py:257</td>
+            <td class="num">0.6–2.0s</td>
+            <td><span class="pill p-ok">small</span></td>
+          </tr>
+          <tr>
+            <td>Delete <code>adjust_for_ambient_noise</code></td>
+            <td class="ref">optimized_voice.py:251</td>
+            <td class="num">0.256s<br><span class="note">of speech</span></td>
+            <td><span class="pill p-ok">one line</span></td>
+          </tr>
+          <tr>
+            <td>Cache the waiting-music and “say again” WAVs at startup</td>
+            <td class="ref">audio_receiver.py:747, 798</td>
+            <td class="num">0.2–1.0s</td>
+            <td><span class="pill p-ok">small</span></td>
+          </tr>
+          <tr>
+            <td>Lower pre-roll threshold to <code>&gt;= 4096</code></td>
+            <td class="ref">ino:559</td>
+            <td class="num">0.13s</td>
+            <td><span class="pill p-ok">one line</span></td>
+          </tr>
+          <tr>
+            <td>Set an OpenAI client timeout (default is 600s)</td>
+            <td class="ref">streaming_openai.py:15</td>
+            <td class="num">tail risk</td>
+            <td><span class="pill p-ok">one line</span></td>
+          </tr>
+          <tr>
+            <td>Set <code>recognizer.operation_timeout</code></td>
+            <td class="ref">optimized_voice.py:93</td>
+            <td class="num">tail risk</td>
+            <td><span class="pill p-ok">one line</span></td>
+          </tr>
+          <tr>
+            <td>Drop the fixed <code>delay(10)</code>/<code>delay(50)</code> upload pacing</td>
+            <td class="ref">ino:661, :665</td>
+            <td class="num">0.25s</td>
+            <td><span class="pill p-warn">test on device</span></td>
+          </tr>
+          <tr>
+            <td>Replace the polled deque with <code>asyncio.Queue</code></td>
+            <td class="ref">audio_receiver.py:307</td>
+            <td class="num">0–50ms</td>
+            <td><span class="pill p-warn">small refactor</span></td>
+          </tr>
+          <tr>
+            <td>Firmware VAD to end recording on silence</td>
+            <td class="ref">ino:589, :275</td>
+            <td class="num">up to 3s</td>
+            <td><span class="pill p-hot">needs hardware</span></td>
+          </tr>
+          <tr>
+            <td>Streaming STT (transcribe during speech)</td>
+            <td class="ref">optimized_voice.py:205</td>
+            <td class="num">0.5–1.8s</td>
+            <td><span class="pill p-hot">new provider</span></td>
+          </tr>
+          <tr>
+            <td>Binary WebSocket frames instead of base64 JSON</td>
+            <td class="ref">ino:652 · audio_receiver.py:253</td>
+            <td class="num">33% wire</td>
+            <td><span class="pill p-hot">both ends</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">
+      The first eight rows are all one-line or near-one-line changes, none of them require hardware, and together they
+      account for the majority of the avoidable time. Start there before touching firmware VAD or swapping STT
+      providers.
+    </p>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:14px">
+    <div>
+      <div class="eyebrow">Not latency, but found on the way</div>
+      <h2>Correctness issues</h2>
+    </div>
+
+    <details>
+      <summary>A client whose first message is <code>settings</code> is permanently mute</summary>
+      <div class="details-body">
+        <p>
+          <code>audio_receiver.py:147–160</code> stores settings, acks, then calls <code>_handle_audio_stream</code>
+          <em>without</em> the <code>asyncio.create_task(self._process_audio_queue(...))</code> that both the
+          <code>register</code> branch (133–135) and the <code>audio_chunk</code> branch (186–188) perform. The deque
+          fills, the <code>COMPLETE</code> sentinel lands in a queue nobody ever pops, and the client is transcribed
+          never — with no error anywhere.
+        </p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Sample-rate agreement is coincidence, not design</summary>
+      <div class="details-body">
+        <p>
+          The firmware reports its rate inside the <code>register</code> message (<code>ino:434–436</code>), and the
+          register handler never reads it. The <code>audio_chunk</code> handler ignores the rate on chunk 0 too. So
+          <code>client_settings</code> is empty for every ESP32 client and <code>_combine_to_proper_wav</code> falls
+          back to a hardcoded <code>16000</code> (<code>audio_receiver.py:654</code>) — which happens to match
+          <code>SAMPLE_RATE</code> in the firmware.
+        </p>
+        <p>
+          Change either constant and the server stamps a wrong header, Google receives pitch-shifted audio, and STT
+          returns garbage with no error. Worse: the three other places that populate <code>client_settings</code>
+          (lines 149, 170, 278) all default to <strong>44100</strong>.
+        </p>
+      </div>
+    </details>
+
+    <details>
+      <summary>The <code>web_</code> client-id prefix is silently destroyed</summary>
+      <div class="details-body">
+        <p>
+          <code>zoo_api.py:212</code> slices <code>[-10:]</code> across the whole f-string rather than the numeric
+          part. Verified by execution: <code>'web_-1474576251381098940_1234'</code> becomes
+          <code>'98940_1234'</code>. Because <code>recent_detections</code> is keyed on the mapped id, the CV-context
+          branch at <code>zoo_api.py:239</code> is unreachable in practice for every web client.
+        </p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Dead code that other code depends on</summary>
+      <div class="details-body">
+        <p>
+          <code>_play_waiting_audio</code> (<code>audio_receiver.py:792–848</code>) has no caller — yet
+          <code>_cancel_waiting_audio</code> and the cancels at 375–377, 597 and 613 all assume it runs. Since
+          <code>waiting_audio_tasks</code> is therefore always empty, every one of those cancels is a no-op.
+        </p>
+        <p>
+          Also unreferenced: <code>_generate_and_queue_mp3</code>, <code>_stream_single_phrase_mp3</code>, and by
+          extension <code>ESP32TTSStreamer</code> entirely. <code>self.tts_connections</code> and
+          <code>self.stream_func</code> are assigned in <code>__init__</code> and never read.
+        </p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Voice recordings travel over plain HTTP</summary>
+      <div class="details-body">
+        <p>
+          The <code>recognize_google</code> endpoint is <code>http://</code>, not HTTPS, authenticated with a shared
+          hardcoded Chromium key. Children's voice recordings traverse the network unencrypted, and Google can revoke
+          that key without notice — the failure mode would be a silent, permanent “say again” loop. The advertised
+          offline fallback cannot fire: <code>pocketsphinx</code> is not in <code>requirements.txt</code>, not
+          installed in the Dockerfile, and not importable.
+        </p>
+      </div>
+    </details>
+
+    <details>
+      <summary>A held button re-triggers recording indefinitely</summary>
+      <div class="details-body">
+        <p>
+          The PSRAM headroom guard at <code>ino:948–951</code> returns before <code>lastButtonState</code> is updated
+          at <code>ino:978</code>. With the button held, <code>lastButtonState</code> stays <code>HIGH</code>, so the
+          HIGH→LOW edge re-fires every iteration — a ~50 ms spin, or ~150 ms when the conditional
+          <code>delay(100)</code> at 942 also runs.
+        </p>
+      </div>
+    </details>
+  </section>
+
+  <section class="panel flat" id="confidence">
+    <div>
+      <div class="eyebrow">Confidence</div>
+      <h2 style="margin-top:6px">What is measured, what is not</h2>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Claim</th><th>Basis</th></tr></thead>
+        <tbody>
+          <tr><td>All fixed constants — 5.00s, 200 ms, 50 ms, 0.1s, 2000 ms, 8192, 4096, maxlen 100</td><td><span class="pill p-ok">read from source</span> every line re-opened and verified</td></tr>
+          <tr><td>FLAC encode 0.140 / 0.148 / 0.230s</td><td><span class="pill p-ok">measured</span> on this machine, bundled <code>flac-win32.exe</code>, synthetic 5s clip</td></tr>
+          <tr><td>Structural claims — blocking loop, batch barrier, dead code, dropped context</td><td><span class="pill p-ok">read from source</span> confirmed by grep and execution</td></tr>
+          <tr><td>Google STT round-trip time</td><td><span class="pill p-warn">estimated</span> no live calls made</td></tr>
+          <tr><td>Azure OpenAI TTFT and token rate</td><td><span class="pill p-warn">estimated</span> no instrumentation exists in the repo</td></tr>
+          <tr><td>ElevenLabs per-phrase latency</td><td><span class="pill p-warn">estimated</span></td></tr>
+          <tr><td>On-wire upload duration</td><td><span class="pill p-warn">estimated</span> no <code>millis()</code> delta anywhere near the chunk loop</td></tr>
+          <tr><td>Geographic hop costs between HKUST / Google / ElevenLabs</td><td><span class="pill p-hot">unmeasurable here</span> this network intercepts DNS — all three hosts resolved to one address</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">
+      The highest-value instrumentation to add is a <code>millis()</code> delta around the firmware chunk loop and a
+      timestamp at each server stage. That would settle the upload figure, the DMA pre-load question, and give the
+      geography question a real answer — all of which are currently reasoned rather than observed.
+    </p>
+  </section>
+
+  <hr>
+
+  <footer>
+    <div>Traced across seven segments with an adversarial verification pass on every citation — 33 of 33 checked in the capture segment alone, with six line-number corrections applied.</div>
+    <div>Line numbers are against <code>PAL_OP</code> @ <code>d0bd442</code>. The active firmware is <code>zoo_esp32/audio_tailscale copy.ino</code>, not <code>audio_tailscale.ino</code>.</div>
+  </footer>
+
+</div>
+<script>
+  (function () {
+    var root = document.documentElement;
+    var btn = document.getElementById('themeToggle');
+    var label = document.getElementById('themeLabel');
+    var order = ['system', 'light', 'dark'];
+
+    function apply(mode) {
+      if (mode === 'system') root.removeAttribute('data-theme');
+      else root.setAttribute('data-theme', mode);
+      label.textContent = mode;
+      btn.setAttribute('aria-label', 'Colour theme: ' + mode + '. Click to change.');
+    }
+
+    var saved = 'system';
+    try { saved = localStorage.getItem('palop-theme') || 'system'; } catch (e) {}
+    if (order.indexOf(saved) === -1) saved = 'system';
+    apply(saved);
+
+    btn.addEventListener('click', function () {
+      var next = order[(order.indexOf(saved) + 1) % order.length];
+      saved = next;
+      try { localStorage.setItem('palop-theme', next); } catch (e) {}
+      apply(next);
+    });
+  })();
+</script>
+
+</body>
+</html>

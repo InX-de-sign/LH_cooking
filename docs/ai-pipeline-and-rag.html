@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="PAL_OP AI pipeline after the gpt-5-mini and retrieval rework: how a question becomes an answer, what the RAG rebuild fixed, and the ranked list of problems still to fix.">
+<title>PAL_OP — AI Pipeline and Retrieval</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box} html{-webkit-text-size-adjust:100%}
+  body{margin:0} img,svg{display:block;max-width:100%} table{border-collapse:collapse}
+  button{font:inherit;color:inherit}
+
+  :root{
+    --ground:#E9EDEF;--surface:#FFFFFF;--surface-2:#F3F6F7;
+    --ink:#0F1A21;--ink-soft:#566874;--ink-faint:#8195A1;
+    --rule:#CFD9DF;--rule-soft:#E1E8EC;
+    --accent:#0B6575;--accent-soft:#DCEDF0;
+    --ok:#2C6E52;--ok-bg:#DDEDE4;--warn:#9A6410;--warn-bg:#F6E9D2;
+    --hot:#A4382A;--hot-bg:#F6DFDB;
+    --shadow:0 1px 2px rgba(15,26,33,.06),0 8px 24px -12px rgba(15,26,33,.18);
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,"Cascadia Mono","SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --measure:70ch;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --ground:#0B1216;--surface:#121E24;--surface-2:#16242B;
+    --ink:#DFE8EC;--ink-soft:#90A4AF;--ink-faint:#6A7F8B;
+    --rule:#23343C;--rule-soft:#1B2A31;
+    --accent:#56C2D2;--accent-soft:#12333A;
+    --ok:#63B58C;--ok-bg:#163025;--warn:#DCA847;--warn-bg:#33290F;
+    --hot:#E47964;--hot-bg:#3A1F1A;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -14px rgba(0,0,0,.7)}}
+  :root[data-theme="dark"]{
+    --ground:#0B1216;--surface:#121E24;--surface-2:#16242B;
+    --ink:#DFE8EC;--ink-soft:#90A4AF;--ink-faint:#6A7F8B;
+    --rule:#23343C;--rule-soft:#1B2A31;
+    --accent:#56C2D2;--accent-soft:#12333A;
+    --ok:#63B58C;--ok-bg:#163025;--warn:#DCA847;--warn-bg:#33290F;
+    --hot:#E47964;--hot-bg:#3A1F1A;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -14px rgba(0,0,0,.7)}
+
+  body{background:var(--ground);color:var(--ink);font-family:var(--sans);
+       font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1060px;margin:0 auto;padding:48px 24px 96px;
+        display:flex;flex-direction:column;gap:40px}
+
+  h1,h2,h3{text-wrap:balance;margin:0;letter-spacing:-.02em}
+  h1{font-size:clamp(2rem,5vw,3rem);font-weight:760;line-height:1.08}
+  h2{font-size:1.5rem;font-weight:700}
+  h3{font-size:1.0625rem;font-weight:680}
+  p{margin:0;max-width:var(--measure)}
+  .eyebrow{font-family:var(--mono);font-size:.6875rem;font-weight:600;
+           letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+  .lede{font-size:1.125rem;color:var(--ink-soft);max-width:62ch}
+  .note{font-size:.875rem;color:var(--ink-soft)}
+  code{font-family:var(--mono);font-size:.8125em;background:var(--surface-2);
+       border:1px solid var(--rule-soft);border-radius:3px;padding:.1em .35em;word-break:break-word}
+  a{color:var(--accent)}
+  a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+
+  pre{margin:0;background:var(--surface-2);border:1px solid var(--rule);border-radius:8px;
+      padding:16px;overflow-x:auto;font-family:var(--mono);font-size:.8125rem;line-height:1.5}
+  pre code{background:none;border:none;padding:0;font-size:inherit}
+  .cmt{color:var(--ink-faint)}
+  .add{color:var(--ok);font-weight:600}
+  .del{color:var(--hot)}
+
+  .panel{background:var(--surface);border:1px solid var(--rule);border-radius:10px;
+         padding:24px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:16px}
+  .flat{box-shadow:none;background:var(--surface-2)}
+  .callout{border-left:3px solid var(--accent);background:var(--accent-soft);
+           border-radius:0 8px 8px 0;padding:20px 22px;display:flex;flex-direction:column;gap:12px}
+  .callout.warn{border-left-color:var(--warn);background:var(--warn-bg)}
+  .callout.hot{border-left-color:var(--hot);background:var(--hot-bg)}
+  .callout.good{border-left-color:var(--ok);background:var(--ok-bg)}
+  .callout p,.callout li{max-width:76ch}
+
+  .scroll{overflow-x:auto;border:1px solid var(--rule);border-radius:8px}
+  table{width:100%;font-size:.875rem;min-width:600px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+  thead th{font-family:var(--mono);font-size:.6875rem;text-transform:uppercase;letter-spacing:.1em;
+           color:var(--ink-soft);background:var(--surface-2);border-bottom:1px solid var(--rule);white-space:nowrap}
+  tbody tr:last-child td{border-bottom:none}
+  td.mono,th.mono{font-family:var(--mono);font-size:.8125rem}
+  td.nw{white-space:nowrap}
+
+  .pill{display:inline-block;font-family:var(--mono);font-size:.6875rem;font-weight:600;
+        padding:2px 8px;border-radius:999px;white-space:nowrap}
+  .p-ok{background:var(--ok-bg);color:var(--ok)}.p-warn{background:var(--warn-bg);color:var(--warn)}
+  .p-hot{background:var(--hot-bg);color:var(--hot)}.p-flat{background:var(--surface-2);color:var(--ink-soft);border:1px solid var(--rule)}
+
+  ul,ol{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:7px}
+  li{max-width:var(--measure)}
+  li::marker{color:var(--ink-faint)}
+  ul ul,ol ol,ul ol,ol ul{margin-top:7px}
+
+  .hop{display:grid;grid-template-columns:56px 1fr;gap:18px;padding:18px 0;
+       border-top:1px solid var(--rule-soft);align-items:start}
+  .hop:first-of-type{border-top:none}
+  .hopn{font-family:var(--mono);font-size:1.25rem;font-weight:700;color:var(--accent);padding-top:2px}
+  .hopb{display:flex;flex-direction:column;gap:9px;min-width:0}
+  .where{font-family:var(--mono);font-size:.6875rem;text-transform:uppercase;
+         letter-spacing:.1em;color:var(--ink-faint)}
+
+  .prob{display:grid;grid-template-columns:auto 1fr;gap:10px 16px;align-items:start;
+        padding:20px 0;border-top:1px solid var(--rule-soft)}
+  .prob:first-of-type{border-top:none}
+  .prob .rank{font-family:var(--mono);font-size:.75rem;font-weight:700;color:var(--accent);
+              background:var(--accent-soft);border-radius:6px;padding:4px 9px;white-space:nowrap}
+  .prob .body{display:flex;flex-direction:column;gap:10px;min-width:0}
+  .prob h3{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+  .kv{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;font-size:.875rem;max-width:80ch}
+  .kv dt{font-family:var(--mono);font-size:.6875rem;text-transform:uppercase;letter-spacing:.09em;
+         color:var(--ink-faint);padding-top:4px}
+  .kv dd{margin:0;color:var(--ink-soft)}
+  .kv dd strong{color:var(--ink)}
+
+  .bars{display:flex;flex-direction:column;gap:6px;font-family:var(--mono);font-size:.75rem}
+  .bar{display:grid;grid-template-columns:96px 1fr 42px;gap:10px;align-items:center}
+  .bar .track{background:var(--surface-2);border:1px solid var(--rule-soft);border-radius:3px;height:14px;overflow:hidden}
+  .bar .fill{height:100%;background:var(--accent)}
+  .bar .fill.thin{background:var(--hot)}
+  .bar .num{text-align:right;color:var(--ink-soft)}
+
+  hr{border:none;border-top:1px solid var(--rule);margin:0}
+  footer{color:var(--ink-faint);font-size:.8125rem;display:flex;flex-direction:column;gap:6px}
+
+  .theme-toggle{position:fixed;top:16px;right:16px;z-index:50;display:inline-flex;align-items:center;
+    gap:7px;padding:7px 13px;background:var(--surface);color:var(--ink-soft);border:1px solid var(--rule);
+    border-radius:999px;font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;
+    text-transform:uppercase;cursor:pointer;box-shadow:var(--shadow)}
+  .theme-toggle:hover{color:var(--ink);border-color:var(--ink-faint)}
+  .theme-toggle .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);flex:none}
+
+  @media print{.theme-toggle{display:none}body{background:#fff;color:#000}.panel{box-shadow:none;break-inside:avoid}}
+  @media (max-width:640px){.hop,.prob{grid-template-columns:1fr;gap:8px}.kv{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" id="themeToggle" type="button"><span class="dot"></span><span id="themeLabel">Theme</span></button>
+
+<div class="wrap">
+
+  <header style="display:flex;flex-direction:column;gap:16px">
+    <div style="font-family:var(--mono);font-size:.75rem;color:var(--ink-faint)">
+      PAL_OP · AI pipeline and retrieval · gpt-5-mini · updated 2026-08-27
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="eyebrow">Offline reference</div>
+      <h1>How a question becomes an answer</h1>
+    </div>
+    <p class="lede">
+      The pipeline after the model switch and the retrieval rebuild — what each hop does,
+      what the rework fixed, and the ranked list of what is still wrong.
+    </p>
+  </header>
+
+  <!-- ============ STATE OF PLAY ============ -->
+  <section class="callout good">
+    <div class="eyebrow" style="color:var(--ok)">Where things stand</div>
+    <h3>The model switch and the retrieval rebuild are done and verified live</h3>
+    <ul>
+      <li><strong>gpt-5-mini</strong> on the HKUST proxy, <code>reasoning_effort=minimal</code>, answering in ~1.4–2.2 s — measurably faster than the gpt-4o-mini it replaced.</li>
+      <li><strong>478 facts</strong> across 48 exhibits and 35 species, up from <code>LIKE '%name%'</code> over 8 rows.</li>
+      <li><strong>Hierarchical memory</strong>: visit → episode → turn, with a ledger so "tell me more" never repeats itself.</li>
+      <li><strong>Grounded</strong>: empty retrieval produces an honest "I'm not sure", not an invented exhibit.</li>
+    </ul>
+    <p class="note">
+      Nothing is committed yet. The working tree holds 13 modified files and 4 new ones.
+    </p>
+  </section>
+
+  <!-- ============ PIPELINE ============ -->
+  <section class="panel">
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div class="eyebrow">The pipeline</div>
+      <h2>Nine hops from microphone to speaker</h2>
+      <p class="note">Modules in <code>chatbot/</code>. Hops 4–6 are the part that was rebuilt.</p>
+    </div>
+
+<pre><code>  ESP32 mic ──▶ <span class="cmt">/ws/esp32/audio/{id}</span> ──▶ STT ──┐
+                                                 ├──▶ context_builder ──▶ gpt-5-mini ──▶ TTS ──▶ ESP32 speaker
+  ESP32-CAM ──▶ YOLO ──▶ <span class="cmt">POST /cv/detection</span> ──┘          │
+                                                            ├── knowledge_base    <span class="cmt">(what it knows)</span>
+                                                            └── conversation_state <span class="cmt">(what it remembers)</span></code></pre>
+
+    <div>
+      <div class="hop">
+        <div class="hopn">1</div>
+        <div class="hopb">
+          <div class="where">zoo_api.py · audio_receiver.py</div>
+          <h3>Audio arrives</h3>
+          <p>The ESP32 audio unit streams I2S chunks over a WebSocket. Recording ends on silence rather than a fixed window.</p>
+        </div>
+      </div>
+
+      <div class="hop">
+        <div class="hopn">2</div>
+        <div class="hopb">
+          <div class="where">optimized_voice.py · Google Speech</div>
+          <h3>Speech becomes text</h3>
+          <p><code>STT_LANGUAGES</code> defaults to <code>en-US</code> alone — one round trip, no misdetection. Listing several languages scores them by recogniser confidence rather than taking the first non-empty answer.</p>
+          <p class="note">Consequence worth knowing: with the default, Cantonese speech never reaches the model as Chinese at all. See problem 2.</p>
+        </div>
+      </div>
+
+      <div class="hop">
+        <div class="hopn">3</div>
+        <div class="hopb">
+          <div class="where">inference/ → POST /cv/detection</div>
+          <h3>The camera offers a label</h3>
+          <p>YOLO posts a label such as <code>red-panda</code>. It is stored per client id and treated as valid for 30 s. The camera id is mapped to the audio id by <code>CLIENT_ID_MAPPING</code>.</p>
+        </div>
+      </div>
+
+      <div class="hop">
+        <div class="hopn">4</div>
+        <div class="hopb">
+          <div class="where">context_builder.py · resolve_subject()</div>
+          <h3>What is "it"?</h3>
+          <p>The whole game for a walk-up guide. Priority order:</p>
+          <ol>
+            <li>an animal <strong>named outright</strong> in the question</li>
+            <li>a <strong>pronoun</strong> ("what do <em>they</em> eat?") → the open episode's subject</li>
+            <li>the <strong>camera</strong> detection</li>
+            <li>the open <strong>episode</strong>, carried forward</li>
+            <li>nothing — a park-level question</li>
+          </ol>
+          <p>Note that 1 beats 3. Previously the camera overrode everything, so asking about capybaras while standing at the pandas got you an answer about pandas.</p>
+        </div>
+      </div>
+
+      <div class="hop">
+        <div class="hopn">5</div>
+        <div class="hopb">
+          <div class="where">knowledge_base.py · retrieve()</div>
+          <h3>Facts, not rows</h3>
+          <p>The question is classified into a <em>facet</em> — <code>diet</code>, <code>route</code>, <code>conservation</code>, <code>practical</code> and ten others — then a cascade runs, exhausting every facet-specific source before broadening:</p>
+          <pre><code>1. facet on the subject
+2. facet on the subject's exhibit(s)     <span class="cmt">← a species has no route facts;</span>
+3. facet park-wide                        <span class="cmt">  its exhibit does</span>
+4. any facet on the subject
+5. any facet on its exhibit(s)
+6. FTS5 full-text search</code></pre>
+          <p>Facts already told this visit are excluded, which is what makes a second "tell me more" produce new material.</p>
+        </div>
+      </div>
+
+      <div class="hop">
+        <div class="hopn">6</div>
+        <div class="hopb">
+          <div class="where">context_builder.py · _render()</div>
+          <h3>Four labelled layers</h3>
+          <pre><code>[VISIT]   English speaker. 12 minutes in, 6 questions.
+          Already visited: Red Panda, Giant Panda.
+[NOW]     Asking about the King Penguin (they named it).
+          Already covered: location, diet (2 questions).
+[RECENT]  Child: what do they eat?
+          Guide: King penguins eat small fishes and squid.
+[FACTS]   Use only these. Do not invent exhibits or numbers.
+          - (route) Monkey Tree presents South Pole Spectacular: ...
+[QUESTION] How do I get there?</code></pre>
+          <p>The old prompt was one flat concatenation with nothing marking which part described <em>now</em> and which described <em>earlier</em>.</p>
+        </div>
+      </div>
+
+      <div class="hop">
+        <div class="hopn">7</div>
+        <div class="hopb">
+          <div class="where">streaming_openai.py · config.py</div>
+          <h3>The model call</h3>
+          <p><code>completion_kwargs()</code> emits the parameter set the deployment family needs. Rolling back to gpt-4o-mini is one environment variable.</p>
+          <p class="note">Language is decided in Python and stated outright, never inferred by the model.</p>
+        </div>
+      </div>
+
+      <div class="hop">
+        <div class="hopn">8</div>
+        <div class="hopb">
+          <div class="where">elevenlabs_voice.py · esp32_tts_streamer.py</div>
+          <h3>Text becomes audio</h3>
+          <p>ElevenLabs MP3, decoded to 16 kHz mono WAV by <code>miniaudio</code>, streamed back to the ESP32.</p>
+        </div>
+      </div>
+
+      <div class="hop">
+        <div class="hopn">9</div>
+        <div class="hopb">
+          <div class="where">conversation_state.py</div>
+          <h3>The turn is recorded</h3>
+          <p>The exchange is written against its episode, the facet is added to the episode's coverage, and every fact used is marked delivered.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ WHAT WAS FIXED ============ -->
+  <section class="panel">
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div class="eyebrow">Closed</div>
+      <h2>What the rework fixed</h2>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Was</th><th>Now</th><th class="nw">Evidence</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>No retrieval. <code>LIKE '%name%'</code> over 8 rows, gated by a hardcoded 7-animal list. The crocodile, dolphins and walruses were unreachable.</td>
+            <td>478 facts, 35 species, 48 exhibits, alias-resolved and facet-ranked.</td>
+            <td class="mono nw">knowledge_base.py</td>
+          </tr>
+          <tr>
+            <td>The streaming path — the one the ESP32 uses — never called <code>get_park_info_context()</code>, so attractions, rides and directions were invisible to the voice bot.</td>
+            <td>One retrieval path for both streaming and non-streaming.</td>
+            <td class="mono nw">enhanced_rag_openai.py</td>
+          </tr>
+          <tr>
+            <td>A hit dumped all 13 columns; the prompt builder then discarded most of them by substring filter. Intent never chose what to fetch.</td>
+            <td>Facet-level retrieval: the question selects the facts.</td>
+            <td class="mono nw">retrieve()</td>
+          </tr>
+          <tr>
+            <td>Flat context. <code>current_topic</code> was a scalar every camera detection overwrote.</td>
+            <td>visit → episode → turn, with computed episode summaries.</td>
+            <td class="mono nw">conversation_state.py</td>
+          </tr>
+          <tr>
+            <td>Repeats itself. Nothing tracked what had already been said.</td>
+            <td>Delivered-fact ledger; retrieval excludes what was already told.</td>
+            <td class="mono nw">delivered_facts</td>
+          </tr>
+          <tr>
+            <td>Invented exhibits. Testing produced a confident "Red Panda Habitat" that does not exist.</td>
+            <td>Empty retrieval states so explicitly; the guide admits it does not know.</td>
+            <td class="mono nw">grounding block</td>
+          </tr>
+          <tr>
+            <td>English questions answered in Chinese — the prompt mentioned Cantonese unconditionally. gpt-4o-mini did this too.</td>
+            <td>English-first. Chinese must be ≥35% of the letters to switch.</td>
+            <td class="mono nw">detect_language()</td>
+          </tr>
+          <tr>
+            <td><code>max_tokens=50</code> on gpt-5 returns an <strong>empty string</strong>, not an error.</td>
+            <td><code>completion_kwargs()</code> per model family, with a budget floor.</td>
+            <td class="mono nw">config.py</td>
+          </tr>
+          <tr>
+            <td>Running from <code>chatbot/</code> loaded the placeholder key in <code>chatbot/.env</code>, gave a 401, and silently fell back to canned answers.</td>
+            <td>Both <code>.env</code> files are loaded; placeholders are treated as unset.</td>
+            <td class="mono nw">_load_env_files()</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ PROBLEMS ============ -->
+  <section class="panel">
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div class="eyebrow">Open</div>
+      <h2>Problems still to fix</h2>
+      <p class="note">Ranked by how much each one costs a real visitor.</p>
+    </div>
+
+    <div>
+
+      <div class="prob">
+        <div class="rank">P1</div>
+        <div class="body">
+          <h3>The knowledge base is a mile wide and an inch deep <span class="pill p-hot">blocking</span></h3>
+          <dl class="kv">
+            <dt>Symptom</dt><dd>Ask "what do meerkats eat?" and the guide correctly says it does not know. It knows <em>where</em> the meerkats are and nothing else.</dd>
+            <dt>Measured</dt><dd><strong>27 of 35 species have 3 facts or fewer</strong>, usually just a location. <strong>29 of 35 have no diet fact at all.</strong> Only the 8 species carried over from <code>zoo.db</code> have real depth.</dd>
+            <dt>Cause</dt><dd>Not retrieval. <code>park_knowledge.py</code> describes <em>exhibits</em> richly and <em>species</em> barely; <code>zoo.db</code> holds only 8 species, and several of its prose columns are empty strings.</dd>
+            <dt>Fix</dt><dd>Add species rows to <code>zoo.db</code> for the other 27, then <code>python knowledge_base.py --rebuild</code>. The schema and the loader already handle them — this is data entry, not code.</dd>
+          </dl>
+          <p class="note">Facts per facet — the shape of the gap:</p>
+          <div class="bars" aria-label="Facts per facet">
+            <div class="bar"><span>location</span><span class="track"><span class="fill" style="width:100%"></span></span><span class="num">120</span></div>
+            <div class="bar"><span>highlight</span><span class="track"><span class="fill" style="width:78%"></span></span><span class="num">94</span></div>
+            <div class="bar"><span>overview</span><span class="track"><span class="fill" style="width:58%"></span></span><span class="num">70</span></div>
+            <div class="bar"><span>route</span><span class="track"><span class="fill" style="width:44%"></span></span><span class="num">53</span></div>
+            <div class="bar"><span>practical</span><span class="track"><span class="fill" style="width:27%"></span></span><span class="num">32</span></div>
+            <div class="bar"><span>conservation</span><span class="track"><span class="fill" style="width:20%"></span></span><span class="num">24</span></div>
+            <div class="bar"><span>nearby</span><span class="track"><span class="fill" style="width:16%"></span></span><span class="num">19</span></div>
+            <div class="bar"><span>identity</span><span class="track"><span class="fill" style="width:13%"></span></span><span class="num">16</span></div>
+            <div class="bar"><span>appearance</span><span class="track"><span class="fill" style="width:13%"></span></span><span class="num">15</span></div>
+            <div class="bar"><span>story</span><span class="track"><span class="fill" style="width:9%"></span></span><span class="num">11</span></div>
+            <div class="bar"><span>habitat</span><span class="track"><span class="fill thin" style="width:7%"></span></span><span class="num">8</span></div>
+            <div class="bar"><span>range</span><span class="track"><span class="fill thin" style="width:7%"></span></span><span class="num">8</span></div>
+            <div class="bar"><span>diet</span><span class="track"><span class="fill thin" style="width:5%"></span></span><span class="num">6</span></div>
+            <div class="bar"><span>behaviour</span><span class="track"><span class="fill thin" style="width:2%"></span></span><span class="num">2</span></div>
+          </div>
+          <p class="note">Children ask about diet and behaviour constantly. Those are the two thinnest facets in the database.</p>
+        </div>
+      </div>
+
+      <div class="prob">
+        <div class="rank">P2</div>
+        <div class="body">
+          <h3>Cantonese cannot reach the guide by voice <span class="pill p-warn">decision needed</span></h3>
+          <dl class="kv">
+            <dt>Symptom</dt><dd>A child speaking Cantonese to the ESP32 gets nonsense, because Google transcribes their speech as garbled English.</dd>
+            <dt>Cause</dt><dd><code>STT_LANGUAGES</code> defaults to <code>en-US</code> alone. This was a deliberate earlier fix — the old code looped <code>zh-HK, zh-CN, en-US</code> and returned the first non-empty result, which meant zh-HK answered nonsense Chinese for English speech and en-US was never reached.</dd>
+            <dt>Consequence</dt><dd>The Cantonese reply path is currently reachable only from the browser text box. <code>GUIDE_LANGUAGE_MODE</code> has no effect on the voice path.</dd>
+            <dt>Decision</dt><dd>
+              <strong>If English-only is the product:</strong> nothing to do — set <code>GUIDE_LANGUAGE_MODE=en</code> to make it explicit.<br>
+              <strong>If Cantonese is wanted:</strong> set <code>STT_LANGUAGES=en-US,zh-HK</code>. Both are then scored by recogniser confidence, at the cost of a second sequential STT round trip on the critical path.
+            </dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="prob">
+        <div class="rank">P3</div>
+        <div class="body">
+          <h3>The same animal fact is written in four places <span class="pill p-warn">drift risk</span></h3>
+          <dl class="kv">
+            <dt>Symptom</dt><dd>Ungrounded claims can still reach a visitor, through paths the <code>[FACTS]</code> guard does not cover.</dd>
+            <dt>Evidence</dt><dd>
+              <code>streaming_openai.py</code> prompt example: <em>"The pandas munch through 40 kilograms of bamboo every single day"</em> — while <code>knowledge.db</code> says the giant panda needs 4,300–5,500 kcal/day. Both are in the model's context at once.<br>
+              <code>zoo_api.py</code> lines 144–157 hold hardcoded greeting facts per label.<br>
+              <code>enhanced_rag_openai.py</code> lines 623–641 hold hardcoded fallback answers, used whenever the API call fails.
+            </dd>
+            <dt>Fix</dt><dd>Drive the CV greeting and the offline fallback from <code>knowledge.db</code>, and strip the concrete numbers out of the prompt examples so they teach tone rather than content.</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="prob">
+        <div class="rank">P4</div>
+        <div class="body">
+          <h3>Full-text search does not work in Chinese <span class="pill p-warn">design limit</span></h3>
+          <dl class="kv">
+            <dt>Symptom</dt><dd>A Chinese question about a subject missing from the alias table retrieves nothing, where the English equivalent would fall back to full-text search.</dd>
+            <dt>Cause</dt><dd>FTS5's <code>unicode61</code> tokeniser does not segment Chinese, and every fact body is English. Chinese is carried entirely by the ~40 hand-written aliases in <code>EXTRA_ALIASES</code>.</dd>
+            <dt>Fix</dt><dd>Short term, keep adding Chinese aliases as species are added — that is where the value is. Long term, this is the one place embeddings would genuinely beat FTS5; Qdrant is already in the compose file and <code>text-embedding-3-small</code> is available on the proxy.</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="prob">
+        <div class="rank">P5</div>
+        <div class="body">
+          <h3>The browser client never receives camera context <span class="pill p-flat">minor</span></h3>
+          <dl class="kv">
+            <dt>Symptom</dt><dd>Testing "what animal is this?" from <code>zoo_index.html</code> always behaves as if no camera is attached.</dd>
+            <dt>Cause</dt><dd><code>zoo_api.py:212</code> mints a random <code>client_id</code> per WebSocket connection, while detections are keyed by the posted <code>user_id</code>. They can never match. The ESP32 path uses a fixed id and works correctly.</dd>
+            <dt>Fix</dt><dd>Let the browser send an id in the connect frame, or accept one as a query parameter, and map it the way <code>CLIENT_ID_MAPPING</code> does for the camera.</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="prob">
+        <div class="rank">P6</div>
+        <div class="body">
+          <h3>Superseded code and unused services still in the tree <span class="pill p-flat">tidy-up</span></h3>
+          <ul>
+            <li><code>memory_tracker.py</code> — fully replaced by <code>conversation_state.py</code>, no longer on the request path.</li>
+            <li><code>enhanced_rag_openai.py</code> — roughly 250 lines (<code>extract_animal_from_message</code>, <code>enhanced_animal_search</code>, <code>build_contextual_response</code>, <code>get_park_info_context</code>, <code>_build_enhanced_prompt</code>) now reachable only when no <code>prompt_context</code> is supplied, which the live paths always supply.</li>
+            <li><strong>Qdrant</strong> — a container in both compose files, imported nowhere. Either use it for P4 or drop it.</li>
+            <li><strong>Postgres</strong> — still running the iteration-1 <em>museum</em> schema (<code>museum_objects</code>, <code>learning_progress</code>, a <code>VECTOR(1536)</code> column). Nothing reads it; all real state is SQLite.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="prob">
+        <div class="rank">P7</div>
+        <div class="body">
+          <h3>Collective labels are registered as species <span class="pill p-flat">cosmetic</span></h3>
+          <p><code>Sharks</code>, <code>Rays</code>, <code>Reef fish</code>, <code>Sea cucumbers</code> and <code>Sea Jellies</code> are groups, not species. They come from the <code>animals</code> lists on the exhibit pages. Answers read slightly oddly ("You can see the Sharks at Shark Mystique"), and they cannot carry species-level facts.</p>
+        </div>
+      </div>
+
+      <div class="prob">
+        <div class="rank">P8</div>
+        <div class="body">
+          <h3>No automated tests <span class="pill p-flat">process</span></h3>
+          <p>Everything in this document was verified by hand. The retrieval layer is unusually easy to test — <code>resolve_subject</code>, <code>classify_facet</code> and <code>retrieve</code> are pure functions over a fixed database, needing no API key. A table of question → expected subject and facet would catch regressions like the two found while building this: <code>"do"</code> classifying as a behaviour question, and <code>"how do I get to the park?"</code> inheriting the previously discussed animal.</p>
+        </div>
+      </div>
+
+      <div class="prob">
+        <div class="rank">P9</div>
+        <div class="body">
+          <h3>Park data has no freshness mechanism <span class="pill p-flat">watch</span></h3>
+          <p><code>park_knowledge.py</code> is a hand-maintained snapshot of the Ocean Park website. It already contains time-bound copy — North Pole Encounter is described as closed from 5 January 2026 "until further notice" — and that text is now a retrievable fact. Nothing flags a stale entry, and there is no scrape date on any record.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============ NEXT ============ -->
+  <section class="panel">
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div class="eyebrow">Next</div>
+      <h2>Order of work</h2>
+    </div>
+
+    <div class="hop">
+      <div class="hopn">1</div>
+      <div class="hopb">
+        <h3>Commit</h3>
+        <p>Nothing is committed. 13 modified files, 4 new. Do this before deploying so there is something to roll back to.</p>
+      </div>
+    </div>
+
+    <div class="hop">
+      <div class="hopn">2</div>
+      <div class="hopb">
+        <h3>Smoke test locally</h3>
+        <pre><code>python scripts\check_model.py            <span class="cmt">-- deployment reachable, params correct</span>
+cd chatbot; python zoo_main.py          <span class="cmt">-- scripted 8-question visit</span>
+docker compose up                       <span class="cmt">-- then browse /static/zoo_index.html</span></code></pre>
+      </div>
+    </div>
+
+    <div class="hop">
+      <div class="hopn">3</div>
+      <div class="hopb">
+        <h3>Deploy to Lighthouse</h3>
+        <p>A <strong>rebuild is required</strong>, not just a restart — the Dockerfile now builds <code>knowledge.db</code> at image build time.</p>
+        <pre><code>docker compose --env-file .env.lighthouse \
+  -f docker-compose.lighthouse.yml up -d --build
+curl -fsS https://your-domain/health</code></pre>
+      </div>
+    </div>
+
+    <div class="hop">
+      <div class="hopn">4</div>
+      <div class="hopb">
+        <h3>Decide the Cantonese question (P2)</h3>
+        <p>One environment variable either way, but it determines whether half the language work is reachable at all.</p>
+      </div>
+    </div>
+
+    <div class="hop">
+      <div class="hopn">5</div>
+      <div class="hopb">
+        <h3>Fill in the species data (P1)</h3>
+        <p>The largest quality gain available, and it needs no code. Every fact added is retrievable immediately after <code>--rebuild</code>.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ REFERENCE ============ -->
+  <section class="panel flat">
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div class="eyebrow">Reference</div>
+      <h2>Knobs and probes</h2>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Variable</th><th>Default</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr><td class="mono nw">AZURE_DEPLOYMENT_NAME</td><td class="mono nw">gpt-5-mini</td><td>Model. Also selects the parameter set. Rollback target: <code>gpt-4o-mini</code>.</td></tr>
+          <tr><td class="mono nw">AZURE_REASONING_EFFORT</td><td class="mono nw">minimal</td><td>gpt-5 only. <code>minimal</code> spends zero reasoning tokens. Raising it roughly doubles latency for no gain on one-sentence answers.</td></tr>
+          <tr><td class="mono nw">AZURE_MAX_COMPLETION_TOKENS</td><td class="mono nw">400</td><td>Budget for reasoning <em>and</em> visible output. Floored at 300 by <code>MIN_REASONING_BUDGET</code>.</td></tr>
+          <tr><td class="mono nw">AZURE_OPENAI_API_VERSION</td><td class="mono nw">2024-10-21</td><td>Do not "upgrade". The proxy 404s the newer preview versions.</td></tr>
+          <tr><td class="mono nw">GUIDE_LANGUAGE_MODE</td><td class="mono nw">auto</td><td><code>auto</code> = English unless the question is clearly Chinese. <code>en</code> = English always.</td></tr>
+          <tr><td class="mono nw">GUIDE_CHINESE_RATIO</td><td class="mono nw">0.35</td><td>Share of letters that must be Chinese before switching. Raise to make switching harder.</td></tr>
+          <tr><td class="mono nw">STT_LANGUAGES</td><td class="mono nw">en-US</td><td>What speech is transcribed as. See P2.</td></tr>
+          <tr><td class="mono nw">SESSION_IDLE_SECONDS</td><td class="mono nw">1800</td><td>Silence after which the next question starts a new visit — a shared handset changing hands.</td></tr>
+          <tr><td class="mono nw">KNOWLEDGE_DB_PATH</td><td class="mono nw">chatbot/knowledge.db</td><td>Derived, gitignored, rebuilt during the image build.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div>
+      <h3 style="margin-bottom:10px">Inspecting retrieval without spending an API call</h3>
+      <pre><code>GET /api/retrieve?q=what+do+red+pandas+eat   <span class="cmt">-- resolved subject, facet, the exact facts</span>
+GET /api/knowledge                           <span class="cmt">-- fact counts per facet (the P1 gauge)</span>
+GET /api/context/esp32_1                     <span class="cmt">-- a visitor's episodes and facets covered</span></code></pre>
+    </div>
+
+    <section class="callout warn" style="margin-top:4px">
+      <h3>PowerShell</h3>
+      <p><code>curl</code> is an alias for <code>Invoke-WebRequest</code> and does not accept <code>-X</code>, <code>-H</code> or <code>-d</code>; <code>\</code> is not a line continuation. Use <code>scripts/check_model.py</code>, or <code>Invoke-RestMethod</code>, or real <code>curl.exe</code> with the JSON body <em>in a file</em> — an inline <code>-d</code> string is mangled by the argument parser and returns a 500.</p>
+    </section>
+  </section>
+
+  <footer>
+    <div>Companion documents: <code>docs/system-reference.html</code> (how it is all wired), <code>docs/audio-latency-chain.html</code> (where the seconds go), <code>docs/tencent-lighthouse-operations-guide.html</code> (running it).</div>
+    <div>Counts read from <code>chatbot/knowledge.db</code> as built on 2026-08-27. Latency figures measured against the HKUST proxy the same day. Regenerate the counts with <code>GET /api/knowledge</code>.</div>
+  </footer>
+
+</div>
+
+<script>
+  (function(){
+    var root=document.documentElement,btn=document.getElementById('themeToggle'),
+        label=document.getElementById('themeLabel'),order=['system','light','dark'],saved='system';
+    function apply(m){ if(m==='system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme',m);
+      label.textContent=m; btn.setAttribute('aria-label','Colour theme: '+m+'. Click to change.'); }
+    try{ saved=localStorage.getItem('palop-theme')||'system'; }catch(e){}
+    if(order.indexOf(saved)===-1) saved='system';
+    apply(saved);
+    btn.addEventListener('click',function(){
+      saved=order[(order.indexOf(saved)+1)%order.length];
+      try{ localStorage.setItem('palop-theme',saved); }catch(e){}
+      apply(saved);
+    });
+  })();
+</script>
+</body>
+</html>

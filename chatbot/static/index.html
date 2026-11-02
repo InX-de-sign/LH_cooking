@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f2f4ef">
+<title>Stovetop Coach</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: one-screen phone app. Status + step card up top (readable at arm's
+   length), conversation scrolls in the middle, a thumb-sized dock at the
+   bottom. Wider screens put camera + step beside the conversation. */
+:root {
+  color-scheme: light;
+  --bg: #f2f4ef;          /* worktop: cool off-white, faint basil bias */
+  --surface: #ffffff;
+  --ink: #1d221e;
+  --muted: #5d665f;
+  --line: #d8ddd5;
+  --yolk: #f0b429;        /* accent: egg yolk; talk button, progress */
+  --yolk-ink: #2a1f00;
+  --basil: #2f7d4f;       /* semantic: done / ok */
+  --flame: #c8402b;       /* semantic: safety / listening */
+  --cook-bubble: #e4e9e1;
+
+  --display: "Bricolage Grotesque", "Arial Narrow", system-ui, sans-serif;
+  --body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --step-size: clamp(1.35rem, 5.2vw, 1.9rem);
+  --radius: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #141815; --surface: #1d221e; --ink: #ecefe9; --muted: #9aa49c;
+    --line: #2f3631; --yolk: #f5c04a; --yolk-ink: #2a1f00; --basil: #5cc285;
+    --flame: #ff7a63; --cook-bubble: #262c27;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #141815; --surface: #1d221e; --ink: #ecefe9; --muted: #9aa49c;
+  --line: #2f3631; --yolk: #f5c04a; --yolk-ink: #2a1f00; --basil: #5cc285;
+  --flame: #ff7a63; --cook-bubble: #262c27;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 400 1.0625rem/1.5 var(--body);
+  padding-top: env(safe-area-inset-top, 0px);
+  display: grid; grid-template-rows: auto 1fr auto;
+  -webkit-tap-highlight-color: transparent;
+}
+[hidden] { display: none !important; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--yolk); outline-offset: 2px; }
+
+/* --- header ------------------------------------------------------------ */
+header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px; border-bottom: 1px solid var(--line);
+}
+.brand { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; }
+.conn {
+  margin-left: auto; display: flex; align-items: center; gap: 6px;
+  font-size: 0.8rem; color: var(--muted);
+}
+.conn::before {
+  content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted);
+}
+.conn[data-state="open"]::before { background: var(--basil); }
+.conn[data-state="closed"]::before { background: var(--flame); }
+
+/* --- main -------------------------------------------------------------- */
+main {
+  min-height: 0; overflow: hidden;
+  display: grid; grid-template-rows: auto 1fr; gap: 12px;
+  padding: 12px 16px 0;
+}
+.top { display: grid; gap: 12px; }
+@media (min-width: 860px) {
+  main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: 1fr; }
+  .top { align-content: start; overflow-y: auto; }
+}
+
+/* camera */
+.camera {
+  position: relative; border-radius: var(--radius); overflow: hidden;
+  background: var(--cook-bubble); aspect-ratio: 16 / 9; max-width: 100%;
+  display: grid; place-items: center;
+}
+.camera video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.camera .cam-empty { text-align: center; padding: 16px; color: var(--muted); font-size: 0.95rem; }
+.camera .cam-empty p { margin: 0 0 10px; }
+.camera.compact { aspect-ratio: auto; height: 46px; place-items: stretch; }
+.camera.compact .cam-empty { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 6px 0 14px; text-align: left; }
+.camera.compact .cam-empty p { margin: 0; }
+.cam-off {
+  position: absolute; top: 8px; right: 8px; border: 0; border-radius: 999px;
+  padding: 6px 12px; font-size: 0.8rem; background: rgb(0 0 0 / 0.55); color: #fff;
+}
+.cam-badge {
+  position: absolute; left: 8px; bottom: 8px; border-radius: 999px; padding: 4px 10px;
+  font-size: 0.75rem; background: rgb(0 0 0 / 0.55); color: #fff;
+}
+.btn {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 999px;
+  padding: 8px 16px; min-height: 40px;
+}
+
+/* step card */
+.step-card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 14px 16px 16px; display: grid; gap: 10px;
+}
+.step-meta { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.recipe-name { font: 600 1rem/1.2 var(--display); }
+.step-count {
+  margin-left: auto; font: 500 0.85rem/1 var(--mono); color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.progress { display: flex; gap: 4px; height: 6px; }
+.progress span { flex: 1; border-radius: 3px; background: var(--line); }
+.progress span.done { background: var(--basil); }
+.progress span.now { background: var(--yolk); }
+.step-text {
+  margin: 0; font: 600 var(--step-size)/1.25 var(--display); letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.done-when { margin: 0; color: var(--muted); font-size: 0.95rem; }
+.done-when b { color: var(--basil); font-weight: 700; }
+.step-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.timer-btn {
+  border: 2px solid var(--ink); background: transparent; border-radius: 999px;
+  padding: 6px 14px; min-height: 40px; font: 500 0.95rem/1 var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.timer-btn[data-running="true"] { border-color: var(--yolk); background: var(--yolk); color: var(--yolk-ink); }
+.timer-btn[data-finished="true"] { border-color: var(--flame); background: var(--flame); color: #fff; }
+.recipe-picks { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* conversation */
+.log {
+  min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
+  padding-bottom: 12px; overscroll-behavior: contain;
+}
+.msg { max-width: 88%; padding: 9px 13px; border-radius: 16px; line-height: 1.45; }
+.msg.coach { align-self: flex-start; background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.msg.cook { align-self: flex-end; background: var(--cook-bubble); border-bottom-right-radius: 4px; }
+.msg.note { align-self: center; max-width: 100%; font-size: 0.8rem; color: var(--muted); padding: 2px 8px; }
+.msg .seen { display: block; margin-top: 6px; font-size: 0.8rem; color: var(--muted); }
+.msg .seen.hazard { color: var(--flame); font-weight: 700; }
+.typing { display: inline-flex; gap: 4px; }
+.typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: blink 1.2s infinite; }
+.typing i:nth-child(2) { animation-delay: 0.2s; } .typing i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes blink { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
+
+/* --- dock -------------------------------------------------------------- */
+.dock {
+  border-top: 1px solid var(--line); background: var(--bg);
+  padding: 10px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  display: grid; gap: 10px;
+}
+.chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.chips button {
+  flex: none; border: 1px solid var(--line); background: var(--surface);
+  border-radius: 999px; padding: 8px 14px; min-height: 40px; white-space: nowrap;
+}
+.talk-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+.text-form { display: flex; gap: 8px; min-width: 0; }
+.text-form input {
+  flex: 1; min-width: 0; min-height: 48px; padding: 0 14px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--surface);
+}
+.send { border: 0; background: transparent; padding: 0 6px; font-weight: 700; color: var(--muted); }
+.talk {
+  width: 72px; height: 72px; border-radius: 50%; border: 0;
+  background: var(--yolk); color: var(--yolk-ink);
+  display: grid; place-items: center; box-shadow: 0 2px 0 rgb(0 0 0 / 0.15);
+}
+.talk svg { width: 30px; height: 30px; }
+.talk[data-state="listening"] { background: var(--flame); color: #fff; animation: pulse 1.4s infinite; }
+.talk[data-state="speaking"] { background: var(--ink); color: var(--bg); }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgb(200 64 43 / 0.45); } 100% { box-shadow: 0 0 0 18px rgb(200 64 43 / 0); } }
+.dock-foot { display: flex; align-items: center; gap: 12px; font-size: 0.85rem; color: var(--muted); }
+.dock-foot label { display: inline-flex; align-items: center; gap: 6px; }
+.hint { margin-left: auto; text-align: right; }
+
+@media (prefers-reduced-motion: reduce) {
+  .talk[data-state="listening"], .typing i { animation: none; }
+}
+</style>
+</head>
+<body>
+<header>
+  <span class="brand">Stovetop Coach</span>
+  <span class="conn" id="conn" data-state="connecting">Connecting</span>
+</header>
+
+<main>
+  <section class="top" aria-label="Recipe">
+    <div class="camera compact" id="camera">
+      <video id="video" playsinline muted hidden></video>
+      <div class="cam-empty" id="camEmpty">
+        <p>Point your phone at the pan so the coach can check on it.</p>
+        <button class="btn" id="camOn" type="button">Turn on camera</button>
+      </div>
+      <button class="cam-off" id="camOff" type="button" hidden>Camera off</button>
+      <span class="cam-badge" id="camBadge" hidden></span>
+    </div>
+
+    <article class="step-card" id="stepCard" aria-live="polite">
+      <div class="step-meta">
+        <span class="recipe-name" id="recipeName">Getting set up</span>
+        <span class="step-count" id="stepCount"></span>
+      </div>
+      <div class="progress" id="progress" aria-hidden="true"></div>
+      <p class="step-text" id="stepText">Answer a few quick questions, then pick what you're cooking.</p>
+      <p class="done-when" id="doneWhen" hidden></p>
+      <div class="step-actions">
+        <button class="timer-btn" id="timerBtn" type="button" hidden></button>
+      </div>
+      <div class="recipe-picks" id="recipePicks" hidden></div>
+    </article>
+  </section>
+
+  <section class="log" id="log" aria-label="Conversation" aria-live="polite"></section>
+</main>
+
+<footer class="dock">
+  <div class="chips" id="chips" hidden>
+    <button type="button" data-say="What's next?">Next step</button>
+    <button type="button" data-say="Repeat that step">Repeat</button>
+    <button type="button" data-say="Does this look done?">Is this done?</button>
+    <button type="button" data-say="What ingredients do I need?">Ingredients</button>
+    <button type="button" data-say="Go back a step">Back</button>
+  </div>
+  <div class="talk-row">
+    <form class="text-form" id="textForm">
+      <label for="textInput" hidden>Type a message</label>
+      <input id="textInput" autocomplete="off" enterkeyhint="send" placeholder="Type, or tap the mic">
+      <button class="send" type="submit">Send</button>
+    </form>
+    <button class="talk" id="talk" type="button" aria-label="Talk to the coach" data-state="idle">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="9" y="2" width="6" height="12" rx="3" fill="none"></rect>
+        <path d="M5 11a7 7 0 0 0 14 0" fill="none"></path>
+        <path d="M12 18v4" fill="none"></path>
+      </svg>
+    </button>
+  </div>
+  <div class="dock-foot">
+    <label><input type="checkbox" id="handsFree"> Hands-free</label>
+    <label><input type="checkbox" id="voiceOut" checked> Speak replies</label>
+    <span class="hint" id="hint">Tap the mic and ask.</span>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const els = {
+    conn: $("conn"), log: $("log"), talk: $("talk"), hint: $("hint"),
+    textForm: $("textForm"), textInput: $("textInput"), chips: $("chips"),
+    handsFree: $("handsFree"), voiceOut: $("voiceOut"),
+    camera: $("camera"), video: $("video"), camEmpty: $("camEmpty"),
+    camOn: $("camOn"), camOff: $("camOff"), camBadge: $("camBadge"),
+    recipeName: $("recipeName"), stepCount: $("stepCount"), progress: $("progress"),
+    stepText: $("stepText"), doneWhen: $("doneWhen"), timerBtn: $("timerBtn"),
+    recipePicks: $("recipePicks"),
+  };
+
+  const state = {
+    ws: null, queue: [], retry: 0,
+    onboarded: false, cooking: {}, visionAvailable: false,
+    stream: null, listening: false, recognition: null, typingEl: null,
+    timer: { id: null, remaining: 0, key: null }, wakeLock: null, audioUnlocked: false,
+  };
+
+  // --- session id: kept on the phone so a reload resumes the same step ----
+  function clientId() {
+    const key = "lh_cooking_client_id";
+    try {
+      let id = localStorage.getItem(key);
+      if (!id) {
+        id = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2)).slice(0, 32);
+        localStorage.setItem(key, id);
+      }
+      return id;
+    } catch (e) { return "anon-" + String(Math.random()).slice(2, 12); }
+  }
+  const CLIENT_ID = clientId();
+
+  // --- connection ---------------------------------------------------------
+  function connect() {
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(`${proto}//${location.host}/ws?client_id=${encodeURIComponent(CLIENT_ID)}`);
+    state.ws = ws;
+    setConn("connecting", "Connecting");
+    ws.onopen = () => {
+      state.retry = 0;
+      setConn("open", "Connected");
+      while (state.queue.length) ws.send(state.queue.shift());
+    };
+    ws.onmessage = (event) => handle(JSON.parse(event.data));
+    ws.onclose = () => {
+      setConn("closed", "Reconnecting");
+      const wait = Math.min(1000 * 2 ** state.retry++, 15000);
+      setTimeout(connect, wait);
+    };
+  }
+  function setConn(s, text) { els.conn.dataset.state = s; els.conn.textContent = text; }
+
+  function handle(data) {
+    if (data.type === "thinking") { showTyping(); return; }
+    if (data.type === "pong") return;
+    hideTyping();
+    if ("vision_available" in data) state.visionAvailable = data.vision_available;
+    if (data.profile) setOnboarded(Boolean(data.profile.complete));
+    if (data.cooking) renderCooking(data.cooking);
+    if (data.message) {
+      const bubble = addMsg("coach", data.message);
+      if (data.vision) noteVision(bubble, data.vision);
+      speak(data.message);
+    }
+    if (data.image_error) addNote(`Camera frame not used: ${data.image_error}`);
+  }
+
+  // --- sending ------------------------------------------------------------
+  function ask(text) {
+    text = (text || "").trim();
+    if (!text) return;
+    unlockAudio();
+    stopSpeaking();
+    addMsg("cook", text);
+    const payload = { type: "ask", message: text };
+    const frame = captureFrame();
+    if (frame) payload.image = frame;
+    const body = JSON.stringify(payload);
+    if (state.ws && state.ws.readyState === WebSocket.OPEN) state.ws.send(body);
+    else { state.queue.push(body); addNote("Not connected yet. Your message will send when the connection is back."); }
+  }
+
+  els.textForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    ask(els.textInput.value);
+    els.textInput.value = "";
+  });
+  els.chips.addEventListener("click", (e) => {
+    const say = e.target.closest("button")?.dataset.say;
+    if (say) ask(say);
+  });
+  els.recipePicks.addEventListener("click", (e) => {
+    const name = e.target.closest("button")?.dataset.recipe;
+    if (name) ask(`Let's make ${name}`);
+  });
+
+  // --- conversation log ---------------------------------------------------
+  function addMsg(who, text) {
+    const div = document.createElement("div");
+    div.className = `msg ${who}`;
+    div.textContent = text;
+    els.log.appendChild(div);
+    els.log.scrollTop = els.log.scrollHeight;
+    return div;
+  }
+  function addNote(text) { return addMsg("note", text); }
+  function noteVision(bubble, vision) {
+    const seen = document.createElement("span");
+    const hazards = vision.hazards || [];
+    seen.className = "seen" + (hazards.length ? " hazard" : "");
+    seen.textContent = hazards.length ? `Camera: ${hazards.join("; ")}` : `Camera saw: ${vision.summary}`;
+    bubble.appendChild(seen);
+  }
+  function showTyping() {
+    if (state.typingEl) return;
+    state.typingEl = addMsg("coach", "");
+    state.typingEl.innerHTML = '<span class="typing" aria-label="Coach is thinking"><i></i><i></i><i></i></span>';
+  }
+  function hideTyping() { state.typingEl?.remove(); state.typingEl = null; }
+
+  // --- onboarding + recipe state -----------------------------------------
+  function setOnboarded(done) {
+    state.onboarded = done;
+    els.chips.hidden = !done;
+    els.textInput.placeholder = done ? "Type, or tap the mic" : "Type your answer, or tap the mic";
+  }
+
+  let recipesLoaded = null;
+  async function loadRecipes() {
+    if (!recipesLoaded) {
+      recipesLoaded = fetch("/api/recipes").then((r) => r.json()).then((d) => d.recipes || []).catch(() => []);
+    }
+    return recipesLoaded;
+  }
+
+  async function renderCooking(c) {
+    state.cooking = c;
+    const total = c.total_steps || 0;
+    els.progress.replaceChildren(...Array.from({ length: total }, (_, i) => {
+      const seg = document.createElement("span");
+      if (c.step !== null && c.step !== undefined) {
+        if (i < c.step) seg.className = "done";
+        else if (i === c.step) seg.className = "now";
+      }
+      return seg;
+    }));
+    els.doneWhen.hidden = true;
+    els.recipePicks.hidden = true;
+    setTimerFor(c);
+
+    if (!c.recipe) {
+      els.recipeName.textContent = state.onboarded ? "No recipe yet" : "Getting set up";
+      els.stepCount.textContent = "";
+      if (!state.onboarded) {
+        els.stepText.textContent = "Answer a few quick questions, then pick what you're cooking.";
+        return;
+      }
+      els.stepText.textContent = "What are we cooking?";
+      const recipes = await loadRecipes();
+      els.recipePicks.replaceChildren(...recipes.map((r) => {
+        const b = document.createElement("button");
+        b.type = "button"; b.className = "btn"; b.dataset.recipe = r.name;
+        b.textContent = r.time_minutes ? `${r.name} · ${r.time_minutes} min` : r.name;
+        return b;
+      }));
+      els.recipePicks.hidden = recipes.length === 0;
+      return;
+    }
+
+    els.recipeName.textContent = c.recipe;
+    if (c.step === null || c.step === undefined) {
+      els.stepCount.textContent = `${total} steps`;
+      els.stepText.textContent = "Get your ingredients out, then say “start”.";
+    } else if (c.step >= total) {
+      els.stepCount.textContent = `${total}/${total}`;
+      els.stepText.textContent = "All steps done. Enjoy it!";
+      els.progress.querySelectorAll("span").forEach((s) => (s.className = "done"));
+    } else {
+      els.stepCount.textContent = `Step ${c.step + 1}/${total}`;
+      els.stepText.textContent = c.step_text || "";
+      if (c.done_when) {
+        els.doneWhen.innerHTML = "";
+        const b = document.createElement("b"); b.textContent = "Done when ";
+        els.doneWhen.append(b, c.done_when);
+        els.doneWhen.hidden = false;
+      }
+    }
+  }
+
+  // --- step timer ---------------------------------------------------------
+  const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  function setTimerFor(c) {
+    const key = c.timer_seconds ? `${c.recipe}#${c.step}` : null;
+    if (state.timer.id && state.timer.key === key) return;   // keep a running timer for this step
+    if (state.timer.id && state.timer.key !== key) { /* running timer for another step keeps going */ return showTimer(); }
+    state.timer.key = key;
+    state.timer.remaining = c.timer_seconds || 0;
+    showTimer();
+  }
+  function showTimer() {
+    const t = state.timer, btn = els.timerBtn;
+    btn.hidden = !t.key;
+    btn.dataset.running = String(Boolean(t.id));
+    btn.dataset.finished = "false";
+    btn.textContent = t.id ? `${fmt(t.remaining)} · stop` : `Start ${fmt(t.remaining)} timer`;
+  }
+  els.timerBtn.addEventListener("click", () => {
+    unlockAudio();
+    const t = state.timer;
+    if (els.timerBtn.dataset.finished === "true") { setTimerFor(state.cooking); return; }
+    if (t.id) { clearInterval(t.id); t.id = null; setTimerFor(state.cooking); return; }
+    t.id = setInterval(() => {
+      t.remaining -= 1;
+      if (t.remaining <= 0) {
+        clearInterval(t.id); t.id = null;
+        els.timerBtn.dataset.running = "false";
+        els.timerBtn.dataset.finished = "true";
+        els.timerBtn.textContent = "Time's up · tap to reset";
+        chime();
+        navigator.vibrate?.([300, 150, 300]);
+        speak("Time's up.");
+        return;
+      }
+      els.timerBtn.textContent = `${fmt(t.remaining)} · stop`;
+    }, 1000);
+    showTimer();
+  });
+
+  // --- camera -------------------------------------------------------------
+  async function cameraOn() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      addNote("This browser can't open the camera. Camera access needs HTTPS on a phone.");
+      return;
+    }
+    try {
+      state.stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 } }, audio: false,
+      });
+      els.video.srcObject = state.stream;
+      await els.video.play();
+      els.video.hidden = false; els.camEmpty.hidden = true; els.camOff.hidden = false;
+      els.camera.classList.remove("compact");
+      els.camBadge.hidden = false;
+      els.camBadge.textContent = state.visionAvailable ? "Coach can see this" : "Preview only: no vision model set";
+      keepAwake();
+    } catch (err) {
+      addNote(`Camera unavailable: ${err.name === "NotAllowedError" ? "permission was denied" : err.message}.`);
+    }
+  }
+  function cameraOff() {
+    state.stream?.getTracks().forEach((t) => t.stop());
+    state.stream = null;
+    els.video.hidden = true; els.camEmpty.hidden = false; els.camOff.hidden = true; els.camBadge.hidden = true;
+    els.camera.classList.add("compact");
+  }
+  els.camOn.addEventListener("click", cameraOn);
+  els.camOff.addEventListener("click", cameraOff);
+
+  // A downscaled JPEG of the current frame, only when a VLM is configured.
+  function captureFrame() {
+    if (!state.stream || !state.visionAvailable || !els.video.videoWidth) return null;
+    const scale = Math.min(1, 768 / els.video.videoWidth);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(els.video.videoWidth * scale);
+    canvas.height = Math.round(els.video.videoHeight * scale);
+    canvas.getContext("2d").drawImage(els.video, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.7);
+  }
+
+  // Keep the screen on while cooking; flour-covered hands can't unlock a phone.
+  async function keepAwake() {
+    try { state.wakeLock = await navigator.wakeLock?.request("screen"); } catch (e) { /* not supported */ }
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && state.stream) keepAwake();
+  });
+
+  // --- voice in -----------------------------------------------------------
+  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  function listen() {
+    if (!Recognition) {
+      addNote("Voice input isn't available in this browser. Type instead, or use Chrome or Safari.");
+      return;
+    }
+    unlockAudio();
+    stopSpeaking();
+    const rec = new Recognition();
+    rec.lang = "en-US"; rec.interimResults = true; rec.continuous = false;
+    state.recognition = rec;
+    let finalText = "";
+    rec.onstart = () => { state.listening = true; setTalk("listening"); els.hint.textContent = "Listening…"; };
+    rec.onresult = (e) => {
+      let interim = "";
+      for (const r of Array.from(e.results)) (r.isFinal ? (finalText = r[0].transcript) : (interim += r[0].transcript));
+      els.hint.textContent = interim || finalText || "Listening…";
+    };
+    rec.onerror = (e) => {
+      if (e.error === "not-allowed") addNote("Microphone permission was denied.");
+      else if (e.error !== "no-speech" && e.error !== "aborted") addNote(`Voice input error: ${e.error}.`);
+    };
+    rec.onend = () => {
+      state.listening = false; state.recognition = null;
+      setTalk("idle"); els.hint.textContent = "Tap the mic and ask.";
+      if (finalText) ask(finalText);
+    };
+    rec.start();
+  }
+  els.talk.addEventListener("click", () => {
+    if (state.listening) state.recognition?.stop();
+    else if (speechSynthesis?.speaking) stopSpeaking();
+    else listen();
+  });
+  function setTalk(s) { els.talk.dataset.state = s; }
+
+  // --- voice out ----------------------------------------------------------
+  let voice = null;
+  function pickVoice() {
+    const voices = speechSynthesis.getVoices();
+    voice = voices.find((v) => v.lang === "en-US" && /natural|samantha|google/i.test(v.name))
+         || voices.find((v) => v.lang.startsWith("en")) || null;
+  }
+  if ("speechSynthesis" in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+
+  // iOS only plays speech that started inside a tap; the first tap unlocks it.
+  function unlockAudio() {
+    if (state.audioUnlocked || !("speechSynthesis" in window)) return;
+    state.audioUnlocked = true;
+    speechSynthesis.speak(new SpeechSynthesisUtterance(""));
+  }
+  function speak(text) {
+    if (!els.voiceOut.checked || !("speechSynthesis" in window) || !text) return afterSpeaking();
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    if (voice) u.voice = voice;
+    u.rate = 1.0;
+    u.onstart = () => setTalk("speaking");
+    u.onend = u.onerror = () => { setTalk("idle"); afterSpeaking(); };
+    speechSynthesis.speak(u);
+  }
+  function stopSpeaking() { if ("speechSynthesis" in window) speechSynthesis.cancel(); setTalk(state.listening ? "listening" : "idle"); }
+  function afterSpeaking() {
+    // Hands-free: once the coach finishes talking, listen for the next question.
+    if (els.handsFree.checked && !state.listening && document.visibilityState === "visible") {
+      setTimeout(() => { if (!state.listening && !speechSynthesis?.speaking) listen(); }, 350);
+    }
+  }
+
+  function chime() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [0, 0.35, 0.7].forEach((at) => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.frequency.value = 880; o.connect(g); g.connect(ctx.destination);
+        g.gain.setValueAtTime(0.0001, ctx.currentTime + at);
+        g.gain.exponentialRampToValueAtTime(0.4, ctx.currentTime + at + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + 0.3);
+        o.start(ctx.currentTime + at); o.stop(ctx.currentTime + at + 0.32);
+      });
+    } catch (e) { /* no audio */ }
+  }
+
+  connect();
+})();
+</script>
+</body>
+</html>

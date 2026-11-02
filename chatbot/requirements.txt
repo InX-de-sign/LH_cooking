@@ -1,0 +1,19 @@
+# Cooking coach service
+
+# --- web ---
+fastapi==0.116.1
+uvicorn[standard]==0.35.0   # [standard] brings the websockets implementation
+websockets==15.0.1
+
+# --- config ---
+PyYAML==6.0.2               # recipes.yaml / glossary.yaml, read at build time
+python-dotenv==1.0.1
+
+# --- model APIs ---
+# One SDK covers the chat model (Azure OpenAI) and any OpenAI-compatible VLM.
+openai==1.101.0
+httpx==0.27.0
+
+# --- deliberately NOT installed ---
+# SpeechRecognition / gtts / miniaudio / pydub : speech runs in the browser now
+# torch / onnxruntime / opencv                 : no local CV model; the VLM is remote

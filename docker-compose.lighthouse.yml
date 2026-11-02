@@ -1,0 +1,76 @@
+# Production on Tencent Cloud Lighthouse: Caddy (HTTPS) in front of the coach.
+#
+#   docker compose --env-file .env.lighthouse -f docker-compose.lighthouse.yml up -d --build
+#
+# Container names are prefixed lh_cooking_ so this stack can sit on the same
+# host as PAL_OP without a name clash -- but only one stack can own ports
+# 80/443. To run both on one server, serve both domains from a single Caddy.
+
+name: lh_cooking
+
+services:
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: lh_cooking_proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env.lighthouse}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      chatbot:
+        condition: service_healthy
+    networks:
+      - public
+      - application
+    restart: unless-stopped
+
+  chatbot:
+    build:
+      context: ./chatbot
+      dockerfile: Dockerfile
+    container_name: lh_cooking_chatbot
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY in .env.lighthouse}
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:?Set AZURE_OPENAI_ENDPOINT in .env.lighthouse}
+      AZURE_OPENAI_API_VERSION: ${AZURE_OPENAI_API_VERSION:-2024-10-21}
+      AZURE_DEPLOYMENT_NAME: ${AZURE_DEPLOYMENT_NAME:-gpt-5-mini}
+      AZURE_OPENAI_TIMEOUT_SECONDS: ${AZURE_OPENAI_TIMEOUT_SECONDS:-30}
+      VLM_PROVIDER: ${VLM_PROVIDER:-none}
+      VLM_BASE_URL: ${VLM_BASE_URL:-}
+      VLM_API_KEY: ${VLM_API_KEY:-}
+      VLM_MODEL: ${VLM_MODEL:-}
+      VLM_MODE: ${VLM_MODE:-auto}
+      VLM_TIMEOUT_SECONDS: ${VLM_TIMEOUT_SECONDS:-10}
+      MEMORY_DB_PATH: /app/data/memory.db
+      HOST: 0.0.0.0
+    volumes:
+      - chatbot_data:/app/data
+    expose:
+      - "8000"
+    networks:
+      application:
+      egress:
+        gw_priority: 1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  caddy_data:
+  caddy_config:
+  chatbot_data:
+
+networks:
+  public:
+  application:
+    internal: true
+  egress:

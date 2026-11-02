@@ -1,0 +1,163 @@
+# recipes.yaml - the source of truth for recipes the coach can walk through.
+#
+# Built into knowledge.db by `python knowledge_base.py --rebuild`.
+# Never edit knowledge.db directly: the Dockerfile rebuilds it at image
+# build time and hand edits are lost.
+#
+# Each entry:
+#   name          what the coach calls it, spoken aloud
+#   aliases       other ways a cook might name it
+#   serves        number of portions
+#   time_minutes  total hands-on + cooking time
+#   difficulty    easy | medium | hard
+#   techniques    glossary.yaml names this recipe relies on; a technique
+#                 question asked mid-recipe can fall back to these
+#   ingredients   one line each, quantity first, spoken as written
+#   steps         in order. `text` is read aloud; `done_when` is what the
+#                 cook (and the camera) should see before moving on;
+#                 `timer_seconds` is optional
+#   facts         anything else, each tagged with a facet:
+#                 overview substitution safety equipment storage tip
+#                 doneness timing heat
+#
+# STARTER CONTENT. These three recipes exist to exercise the pipeline. Their
+# source is marked `starter:unverified` -- review the quantities and times
+# before anyone cooks from them, then replace the source with a real one.
+
+- name: "Tomato and Egg Stir-fry"
+  aliases: ["tomato egg", "egg and tomato", "tomato and eggs", "eggs and tomatoes"]
+  serves: 2
+  time_minutes: 15
+  difficulty: easy
+  techniques: ["stir-fry", "beat eggs", "season to taste"]
+  ingredients:
+    - "4 eggs"
+    - "3 medium ripe tomatoes, cut into wedges"
+    - "2 spring onions, sliced, white and green parts kept apart"
+    - "2 tablespoons neutral oil"
+    - "1 teaspoon sugar"
+    - "half a teaspoon salt"
+  steps:
+    - text: "Crack the eggs into a bowl with a pinch of the salt and beat them until no streaks of white remain."
+      done_when: "The egg is an even yellow with a little froth on top."
+    - text: "Heat 1 tablespoon of oil in a wok or frying pan over medium-high heat."
+      done_when: "The oil shimmers and moves easily when you tilt the pan."
+    - text: "Pour in the eggs, let them set for a few seconds, then push them gently into large soft curds. Take them out while they are still slightly wet."
+      done_when: "Mostly set, soft and glossy, not dry or browned."
+      timer_seconds: 45
+    - text: "Add the remaining oil and the white parts of the spring onion, and stir for about 20 seconds."
+      done_when: "The spring onion smells fragrant."
+      timer_seconds: 20
+    - text: "Add the tomato wedges and stir-fry until they soften and release their juice, about 2 to 3 minutes."
+      done_when: "The tomatoes are soft at the edges and there is a little red sauce in the pan."
+      timer_seconds: 150
+    - text: "Stir in the sugar and the rest of the salt, then return the eggs and fold everything together for 30 seconds."
+      done_when: "The eggs are coated in sauce and just cooked through."
+      timer_seconds: 30
+    - text: "Taste, adjust the salt, scatter the green spring onion over the top and serve."
+  facts:
+    - facet: overview
+      text: "Tomato and egg stir-fry is a quick home-style dish: soft scrambled egg folded into a sweet and sour tomato sauce."
+      source: "starter:unverified"
+    - facet: tip
+      text: "Taking the eggs out while they are still a little wet keeps them soft, because they finish cooking when they go back into the hot tomatoes."
+      source: "starter:unverified"
+    - facet: substitution
+      text: "If your tomatoes are not very ripe, add a tablespoon of ketchup or a splash of water with the tomatoes to help them make a sauce."
+      source: "starter:unverified"
+    - facet: substitution
+      text: "Chives or a little chopped onion can stand in for spring onion."
+      source: "starter:unverified"
+    - facet: storage
+      text: "Leftover tomato and egg keeps in the fridge in a covered container for up to two days; reheat until steaming hot."
+      source: "starter:unverified"
+
+- name: "Spaghetti Aglio e Olio"
+  aliases: ["aglio e olio", "aglio olio", "garlic and oil pasta", "garlic spaghetti", "garlic pasta"]
+  serves: 2
+  time_minutes: 20
+  difficulty: easy
+  techniques: ["boil pasta", "al dente", "slice garlic", "emulsify", "season to taste"]
+  ingredients:
+    - "200 grams dried spaghetti"
+    - "4 cloves garlic, thinly sliced"
+    - "5 tablespoons olive oil"
+    - "half a teaspoon chilli flakes"
+    - "a small handful of parsley, chopped"
+    - "salt for the pasta water"
+  steps:
+    - text: "Bring a large pot of water to a rolling boil and salt it generously."
+      done_when: "Big bubbles break the surface constantly, even when you stir."
+    - text: "Add the spaghetti, stir for the first minute so it does not stick, and cook it for one minute less than the packet says."
+      done_when: "Bend a strand: it should be tender with a thin firm core."
+    - text: "While the pasta cooks, put the olive oil and sliced garlic in a cold frying pan and warm them over low heat."
+      done_when: "The garlic is sizzling gently and turning pale gold at the edges."
+      timer_seconds: 240
+    - text: "Add the chilli flakes, stir for a few seconds, then take the pan off the heat."
+      timer_seconds: 10
+    - text: "Before draining, scoop out a mug of the pasta water. Then drain the spaghetti."
+    - text: "Put the pan back on medium heat, add the spaghetti and about half the reserved water, and toss hard for one to two minutes."
+      done_when: "The oil and water have come together into a glossy sauce that clings to the pasta, with no pool of oil left in the pan."
+      timer_seconds: 90
+    - text: "Toss in the parsley, taste for salt, and serve straight away."
+  facts:
+    - facet: overview
+      text: "Spaghetti aglio e olio is a Neapolitan pasta made from little more than garlic, olive oil and chilli, finished with starchy pasta water."
+      source: "starter:unverified"
+    - facet: tip
+      text: "Starting the garlic in cold oil over low heat lets it flavour the oil slowly without burning."
+      source: "starter:unverified"
+    - facet: doneness
+      text: "Pale gold garlic is perfect. Once garlic turns dark brown it tastes bitter, and it is better to start the garlic again."
+      source: "starter:unverified"
+    - facet: substitution
+      text: "Spaghettini, linguine or any long pasta works in place of spaghetti."
+      source: "starter:unverified"
+    - facet: substitution
+      text: "Without parsley the dish is still good; a squeeze of lemon or a little grated parmesan are common additions."
+      source: "starter:unverified"
+
+- name: "Pan-seared Chicken Breast"
+  aliases: ["chicken breast", "pan fried chicken", "pan-fried chicken", "seared chicken", "pan seared chicken"]
+  serves: 2
+  time_minutes: 25
+  difficulty: medium
+  techniques: ["sear", "rest meat", "pound to even thickness", "season to taste"]
+  ingredients:
+    - "2 boneless skinless chicken breasts"
+    - "1 tablespoon neutral oil"
+    - "1 tablespoon butter"
+    - "salt and black pepper"
+  steps:
+    - text: "Pat the chicken dry with kitchen paper. If one end is much thicker, pound it gently to an even thickness of about 2 centimetres."
+      done_when: "The surface looks dry, not wet or shiny."
+    - text: "Season both sides with salt and pepper, then wash your hands before touching anything else."
+    - text: "Heat the oil in a heavy frying pan over medium-high heat."
+      done_when: "The oil shimmers and a drop of water sizzles hard."
+    - text: "Lay the chicken in the pan, presentation side down, and leave it alone for 5 to 6 minutes."
+      done_when: "The underside is deep golden brown and releases from the pan without sticking."
+      timer_seconds: 330
+    - text: "Flip the chicken, add the butter, and cook for another 5 to 6 minutes, spooning the melted butter over the top."
+      done_when: "The thickest part reaches 74 degrees Celsius on a thermometer, or the juices run clear when pierced."
+      timer_seconds: 330
+    - text: "Move the chicken to a board and let it rest for 5 minutes before slicing."
+      timer_seconds: 300
+  facts:
+    - facet: overview
+      text: "Pan-seared chicken breast is browned in a hot pan on one side, flipped, and finished with butter for flavour."
+      source: "starter:unverified"
+    - facet: safety
+      text: "Chicken is safe to eat when the thickest part reaches 74 degrees Celsius, which is 165 degrees Fahrenheit."
+      source: "starter:unverified"
+    - facet: safety
+      text: "Use a separate board and knife for raw chicken, and wash anything that touched it with hot soapy water."
+      source: "starter:unverified"
+    - facet: tip
+      text: "If the chicken sticks when you try to flip it, wait another minute; it releases on its own once a crust forms."
+      source: "starter:unverified"
+    - facet: substitution
+      text: "Boneless chicken thighs work too; they take a little longer and stay juicier."
+      source: "starter:unverified"
+    - facet: storage
+      text: "Cooked chicken keeps for up to three days in the fridge; refrigerate it within two hours of cooking."
+      source: "starter:unverified"

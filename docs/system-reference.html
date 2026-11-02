@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="PAL_OP system reference: Azure Web App specs, API endpoints, end-to-end data flow from ESP32 through Azure to OpenAI/Google/ElevenLabs, and how to change the TTS provider.">
+<title>PAL_OP — System Reference</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box} html{-webkit-text-size-adjust:100%}
+  body{margin:0} img,svg{display:block;max-width:100%} table{border-collapse:collapse}
+  button{font:inherit;color:inherit}
+
+  :root{
+    --ground:#E9EDEF;--surface:#FFFFFF;--surface-2:#F3F6F7;
+    --ink:#0F1A21;--ink-soft:#566874;--ink-faint:#8195A1;
+    --rule:#CFD9DF;--rule-soft:#E1E8EC;
+    --accent:#0B6575;--accent-soft:#DCEDF0;
+    --ok:#2C6E52;--ok-bg:#DDEDE4;--warn:#9A6410;--warn-bg:#F6E9D2;
+    --hot:#A4382A;--hot-bg:#F6DFDB;
+    --shadow:0 1px 2px rgba(15,26,33,.06),0 8px 24px -12px rgba(15,26,33,.18);
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,"Cascadia Mono","SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --measure:70ch;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --ground:#0B1216;--surface:#121E24;--surface-2:#16242B;
+    --ink:#DFE8EC;--ink-soft:#90A4AF;--ink-faint:#6A7F8B;
+    --rule:#23343C;--rule-soft:#1B2A31;
+    --accent:#56C2D2;--accent-soft:#12333A;
+    --ok:#63B58C;--ok-bg:#163025;--warn:#DCA847;--warn-bg:#33290F;
+    --hot:#E47964;--hot-bg:#3A1F1A;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -14px rgba(0,0,0,.7)}}
+  :root[data-theme="dark"]{
+    --ground:#0B1216;--surface:#121E24;--surface-2:#16242B;
+    --ink:#DFE8EC;--ink-soft:#90A4AF;--ink-faint:#6A7F8B;
+    --rule:#23343C;--rule-soft:#1B2A31;
+    --accent:#56C2D2;--accent-soft:#12333A;
+    --ok:#63B58C;--ok-bg:#163025;--warn:#DCA847;--warn-bg:#33290F;
+    --hot:#E47964;--hot-bg:#3A1F1A;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -14px rgba(0,0,0,.7)}
+
+  body{background:var(--ground);color:var(--ink);font-family:var(--sans);
+       font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1060px;margin:0 auto;padding:48px 24px 96px;
+        display:flex;flex-direction:column;gap:40px}
+
+  h1,h2,h3{text-wrap:balance;margin:0;letter-spacing:-.02em}
+  h1{font-size:clamp(2rem,5vw,3rem);font-weight:760;line-height:1.08}
+  h2{font-size:1.5rem;font-weight:700}
+  h3{font-size:1.0625rem;font-weight:680}
+  p{margin:0;max-width:var(--measure)}
+  .eyebrow{font-family:var(--mono);font-size:.6875rem;font-weight:600;
+           letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+  .lede{font-size:1.125rem;color:var(--ink-soft);max-width:62ch}
+  .note{font-size:.875rem;color:var(--ink-soft)}
+  code{font-family:var(--mono);font-size:.8125em;background:var(--surface-2);
+       border:1px solid var(--rule-soft);border-radius:3px;padding:.1em .35em;word-break:break-word}
+  a{color:var(--accent)}
+  a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+
+  pre{margin:0;background:var(--surface-2);border:1px solid var(--rule);border-radius:8px;
+      padding:16px;overflow-x:auto;font-family:var(--mono);font-size:.8125rem;line-height:1.5}
+  pre code{background:none;border:none;padding:0;font-size:inherit}
+  .cmt{color:var(--ink-faint)}
+
+  .panel{background:var(--surface);border:1px solid var(--rule);border-radius:10px;
+         padding:24px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:16px}
+  .flat{box-shadow:none;background:var(--surface-2)}
+  .callout{border-left:3px solid var(--accent);background:var(--accent-soft);
+           border-radius:0 8px 8px 0;padding:20px 22px;display:flex;flex-direction:column;gap:12px}
+  .callout.warn{border-left-color:var(--warn);background:var(--warn-bg)}
+  .callout.hot{border-left-color:var(--hot);background:var(--hot-bg)}
+  .callout.good{border-left-color:var(--ok);background:var(--ok-bg)}
+  .callout p,.callout li{max-width:76ch}
+
+  .scroll{overflow-x:auto;border:1px solid var(--rule);border-radius:8px}
+  table{width:100%;font-size:.875rem;min-width:600px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+  thead th{font-family:var(--mono);font-size:.6875rem;text-transform:uppercase;letter-spacing:.1em;
+           color:var(--ink-soft);background:var(--surface-2);border-bottom:1px solid var(--rule);white-space:nowrap}
+  tbody tr:last-child td{border-bottom:none}
+  td.mono,th.mono{font-family:var(--mono);font-size:.8125rem}
+  td.nw{white-space:nowrap}
+
+  .pill{display:inline-block;font-family:var(--mono);font-size:.6875rem;font-weight:600;
+        padding:2px 8px;border-radius:999px;white-space:nowrap}
+  .p-ok{background:var(--ok-bg);color:var(--ok)}.p-warn{background:var(--warn-bg);color:var(--warn)}
+  .p-hot{background:var(--hot-bg);color:var(--hot)}.p-flat{background:var(--surface-2);color:var(--ink-soft);border:1px solid var(--rule)}
+
+  ul,ol{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:7px}
+  li{max-width:var(--measure)}
+  li::marker{color:var(--ink-faint)}
+  ul ul,ol ol,ul ol,ol ul{margin-top:7px}
+
+  .hop{display:grid;grid-template-columns:56px 1fr;gap:18px;padding:18px 0;
+       border-top:1px solid var(--rule-soft);align-items:start}
+  .hop:first-of-type{border-top:none}
+  .hopn{font-family:var(--mono);font-size:1.25rem;font-weight:700;color:var(--accent);padding-top:2px}
+  .hopb{display:flex;flex-direction:column;gap:9px;min-width:0}
+  .where{font-family:var(--mono);font-size:.6875rem;text-transform:uppercase;
+         letter-spacing:.1em;color:var(--ink-faint)}
+
+  hr{border:none;border-top:1px solid var(--rule);margin:0}
+  footer{color:var(--ink-faint);font-size:.8125rem;display:flex;flex-direction:column;gap:6px}
+
+  .theme-toggle{position:fixed;top:16px;right:16px;z-index:50;display:inline-flex;align-items:center;
+    gap:7px;padding:7px 13px;background:var(--surface);color:var(--ink-soft);border:1px solid var(--rule);
+    border-radius:999px;font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;
+    text-transform:uppercase;cursor:pointer;box-shadow:var(--shadow)}
+  .theme-toggle:hover{color:var(--ink);border-color:var(--ink-faint)}
+  .theme-toggle .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);flex:none}
+
+  @media print{.theme-toggle{display:none}body{background:#fff;color:#000}.panel{box-shadow:none;break-inside:avoid}}
+  @media (max-width:640px){.hop{grid-template-columns:1fr;gap:8px}}
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" id="themeToggle" type="button"><span class="dot"></span><span id="themeLabel">Theme</span></button>
+
+<div class="wrap">
+
+  <header style="display:flex;flex-direction:column;gap:16px">
+    <div style="font-family:var(--mono);font-size:.75rem;color:var(--ink-faint)">
+      PAL_OP · system reference · Azure for Students (sfengam) · updated 2026-08-11
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="eyebrow">Offline reference</div>
+      <h1>How it is all wired</h1>
+    </div>
+    <p class="lede">
+      Azure Web App specs, every API endpoint, the full path a child's voice takes from the ESP32 to
+      OpenAI and back — and how to swap the audio package.
+    </p>
+  </header>
+
+  <!-- ============ TTS ANSWER FIRST ============ -->
+  <section class="callout good">
+    <div class="eyebrow" style="color:var(--ok)">Direct answer</div>
+    <h3>Yes — the live Azure app is already wired to your previous ElevenLabs account</h3>
+    <ul>
+      <li><strong>It is using the live key</strong> <code>sk_a96fed…</code> — the one that was never public. Not the leaked <code>sk_9f2d33…</code>.</li>
+      <li><code>TTS_PROVIDER=elevenlabs</code>, so <code>zoo_api.py:42-47</code> constructs <code>ElevenLabsVoice</code> rather than falling back to Google.</li>
+      <li>Confirmed live: <code>GET /health</code> returns <code>"tts":"elevenlabs"</code>.</li>
+      <li>Audio is fetched from <code>https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream</code> as MP3, then decoded locally to 16 kHz mono WAV by <code>miniaudio</code>.</li>
+    </ul>
+    <p class="note">
+      Current settings on the deployed app: voice <code>sarah</code>, model <code>eleven_turbo_v2_5</code>,
+      stream <code>true</code>, <code>AUDIO_SPEED=1.3</code>.
+    </p>
+  </section>
+
+  <section class="callout warn">
+    <div class="eyebrow" style="color:var(--warn)">Worth knowing before you change it</div>
+    <h3>You are on the slow model</h3>
+    <ul>
+      <li>Now on <code>eleven_turbo_v2_5</code> (switched 2026-08-11; was <code>eleven_multilingual_v2</code>, which is slower).</li>
+      <li><strong>Turbo is materially lower latency</strong> than multilingual_v2, and TTS sits directly on the critical path — it is one of the legs in the latency budget.</li>
+      <li>Switch back only if you genuinely need Cantonese output — and note the streaming prompt path carries no language rule, so the model is not currently told to answer in Chinese.</li>
+      <li>Keep multilingual only if you genuinely need Cantonese/Chinese output. Note the streaming prompt path carries <em>no language rule</em> at all (<code>streaming_openai.py:22-84</code>), so the model is not currently being told to answer in Chinese anyway.</li>
+    </ul>
+  </section>
+
+  <section class="panel">
+    <div><div class="eyebrow">Changing the audio package</div><h2 style="margin-top:6px">Four options, easiest first</h2></div>
+
+    <h3>1 · Change voice or model — no redeploy</h3>
+    <ul>
+      <li>These are App Settings, not code. Changing them restarts the app but ships nothing.</li>
+      <li>Restart drops every live WebSocket, so do it off-peak.</li>
+    </ul>
+<pre><code>az webapp config appsettings set -g palop-rg -n palop-chatbot-hk --settings \
+  ELEVENLABS_VOICE=rachel \
+  ELEVENLABS_MODEL=eleven_turbo_v2_5</code></pre>
+
+    <h3>2 · Pick a different built-in voice</h3>
+    <ul>
+      <li><code>elevenlabs_voice.py</code> ships a <code>VOICES</code> map of 20 aliases → voice IDs. Use the alias, not the ID.</li>
+      <li>Female: <code>rachel</code>, <code>sarah</code> (current), <code>sarah_mature</code>, <code>domi</code>, <code>emily</code>, <code>elli</code>, <code>dorothy</code></li>
+      <li>Male: <code>drew</code>, <code>clyde</code>, <code>paul</code>, <code>dave</code>, <code>fin</code>, <code>antoni</code>, <code>thomas</code>, <code>charlie</code>, <code>george</code>, <code>callum</code>, <code>patrick</code>, <code>harry</code>, <code>liam</code></li>
+      <li>For a voice not in the map, add the alias → ID pair to <code>VOICES</code> and redeploy.</li>
+    </ul>
+
+    <h3>3 · Switch provider to Google gTTS — free, no key</h3>
+    <ul>
+      <li><code>TTS_PROVIDER=google</code> makes <code>zoo_api.py:51</code> reuse <code>OptimizedVoiceComponent</code> for both STT and TTS.</li>
+      <li>No ElevenLabs key needed, no per-character cost.</li>
+      <li>Quality is noticeably worse for a children's companion, and both STT and TTS then share one 2-worker thread pool — a real bottleneck under concurrency.</li>
+    </ul>
+<pre><code>az webapp config appsettings set -g palop-rg -n palop-chatbot-hk --settings TTS_PROVIDER=google</code></pre>
+
+    <h3>4 · Add a new provider (Azure Speech, Cartesia, PlayHT…)</h3>
+    <ul>
+      <li>The contract is one method. Anything implementing it drops straight in:</li>
+    </ul>
+<pre><code>class MyVoice:
+    async def create_audio_response_async(self, text: str) -&gt; bytes | None:
+        """Return MP3 bytes. The caller decodes to 16 kHz mono WAV itself."""</code></pre>
+    <ul>
+      <li>Register it beside the existing branch in <code>zoo_api.py:42-51</code>.</li>
+      <li>Return <strong>MP3</strong> — <code>audio_receiver.py:_mp3_to_esp32_wav</code> handles the rest via <code>miniaudio</code>.</li>
+      <li>If your provider returns WAV or PCM directly, skip the decode entirely and save a step.</li>
+      <li><strong>Azure Speech would be the natural fit</strong> — same cloud, same region, so it removes one cross-continent hop from the latency chain.</li>
+    </ul>
+  </section>
+
+  <!-- ============ AZURE SPECS ============ -->
+  <section class="panel">
+    <div><div class="eyebrow">Infrastructure</div><h2 style="margin-top:6px">Azure Web App specs</h2></div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Property</th><th>Value</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Public URL</td><td class="mono">palop-chatbot-hk.azurewebsites.net</td><td>HTTPS + WSS, platform certificate</td></tr>
+          <tr><td>Subscription</td><td class="mono">Azure for Students<br>sfengam@connect.ust.hk</td><td class="mono">1605ab78-e2a6-4a7d-8198-7cffb175ff48</td></tr>
+          <tr><td>Resource group</td><td class="mono">palop-rg</td><td>—</td></tr>
+          <tr><td>Region</td><td class="mono">Switzerland North</td><td>Students bans every Asian region — costs ~1.4 s versus East Asia</td></tr>
+          <tr><td>Plan</td><td class="mono">palop-plan</td><td>F1 / Free / Linux — <span class="pill p-ok">no cost</span></td></tr>
+          <tr><td>Runtime</td><td class="mono">PYTHON|3.12</td><td>Linux only; Python on Windows is unsupported</td></tr>
+          <tr><td>Web server</td><td class="mono">nginx → gunicorn → uvicorn</td><td>2 workers, <code>--timeout 600</code></td></tr>
+          <tr><td>Startup command</td><td class="mono">gunicorn -w 2 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 --timeout 600 zoo_api:app</td><td>explicit, not auto-detected</td></tr>
+          <tr><td>WebSockets</td><td class="mono">enabled</td><td>set explicitly — Microsoft documents no default</td></tr>
+          <tr><td>Always On</td><td class="mono">false</td><td><span class="pill p-hot">F1 limitation</span> unloads after 20 min idle</td></tr>
+          <tr><td>Build</td><td class="mono">Oryx</td><td><code>SCM_DO_BUILD_DURING_DEPLOYMENT=1</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3>Limits you are living with on F1</h3>
+    <ul>
+      <li><strong>5 concurrent WebSockets per instance.</strong> Linux Free is capped at 5; every other tier is ~50,000. Two ESP32 units plus a browser tab is already most of your budget.</li>
+      <li><strong>No Always On.</strong> After 20 minutes with no <em>incoming HTTP request</em>, the app unloads and every socket dies. An idle WebSocket does not count as a request.</li>
+      <li><strong>60 CPU-minutes/day</strong> and 1 GB storage on Free.</li>
+      <li><strong>Fix is one command, no redeploy:</strong> <code>az appservice plan update -g palop-rg -n palop-plan --sku B1</code></li>
+    </ul>
+    <h3>Platform behaviours that apply at every tier</h3>
+    <ul>
+      <li><strong>4-minute idle timeout</strong> at the Azure Load Balancer (~240 s on Linux), and it is <em>not configurable</em>. Any socket silent for that long is torn down. The ESP32 pings every 15 s so it stays alive — but the server does not handle those pings, they hit the unknown-message branch.</li>
+      <li><strong>Every app-setting change restarts the app</strong> and drops all live sockets. There is no zero-downtime path for stateful connections.</li>
+      <li><strong>Code runs from <code>/tmp/&lt;uid&gt;</code>, not <code>/home/site/wwwroot</code></strong>, when build automation is on. Only <code>/home</code> persists across restarts.</li>
+    </ul>
+  </section>
+
+  <!-- ============ ENDPOINTS ============ -->
+  <section class="panel">
+    <div><div class="eyebrow">Surface</div><h2 style="margin-top:6px">API endpoints we expose</h2></div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th class="mono">Method</th><th>Path</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td class="mono nw">WS</td><td class="mono">/ws/esp32/audio/{client_id}</td><td><strong>The main product path.</strong> ESP32 audio unit — uplink audio chunks, downlink TTS</td></tr>
+          <tr><td class="mono nw">WS</td><td class="mono">/ws</td><td>Browser test client (<code>static/zoo_index.html</code>). Text in, text out — no audio</td></tr>
+          <tr><td class="mono nw">WS</td><td class="mono">/ws/audio/{client_id}</td><td>Legacy Raspberry Pi endpoint. Same machinery, no keepalive, unauthenticated</td></tr>
+          <tr><td class="mono nw">POST</td><td class="mono">/cv/detection</td><td>Vision service pushes an animal detection to give the chatbot context</td></tr>
+          <tr><td class="mono nw">GET</td><td class="mono">/cv/recent/{user_id}</td><td>Most recent detection for one client</td></tr>
+          <tr><td class="mono nw">GET</td><td class="mono">/cv/detections</td><td>All recent detections</td></tr>
+          <tr><td class="mono nw">GET</td><td class="mono">/health</td><td>Liveness + component status. Used by the platform health check</td></tr>
+          <tr><td class="mono nw">GET</td><td class="mono">/api/animals</td><td>Animal list from <code>zoo.db</code></td></tr>
+          <tr><td class="mono nw">GET</td><td class="mono">/test-tts</td><td>Diagnostic — exercise the TTS provider</td></tr>
+          <tr><td class="mono nw">GET</td><td class="mono">/test-audio</td><td>Diagnostic — audio pipeline</td></tr>
+          <tr><td class="mono nw">GET</td><td class="mono">/test-database</td><td>Diagnostic — SQLite reachability</td></tr>
+          <tr><td class="mono nw">GET</td><td class="mono">/</td><td>Serves the browser client</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <ul>
+      <li><strong>None of these endpoints authenticate.</strong> All three WebSocket endpoints accept any connection, and <code>/cv/detection</code> accepts any POST. Fine behind Tailscale; not fine on a public <code>azurewebsites.net</code> hostname.</li>
+    </ul>
+  </section>
+
+  <section class="panel">
+    <div><div class="eyebrow">Outbound</div><h2 style="margin-top:6px">Third-party APIs we call</h2></div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Service</th><th>Endpoint</th><th>Used for</th></tr></thead>
+        <tbody>
+          <tr><td>Azure OpenAI<br><span class="note">via HKUST gateway</span></td><td class="mono">hkust.azure-api.net<br>gpt-4o-mini, api 2024-10-21</td><td>Response generation, SSE streaming</td></tr>
+          <tr><td>ElevenLabs</td><td class="mono">api.elevenlabs.io/v1<br>/text-to-speech/{id}/stream</td><td>Speech synthesis → MP3</td></tr>
+          <tr><td>Google Speech<br><span class="note">free Chromium endpoint</span></td><td class="mono">http://www.google.com/speech-api<br><span class="pill p-hot">plain HTTP</span></td><td>Transcription, via <code>SpeechRecognition</code></td></tr>
+          <tr><td>GitHub raw</td><td class="mono">raw.githubusercontent.com<br>/InX-de-sign/yp-codes</td><td>Waiting-music and "say again" WAVs</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <ul>
+      <li><strong>Google STT travels over plain HTTP</strong>, not HTTPS, with a shared hardcoded key. Children's voice recordings cross the network unencrypted.</li>
+      <li><strong>The prompt WAVs are fetched from a third-party repo on every use</strong>, uncached. If <code>yp-codes</code> is renamed or made private, waiting music and retry prompts break silently. Worth vendoring into the deployment.</li>
+    </ul>
+  </section>
+
+  <!-- ============ DATA FLOW ============ -->
+  <section style="display:flex;flex-direction:column;gap:8px">
+    <div class="eyebrow">End to end</div>
+    <h2>How information travels</h2>
+    <p class="note">One complete turn: child presses the button, hears an answer.</p>
+  </section>
+
+  <div class="panel">
+
+    <div class="hop">
+      <div class="hopn">01</div>
+      <div class="hopb">
+        <div class="where">ESP32 audio unit · on site</div>
+        <h3>Capture</h3>
+        <ul>
+          <li>Button press triggers a <strong>fixed 5-second</strong> I2S recording — 16 kHz, mono, 16-bit = 160,000 bytes into PSRAM.</li>
+          <li>One blocking <code>i2s_read</code>; no voice-activity detection, no early stop.</li>
+          <li>An 8× software gain is applied, then a 44-byte RIFF header is prepended.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="hop">
+      <div class="hopn">02</div>
+      <div class="hopb">
+        <div class="where">ESP32 → Azure · WSS 443</div>
+        <h3>Uplink</h3>
+        <ul>
+          <li>The 160,044-byte WAV is split into <strong>20 chunks of 8 KB</strong>.</li>
+          <li>Each chunk is <strong>base64-encoded and wrapped in JSON</strong>, sent as a WebSocket <em>text</em> frame — never binary.</li>
+          <li>That inflates 160 KB to about 213 KB on the wire, a 33% overhead.</li>
+          <li>Fixed pacing: 10 ms between chunks, 50 ms before the <code>audio_complete</code> marker.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="hop">
+      <div class="hopn">03</div>
+      <div class="hopb">
+        <div class="where">Azure App Service · Switzerland North</div>
+        <h3>Ingress</h3>
+        <ul>
+          <li>TLS terminates at nginx, which proxies to gunicorn → uvicorn → FastAPI.</li>
+          <li>Chunks are base64-decoded and appended to a per-client <code>deque(maxlen=100)</code>.</li>
+          <li><strong>Nothing happens until the <code>COMPLETE</code> marker arrives.</strong> The whole 5 seconds must land before transcription starts — this is a batch pipeline, not a streaming one.</li>
+          <li>Chunks are reassembled into a single WAV with a fresh RIFF header.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="hop">
+      <div class="hopn">04</div>
+      <div class="hopb">
+        <div class="where">Azure → Google · HTTP</div>
+        <h3>Speech to text</h3>
+        <ul>
+          <li>The WAV is written to a <strong>temp file on disk</strong>, re-read, and FLAC-encoded at maximum compression.</li>
+          <li>Sent to Google's free speech endpoint. Up to <strong>three sequential attempts</strong> across languages — with English tried <em>last</em>.</li>
+          <li>Runs on a 2-worker thread pool; no per-request timeout is set.</li>
+          <li>Returns a single finished transcript string. No partial results.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="hop">
+      <div class="hopn">05</div>
+      <div class="hopb">
+        <div class="where">In process</div>
+        <h3>Context assembly</h3>
+        <ul>
+          <li>SQLite lookups against <code>zoo.db</code> (8 rows, no indexes) and <code>memory.db</code>.</li>
+          <li>Despite the "RAG" naming there is <strong>no vector store</strong> — retrieval is a <code>LIKE '%name%'</code> scan plus hardcoded dictionaries. It costs milliseconds.</li>
+          <li>If the vision service posted a detection recently, that animal is added as context.</li>
+          <li><strong>Most of the assembled context is then discarded</strong> — the streaming prompt builder reads only the detected animal and a truncated database excerpt. Conversation history is loaded and never used, so the voice path has no memory between turns.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="hop">
+      <div class="hopn">06</div>
+      <div class="hopb">
+        <div class="where">Azure → HKUST gateway · HTTPS</div>
+        <h3>Generation</h3>
+        <ul>
+          <li><code>gpt-4o-mini</code> via <code>hkust.azure-api.net</code>, <code>max_tokens=50</code>, streamed as server-sent events.</li>
+          <li><strong>The client is synchronous</strong>, so the event loop is blocked for the entire generation — not just until the first token.</li>
+          <li>No timeout is configured, so the SDK default of 600 seconds applies.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="hop">
+      <div class="hopn">07</div>
+      <div class="hopb">
+        <div class="where">Azure → ElevenLabs · HTTPS</div>
+        <h3>Speech synthesis</h3>
+        <ul>
+          <li>The text stream is cut at <strong>sentence boundaries</strong> — first phrase at 25 characters, later ones at 60 — so synthesis can start before the model finishes.</li>
+          <li>Each phrase is sent to ElevenLabs and comes back as MP3.</li>
+          <li>MP3 → 16 kHz mono WAV is done <strong>in-process by <code>miniaudio</code></strong>, no ffmpeg subprocess.</li>
+          <li>Up to 3 phrases synthesise concurrently; they are always <em>sent</em> in order.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="hop">
+      <div class="hopn">08</div>
+      <div class="hopb">
+        <div class="where">Azure → ESP32 · WSS 443</div>
+        <h3>Downlink and playback</h3>
+        <ul>
+          <li>Per phrase: an <code>audio_start</code> JSON frame, then raw WAV in <strong>4 KB binary frames</strong>, then <code>audio_complete</code>.</li>
+          <li>The ESP32 queues up to 5 streams and plays them FIFO, keyed on the <code>phrase</code> field.</li>
+          <li>Playback begins once about 380 ms of audio is buffered, then feeds the I2S DAC 1 KB at a time.</li>
+          <li>Audio reaches the speaker through an 8-buffer DMA ring.</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+
+  <section class="callout hot">
+    <div class="eyebrow" style="color:var(--hot)">Known issues on this path</div>
+    <h3>Three things that are wrong today</h3>
+    <ul>
+      <li><strong>The sentence-streaming optimisation cannot take effect</strong> while the OpenAI client is synchronous — the blocked event loop prevents any synthesis task from running until generation completes.</li>
+      <li><strong>The firmware waits a full phrase-length plus 2 seconds of silence after every phrase</strong> before advancing its queue. With multi-phrase streaming that becomes a gap inside every sentence.</li>
+      <li><strong>Conversation memory is written to ephemeral storage.</strong> <code>memory.db</code> lives outside <code>/home</code>, so it is wiped on every restart — and app-setting changes restart the app.</li>
+    </ul>
+  </section>
+
+  <hr>
+
+  <footer>
+    <div>Companion documents: <code>docs/audio-latency-chain.html</code> (where the seconds go) and <code>docs/azure-deployment.html</code> (how it was deployed).</div>
+    <div>Azure values read live from the deployed app. Code behaviour verified against the repository at commit <code>d4fbab5</code>.</div>
+  </footer>
+
+</div>
+
+<script>
+  (function(){
+    var root=document.documentElement,btn=document.getElementById('themeToggle'),
+        label=document.getElementById('themeLabel'),order=['system','light','dark'],saved='system';
+    function apply(m){ if(m==='system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme',m);
+      label.textContent=m; btn.setAttribute('aria-label','Colour theme: '+m+'. Click to change.'); }
+    try{ saved=localStorage.getItem('palop-theme')||'system'; }catch(e){}
+    if(order.indexOf(saved)===-1) saved='system';
+    apply(saved);
+    btn.addEventListener('click',function(){
+      saved=order[(order.indexOf(saved)+1)%order.length];
+      try{ localStorage.setItem('palop-theme',saved); }catch(e){}
+      apply(saved);
+    });
+  })();
+</script>
+</body>
+</html>
