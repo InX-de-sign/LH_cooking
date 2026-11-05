@@ -20,6 +20,7 @@ import re
 from typing import Any, Dict, Optional
 
 from config import load_azure_openai_config
+from web_search import BuiltinWebSearch, SearchUnavailable, should_search
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -35,6 +36,7 @@ class EnhancedRAGWithOpenAI:
         self.config = load_azure_openai_config()
         self.openai_client = None
         self.streaming_openai = None
+        self.web_search = BuiltinWebSearch()
 
         if not self.config.configured:
             logger.warning("No chat model configured (OPENAI_API_KEY is empty) - "
@@ -42,18 +44,15 @@ class EnhancedRAGWithOpenAI:
                            "chat-model slot in chatbot/.env to enable the model.")
             return
 
-        from openai import AzureOpenAI
-        self.openai_client = AzureOpenAI(
-            api_key=self.config.api_key,
-            api_version=self.config.api_version,
-            azure_endpoint=self.config.azure_endpoint,
+        from api_client import create_client
+        self.openai_client = create_client(
+            self.config,
             timeout=float(os.getenv("AZURE_OPENAI_TIMEOUT_SECONDS", "30")),
             max_retries=1,
         )
         # The personas live with the prompt builder that uses them.
         from streaming_openai import StreamingOpenAI
         self.streaming_openai = StreamingOpenAI()
-        self._test_connection()
 
     @property
     def available(self) -> bool:
@@ -61,38 +60,41 @@ class EnhancedRAGWithOpenAI:
 
     def describe(self) -> Dict[str, Any]:
         if not self.available:
-            return {"configured": False, "mode": "recipe notes only"}
+            return {"configured": False, "mode": "recipe notes only", "web_search": self.web_search.describe()}
+        from api_client import base_url
         return {
             "configured": True,
-            "endpoint": self.config.azure_endpoint,
+            "endpoint": base_url(self.config),
             "deployment": self.config.deployment_name,
             "api_version": self.config.api_version,
             "reasoning_model": self.config.is_reasoning_model,
             "parameters": self.config.completion_kwargs(),
+            "web_search": self.web_search.describe(),
         }
 
-    def _test_connection(self):
-        """One tiny call at startup, so a bad key shows up in the log immediately.
-
-        A failure here is logged, not fatal: every request still tries the
-        model, so a network blip at boot does not disable it until restart.
-        """
-        try:
-            self.openai_client.chat.completions.create(
-                model=self.config.deployment_name,
-                messages=[{"role": "user", "content": "Hello"}],
-                **self.config.completion_kwargs(16)
-            )
-            logger.info("Chat model reachable: %s", self.config.deployment_name)
-        except Exception as e:
-            logger.error("Chat model check failed (%s): %s", self.config.deployment_name, e)
-
     async def process_query_with_openai(self, query: str, context: Dict[str, Any],
-                                        user_id: str) -> str:
-        """Answer in one shot."""
+                                        user_id: str, on_delta=None) -> str:
+        """Answer, optionally delivering streamed text through an async callback."""
+        context["sources"] = []
+        if should_search(query, context):
+            try:
+                result = await self.web_search.search(query, context=context.get("prompt_context"))
+                context["sources"] = result.sources
+                return result.text
+            except SearchUnavailable as exc:
+                # A model-only answer must never be presented as an online lookup.
+                return "Online search is unavailable. " + str(exc)
         if not self.available:
             return self._offline_fallback(query, context)
+        parts = []
         try:
+            if on_delta is not None:
+                async for delta in self.streaming_openai.stream_response(query, context):
+                    parts.append(delta)
+                    await on_delta(delta)
+                reply = "".join(parts).strip()
+                return reply or self._offline_fallback(query, context, failed=True)
+
             from streaming_openai import DEFAULT_PERSONA
             prompts = self.streaming_openai.system_prompts
             system_prompt = prompts.get(context.get('query_type', DEFAULT_PERSONA),
@@ -103,6 +105,11 @@ class EnhancedRAGWithOpenAI:
             return response or self._offline_fallback(query, context, failed=True)
         except Exception as e:
             logger.error(f"Query processing error: {e}")
+            if parts:
+                # Do not replace words the cook has already heard with a new answer.
+                suffix = " My connection was interrupted. Please ask me to repeat that."
+                await on_delta(suffix)
+                return "".join(parts).strip() + suffix
             return self._offline_fallback(query, context, failed=True)
 
     async def _call_openai_api(self, system_prompt: str, user_prompt: str) -> Optional[str]:

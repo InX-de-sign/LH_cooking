@@ -61,8 +61,7 @@ class CookingAssistant:
             return f"Welcome back{name}! What are we cooking?"
         total = len(self.knowledge.steps(visit.recipe_id))
         if visit.step is None:
-            return (f"Welcome back{name}! We're making {visit.recipe_name}. "
-                    f"Say start when you're ready.")
+            return f"Welcome back{name}! {self._recipe_preview(visit.recipe_id, visit.recipe_name)}"
         if visit.step >= total:
             return f"Welcome back{name}! You finished {visit.recipe_name}."
         return (f"Welcome back{name}! You're on step {visit.step + 1} of {total} "
@@ -74,7 +73,16 @@ class CookingAssistant:
     def cooking_state(self, user_id: str) -> Dict[str, Any]:
         visit = self.store.current_visit(user_id)
         steps = self.knowledge.steps(visit.recipe_id) if visit.recipe_id else []
-        return cooking_state(visit.recipe_name, visit.step, steps)
+        state = cooking_state(visit.recipe_name, visit.step, steps)
+        recipe = self.knowledge.recipe_details(visit.recipe_id) if visit.recipe_id else {}
+        state.update(ingredients=recipe.get("ingredients", []), serves=recipe.get("serves"),
+                     time_minutes=recipe.get("time_minutes"))
+        return state
+
+    def _recipe_preview(self, recipe_id: int, recipe_name: str) -> str:
+        ingredients = self.knowledge.ingredients_text(recipe_id) or ""
+        return (f"Let's make {recipe_name}.\n\n{ingredients}\n\n"
+                "Gather these ingredients, then say start or tap Start cooking for step 1.")
 
     def _finish_onboarding(self, user_id: str) -> str:
         """Resolve 'what are you cooking today?' to a recipe, and greet."""
@@ -86,10 +94,7 @@ class CookingAssistant:
 
         if recipe is not None:
             self.store.set_recipe(visit, recipe.id, recipe.name)
-            minutes = next((r["time_minutes"] for r in recipes if r["id"] == recipe.id), None)
-            length = f" It takes about {minutes} minutes." if minutes else ""
-            return (f"Great{name}! Let's make {recipe.name}.{length} Ask me for the "
-                    f"ingredients, or say start when you're ready.")
+            return f"Great{name}! {self._recipe_preview(recipe.id, recipe.name)}"
         if visit.dish:
             return (f"Thanks{name}! I don't have a recipe for {visit.dish} yet, but I can "
                     f"still answer cooking questions. Recipes I can walk you through: "
@@ -99,7 +104,8 @@ class CookingAssistant:
 
     # -- one turn -----------------------------------------------------------
     async def process_message(self, message: str, user_id: str = "default_user",
-                              image: Optional[tuple] = None) -> Dict[str, Any]:
+                              image: Optional[tuple] = None, on_delta=None,
+                              image_source: str = "camera") -> Dict[str, Any]:
         """Answer one utterance. `image` is (bytes, mime) from the phone, or None.
 
         Returns the reply plus the state the phone needs to update its screen.
@@ -113,10 +119,19 @@ class CookingAssistant:
             if onboarding["message"] is not None:
                 return self._result(user_id, onboarding["message"])
 
-            observation = await self._look(user_id, message, image)
+            uploaded_photo = image_source == "upload" and image is not None
+            observation = await self._look(user_id, message, image, force=uploaded_photo)
+            if uploaded_photo and observation is None:
+                return self._result(user_id, "I couldn't analyze the uploaded photo. Check your vision model settings and try again.")
 
+            previous_recipe_id = self.store.current_visit(user_id).recipe_id
             turn = await asyncio.to_thread(self.context.build, user_id, message, observation)
             logger.info("Resolved %r", turn)
+
+            if turn.recipe and turn.recipe.id != previous_recipe_id and not uploaded_photo:
+                reply = self._recipe_preview(turn.recipe.id, turn.recipe.name)
+                await asyncio.to_thread(self.context.record, turn, reply, source="recipe-notes")
+                return self._result(user_id, reply, observation=observation)
 
             context = {
                 "prompt_context": turn.text,
@@ -124,25 +139,26 @@ class CookingAssistant:
                 "query_type": self._persona(turn),
                 "social": turn.social,
                 "facet": turn.facet,
+                "missing_notes": not turn.facts and not turn.observation,
             }
             reply = await self.model.process_query_with_openai(
-                query=message, context=context, user_id=user_id)
+                query=message, context=context, user_id=user_id, on_delta=on_delta)
 
             await asyncio.to_thread(self.context.record, turn, reply, source="model")
             return self._result(user_id, reply, cooking=turn.cooking_state(),
-                                observation=observation)
+                                observation=observation, sources=context.get("sources"))
 
         except Exception as exc:
             logger.error("Processing error: %s", exc, exc_info=True)
             return self._result(user_id, "Sorry, something went wrong on my side. "
                                          "Could you say that again?")
 
-    async def _look(self, user_id: str, message: str, image: Optional[tuple]):
+    async def _look(self, user_id: str, message: str, image: Optional[tuple], force=False):
         """Ask the VLM about the attached frame, if this question needs eyes."""
         if image is None or not self.vision.available:
             return None
-        if detect_navigation(message) or not wants_vision(
-                message, classify_facet(message), self.vision.config.mode):
+        if not force and (detect_navigation(message) or not wants_vision(
+                message, classify_facet(message), self.vision.config.mode)):
             return None
 
         visit = self.store.current_visit(user_id)
@@ -163,12 +179,13 @@ class CookingAssistant:
             return "safety"
         return "help"
 
-    def _result(self, user_id, reply, cooking=None, observation=None) -> Dict[str, Any]:
+    def _result(self, user_id, reply, cooking=None, observation=None, sources=None) -> Dict[str, Any]:
         return {
             "message": reply,
             "profile": self.store.onboarding_state(user_id),
-            "cooking": cooking or self.cooking_state(user_id),
+            "cooking": {**self.cooking_state(user_id), **(cooking or {})},
             "vision": observation.to_dict() if observation else None,
+            "sources": sources or [],
         }
 
     # -- reporting -----------------------------------------------------------

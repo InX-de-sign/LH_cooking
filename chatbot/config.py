@@ -124,8 +124,8 @@ def load_azure_openai_config():
     config = AzureOpenAIConfig(
         api_key=os.getenv("OPENAI_API_KEY"),
         azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", "https://hkust.azure-api.net"),
-        # The HKUST proxy serves gpt-5-mini on the 2024-10-21 GA version only;
-        # the newer preview versions 404 there. Do not "upgrade" this.
+        # Direct Azure resources use this version. The HKUST GenAI v1 route
+        # does not take an api-version query parameter.
         api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-10-21"),
         deployment_name=os.getenv("AZURE_DEPLOYMENT_NAME", "gpt-5-mini"),
         max_tokens=int(os.getenv("AZURE_MAX_COMPLETION_TOKENS", "400")),

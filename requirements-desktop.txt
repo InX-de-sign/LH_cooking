@@ -1,0 +1,4 @@
+# Local launcher only; these packages are not installed in the cloud image.
+-r chatbot/requirements.txt
+Pillow>=11.3,<14
+opencv-python>=4.10,<5

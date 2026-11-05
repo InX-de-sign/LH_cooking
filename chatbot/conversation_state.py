@@ -29,17 +29,19 @@ Episode summaries are assembled from the facets already covered rather than by
 asking the model to summarise. A voice coach cannot spend a second and a half
 of API latency on bookkeeping.
 
-The visit profile (name, skill, dietary needs, today's dish) is stored only
-with the visit. It is not a cross-session account.
+Name, experience and dietary needs are remembered for the browser's user ID.
+Today's dish and step remain specific to each visit.
 """
 
 import json
+from contextvars import ContextVar
 import logging
 import os
 import re
 import sqlite3
 import threading
 import time
+import uuid
 from typing import Any, Dict, List, Optional, Sequence
 
 logger = logging.getLogger(__name__)
@@ -96,6 +98,14 @@ CREATE TABLE IF NOT EXISTS visits (
     onboarding_completed_at REAL
 );
 CREATE INDEX IF NOT EXISTS idx_visits_user ON visits(user_id, last_active DESC);
+
+CREATE TABLE IF NOT EXISTS profiles (
+    user_id     TEXT PRIMARY KEY,
+    cook_name   TEXT,
+    skill_level TEXT,
+    dietary     TEXT,
+    updated_at  REAL NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS episodes (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -232,6 +242,9 @@ class ConversationStore:
 
     def __init__(self, db_path: str = None):
         self.db_path = db_path or os.getenv("MEMORY_DB_PATH", "memory.db")
+        # asyncio.to_thread propagates this per-WebSocket task context to
+        # the existing synchronous store/retrieval methods.
+        self._chat_id = ContextVar("cooking_chat_id", default=None)
         self._lock = threading.Lock()
         self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
@@ -248,7 +261,7 @@ class ConversationStore:
             ("visits", {
                 "cook_name": "TEXT", "skill_level": "TEXT", "dietary": "TEXT",
                 "dish": "TEXT", "recipe_id": "INTEGER", "recipe_name": "TEXT",
-                "step": "INTEGER",
+                "step": "INTEGER", "chat_id": "TEXT",
                 "onboarding_step": "TEXT NOT NULL DEFAULT 'name'",
                 "onboarding_started_at": "REAL", "onboarding_completed_at": "REAL",
             }),
@@ -259,6 +272,14 @@ class ConversationStore:
             for name, definition in migrations.items():
                 if name not in columns:
                     self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
+        self._conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_visits_chat ON visits(user_id, chat_id) WHERE chat_id IS NOT NULL")
+        # Preserve the latest completed profile when upgrading an existing database.
+        self._conn.execute(
+            "INSERT OR IGNORE INTO profiles (user_id, cook_name, skill_level, dietary, updated_at) "
+            "SELECT v.user_id, v.cook_name, v.skill_level, v.dietary, v.last_active FROM visits v "
+            "WHERE v.onboarding_step = 'complete' AND v.session_id = ("
+            "SELECT latest.session_id FROM visits latest WHERE latest.user_id = v.user_id "
+            "AND latest.onboarding_step = 'complete' ORDER BY latest.last_active DESC LIMIT 1)")
 
     @staticmethod
     def _visit_from_row(row: sqlite3.Row) -> Visit:
@@ -270,28 +291,42 @@ class ConversationStore:
             row["onboarding_completed_at"],
         )
 
+    def bind_chat(self, chat_id):
+        """Bind a page's chat ID to its request task, never to the shared store."""
+        return self._chat_id.set(chat_id)
+
+    def reset_chat_binding(self, token):
+        self._chat_id.reset(token)
+
     def current_visit(self, user_id: str, language: str = None) -> Visit:
         """Resume this cook's open session, or start a new one."""
         now = time.time()
+        chat_id = self._chat_id.get()
         with self._lock:
-            row = self._conn.execute(
-                "SELECT * FROM visits WHERE user_id = ? ORDER BY last_active DESC LIMIT 1",
-                (user_id,),
-            ).fetchone()
+            if chat_id:
+                row = self._conn.execute("SELECT * FROM visits WHERE user_id = ? AND chat_id = ?",
+                                         (user_id, chat_id)).fetchone()
+            else:
+                row = self._conn.execute(
+                    "SELECT * FROM visits WHERE user_id = ? ORDER BY last_active DESC LIMIT 1", (user_id,)).fetchone()
 
-            if row and (now - row["last_active"]) <= SESSION_IDLE_SECONDS:
+            if row and (chat_id or (now - row["last_active"]) <= SESSION_IDLE_SECONDS):
                 return self._visit_from_row(row)
 
-            session_id = f"{user_id}:{int(now)}"
+            session_id = f"{user_id}:{int(now)}:{uuid.uuid4().hex[:12]}"
+            profile = self._conn.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
             self._conn.execute(
                 "INSERT INTO visits (session_id, user_id, started_at, last_active, language,"
-                " turn_count, onboarding_step)"
-                " VALUES (?, ?, ?, ?, ?, 0, 'name')",
-                (session_id, user_id, now, now, language or "en"),
+                " turn_count, onboarding_step, cook_name, skill_level, dietary, chat_id)"
+                " VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)",
+                (session_id, user_id, now, now, language or "en", "dish" if profile else "name",
+                 profile["cook_name"] if profile else None, profile["skill_level"] if profile else None,
+                 profile["dietary"] if profile else None, chat_id),
             )
             self._conn.commit()
             logger.info("New visit %s for %s", session_id, user_id)
-            return Visit(session_id, user_id, now, now, language or "en", 0)
+            row = self._conn.execute("SELECT * FROM visits WHERE session_id = ?", (session_id,)).fetchone()
+            return self._visit_from_row(row)
 
     def touch_visit(self, session_id: str):
         with self._lock:
@@ -321,6 +356,40 @@ class ConversationStore:
         visit.step = step
 
     # -- visit profile -----------------------------------------------------
+    def get_profile(self, user_id: str) -> Dict[str, Any]:
+        visit = self.current_visit(user_id)
+        return {"cook_name": visit.cook_name or "", "skill_level": visit.skill_level or "",
+                "dietary": visit.dietary or ""}
+
+    def save_profile(self, user_id: str, values: dict) -> Dict[str, Any]:
+        if not isinstance(values, dict):
+            raise ValueError("Provide a profile with name, experience and dietary needs.")
+        clean = {}
+        for field, limit in (("cook_name", 80), ("skill_level", 120), ("dietary", 1000)):
+            value = values.get(field, "")
+            if not isinstance(value, str) or len(value) > limit:
+                raise ValueError(f"{field.replace('_', ' ').capitalize()} must be text of at most {limit} characters.")
+            clean[field] = " ".join(value.split()) or None
+        visit = self.current_visit(user_id)
+        now = time.time()
+        with self._lock:
+            self._write_profile(user_id, clean, now)
+            self._conn.execute(
+                "UPDATE visits SET cook_name = ?, skill_level = ?, dietary = ?, last_active = ?, "
+                "onboarding_step = ?, onboarding_started_at = COALESCE(onboarding_started_at, ?) WHERE session_id = ?",
+                (clean["cook_name"], clean["skill_level"], clean["dietary"], now,
+                 "complete" if visit.onboarding_complete else "dish", now, visit.session_id))
+            self._conn.commit()
+        return {key: value or "" for key, value in clean.items()}
+
+    def _write_profile(self, user_id, values, now):
+        # Caller holds the lock and commits the surrounding transaction.
+        self._conn.execute(
+            "INSERT INTO profiles (user_id, cook_name, skill_level, dietary, updated_at) VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(user_id) DO UPDATE SET cook_name = excluded.cook_name, skill_level = excluded.skill_level, "
+            "dietary = excluded.dietary, updated_at = excluded.updated_at",
+            (user_id, values["cook_name"], values["skill_level"], values["dietary"], now))
+
     @staticmethod
     def _clean_answer(value: str, maximum_length: int) -> str:
         return " ".join(str(value or "").split())[:maximum_length]
@@ -405,11 +474,49 @@ class ConversationStore:
         if next_step == "complete":
             updates["onboarding_completed_at"] = now
         self._update_visit(visit.session_id, **updates)
+        if next_step in ("dish", "complete"):
+            refreshed = self.current_visit(user_id)
+            with self._lock:
+                self._write_profile(user_id, {"cook_name": refreshed.cook_name,
+                    "skill_level": refreshed.skill_level, "dietary": refreshed.dietary}, now)
+                self._conn.commit()
 
         if next_step != "complete":
             return {"complete": False, "message": ONBOARDING_QUESTIONS[next_step],
                     "just_completed": False}
         return {"complete": True, "message": None, "just_completed": True}
+
+    # -- history ----------------------------------------------------------
+    def history(self, user_id: str, offset: int = 0, limit: int = 20) -> Dict[str, Any]:
+        if type(offset) is not int or offset < 0:
+            raise ValueError("History offset must be a non-negative integer.")
+        limit = min(max(limit, 1), 50)
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT session_id, started_at, last_active, recipe_name, dish, turn_count FROM visits "
+                "WHERE user_id = ? ORDER BY started_at DESC, session_id DESC LIMIT ? OFFSET ?",
+                (user_id, limit + 1, offset)).fetchall()
+        return {"sessions": [dict(row) for row in rows[:limit]],
+                "next_offset": offset + limit if len(rows) > limit else None}
+
+    def history_detail(self, user_id: str, session_id: str, offset: int = 0, limit: int = 40) -> Dict[str, Any]:
+        if type(offset) is not int or offset < 0:
+            raise ValueError("History offset must be a non-negative integer.")
+        if not isinstance(session_id, str) or len(session_id) > 160:
+            raise ValueError("Invalid history entry.")
+        limit = min(max(limit, 1), 100)
+        with self._lock:
+            session = self._conn.execute(
+                "SELECT session_id, started_at, last_active, recipe_name, dish, turn_count FROM visits "
+                "WHERE user_id = ? AND session_id = ?", (user_id, session_id)).fetchone()
+            if session is None:
+                raise ValueError("History entry not found.")
+            rows = self._conn.execute(
+                "SELECT id, ts, user_text, assistant_text, vision FROM turns "
+                "WHERE user_id = ? AND session_id = ? ORDER BY id DESC LIMIT ? OFFSET ?",
+                (user_id, session_id, limit + 1, offset)).fetchall()
+        return {"session": dict(session), "turns": [dict(row) for row in reversed(rows[:limit])],
+                "next_offset": offset + limit if len(rows) > limit else None}
 
     # -- episodes ---------------------------------------------------------
     def open_episode(self, session_id: str, user_id: str, subject, opened_by: str) -> Episode:

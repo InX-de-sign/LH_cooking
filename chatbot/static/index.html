@@ -63,7 +63,7 @@ button { cursor: pointer; }
 
 /* --- header ------------------------------------------------------------ */
 header {
-  display: flex; align-items: center; gap: 12px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   padding: 10px 16px; border-bottom: 1px solid var(--line);
 }
 .brand { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; }
@@ -76,6 +76,46 @@ header {
 }
 .conn[data-state="open"]::before { background: var(--basil); }
 .conn[data-state="closed"]::before { background: var(--flame); }
+.header-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.header-button {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 10px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-size: 0.85rem;
+}
+.header-button svg { width: 18px; height: 18px; }
+@media (max-width: 600px) {
+  header { gap: 6px; padding: 8px 12px; }
+  .brand { font-size: 1rem; }
+  .conn { margin-left: auto; font-size: 0.72rem; }
+  .header-actions { width: 100%; justify-content: flex-end; }
+  .header-button { padding: 6px 8px; }
+}
+
+/* profile and usage history */
+dialog {
+  width: min(600px, calc(100% - 24px)); max-height: calc(100dvh - 32px);
+  padding: 20px; border: 1px solid var(--line); border-radius: 18px;
+  background: var(--surface); color: var(--ink); overflow-y: auto;
+}
+dialog::backdrop { background: rgb(0 0 0 / 0.4); }
+.dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.dialog-heading h2 { margin: 0; font: 600 1.4rem/1.2 var(--display); }
+.dialog-help, .dialog-status { color: var(--muted); font-size: 0.9rem; margin: 8px 0 14px; }
+.dialog-status[data-error="true"] { color: var(--flame); }
+.profile-form { display: grid; gap: 8px; }
+.profile-form input, .profile-form select, .profile-form textarea {
+  width: 100%; padding: 10px 12px; margin-bottom: 8px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--bg); color: var(--ink); font: inherit;
+}
+.profile-form textarea { resize: vertical; min-height: 95px; }
+.primary { background: var(--basil); border-color: var(--basil); color: var(--surface); }
+.history-list { display: grid; gap: 10px; }
+.history-entry { display: grid; gap: 4px; width: 100%; text-align: left; padding: 12px; border-radius: 12px; }
+.history-date { font-size: 0.8rem; color: var(--muted); }
+.history-turns { display: grid; gap: 14px; margin: 12px 0; }
+.history-turn { border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+.history-message { margin: 6px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.history-message b { display: block; font-size: 0.8rem; color: var(--muted); }
+dialog button:disabled { cursor: wait; opacity: 0.6; }
 
 /* --- main -------------------------------------------------------------- */
 main {
@@ -83,10 +123,10 @@ main {
   display: grid; grid-template-rows: auto 1fr; gap: 12px;
   padding: 12px 16px 0;
 }
-.top { display: grid; gap: 12px; }
+.top { display: grid; gap: 12px; max-height: 55dvh; overflow-y: auto; }
 @media (min-width: 860px) {
   main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: 1fr; }
-  .top { align-content: start; overflow-y: auto; }
+  .top { align-content: start; max-height: none; }
 }
 
 /* camera */
@@ -143,7 +183,13 @@ main {
 }
 .timer-btn[data-running="true"] { border-color: var(--yolk); background: var(--yolk); color: var(--yolk-ink); }
 .timer-btn[data-finished="true"] { border-color: var(--flame); background: var(--flame); color: #fff; }
-.recipe-picks { display: flex; gap: 8px; flex-wrap: wrap; }
+.recipe-picks { display: flex; gap: 8px; flex-wrap: wrap; max-height: 230px; overflow-y: auto; }
+.recipe-search { display: grid; gap: 6px; }
+.recipe-search input { width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.ingredients-panel summary { cursor: pointer; font-weight: 600; }
+.ingredients-panel ul { padding-left: 22px; margin: 10px 0 0; max-height: 230px; overflow-y: auto; }
+.ingredients-panel li { margin-bottom: 6px; }
+.recipe-details { margin: 0; color: var(--muted); }
 
 /* conversation */
 .log {
@@ -174,17 +220,41 @@ main {
 }
 .talk-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
 .text-form { display: flex; gap: 8px; min-width: 0; }
-.text-form input {
+.text-form input:not([type="file"]) {
   flex: 1; min-width: 0; min-height: 48px; padding: 0 14px;
   border: 1px solid var(--line); border-radius: 999px; background: var(--surface);
 }
-.send { border: 0; background: transparent; padding: 0 6px; font-weight: 700; color: var(--muted); }
+.send {
+  flex: none; width: 44px; height: 48px; border: 0; border-radius: 50%;
+  background: transparent; padding: 0; color: var(--basil);
+  display: grid; place-items: center;
+}
+.send svg { width: 22px; height: 22px; }
+.send:hover { background: var(--cook-bubble); }
+.attach {
+  flex: none; width: 44px; height: 48px; padding: 0;
+  border: 1px solid var(--line); border-radius: 50%; background: var(--surface);
+  display: grid; place-items: center;
+}
+.attach svg { width: 21px; height: 21px; }
+.attach:hover { background: var(--cook-bubble); }
+.attachment {
+  display: flex; align-items: center; gap: 10px; min-width: 0;
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface);
+}
+.attachment img { width: 52px; height: 52px; object-fit: cover; border-radius: 8px; }
+.attachment-info { flex: 1; min-width: 0; font-size: 0.85rem; }
+.attachment-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-status { display: block; color: var(--muted); }
+.attachment .btn { flex: none; padding: 4px 10px; }
+.msg .sent-photo { display: block; max-width: 100%; max-height: 180px; margin-top: 8px; border-radius: 8px; }
 .talk {
-  width: 72px; height: 72px; border-radius: 50%; border: 0;
+  width: 48px; height: 48px; border-radius: 50%; border: 0;
   background: var(--yolk); color: var(--yolk-ink);
   display: grid; place-items: center; box-shadow: 0 2px 0 rgb(0 0 0 / 0.15);
 }
-.talk svg { width: 30px; height: 30px; }
+.talk svg { width: 22px; height: 22px; }
 .talk[data-state="listening"] { background: var(--flame); color: #fff; animation: pulse 1.4s infinite; }
 .talk[data-state="speaking"] { background: var(--ink); color: var(--bg); }
 @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgb(200 64 43 / 0.45); } 100% { box-shadow: 0 0 0 18px rgb(200 64 43 / 0); } }
@@ -201,7 +271,49 @@ main {
 <header>
   <span class="brand">Stovetop Coach</span>
   <span class="conn" id="conn" data-state="connecting">Connecting</span>
+  <nav class="header-actions" aria-label="Profile and history">
+    <button class="header-button" id="newChatButton" type="button" title="Start a new chat for a different dish">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+      New chat
+    </button>
+    <button class="header-button" id="historyButton" type="button" aria-haspopup="dialog" aria-controls="historyDialog">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.7 7M3 4v7h7M12 7v5l3 2"></path></svg>
+      History
+    </button>
+    <button class="header-button" id="profileButton" type="button" aria-haspopup="dialog" aria-controls="profileDialog">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21v-2a8 8 0 0 1 16 0v2"></path></svg>
+      Profile
+    </button>
+  </nav>
 </header>
+
+<dialog id="profileDialog" aria-labelledby="profileTitle">
+  <div class="dialog-heading"><h2 id="profileTitle">Your cooking profile</h2><button class="btn" id="closeProfile" type="button" aria-label="Close profile">Close</button></div>
+  <p class="dialog-help">Your coach uses these details in future cooking conversations. Your profile and history are linked to this browser.</p>
+  <form class="profile-form" id="profileForm">
+    <label for="profileName">Your name</label>
+    <input id="profileName" autocomplete="given-name" maxlength="80" placeholder="What should we call you?">
+    <label for="profileSkill">Cooking experience</label>
+    <select id="profileSkill"><option value="">Prefer not to say</option value="beginner">Beginner</option><option value="some experience">Some experience</option><option value="confident">Confident</option></select>
+    <label for="profileDietary">Allergies &amp; dietary needs</label>
+    <textarea id="profileDietary" maxlength="1000" placeholder="For example: peanut allergy, vegetarian, avoid dairy. Leave blank if none."></textarea>
+    <button class="btn primary" id="saveProfile" type="submit">Save profile</button>
+  </form>
+  <p class="dialog-status" id="profileStatus" role="status" aria-live="polite"></p>
+</dialog>
+
+<dialog id="historyDialog" aria-labelledby="historyTitle">
+  <div class="dialog-heading"><h2 id="historyTitle">Usage history</h2><button class="btn" id="closeHistory" type="button" aria-label="Close usage history">Close</button></div>
+  <p class="dialog-help">View past questions, replies, and photo descriptions from this browser. Photos themselves are not saved in history.</p>
+  <p class="dialog-status" id="historyStatus" role="status" aria-live="polite"></p>
+  <div id="historyOverview"><div class="history-list" id="historyList"></div><button class="btn" id="moreHistory" type="button" hidden>Load more sessions</button></div>
+  <section id="historyDetail" hidden>
+    <button class="btn" id="backHistory" type="button">Back to sessions</button>
+    <h3 id="historySessionTitle"></h3>
+    <button class="btn" id="olderHistory" type="button" hidden>Load older messages</button>
+    <div class="history-turns" id="historyTurns"></div>
+  </section>
+</dialog>
 
 <main>
   <section class="top" aria-label="Recipe">
@@ -221,11 +333,21 @@ main {
         <span class="step-count" id="stepCount"></span>
       </div>
       <div class="progress" id="progress" aria-hidden="true"></div>
+      <p class="recipe-details" id="recipeDetails" hidden></p>
+      <details class="ingredients-panel" id="ingredientsPanel" hidden open>
+        <summary>Ingredients</summary>
+        <ul id="ingredientsList"></ul>
+      </details>
       <p class="step-text" id="stepText">Answer a few quick questions, then pick what you're cooking.</p>
       <p class="done-when" id="doneWhen" hidden></p>
       <div class="step-actions">
+        <button class="btn" id="startCooking" type="button" hidden>Start cooking</button>
         <button class="timer-btn" id="timerBtn" type="button" hidden></button>
       </div>
+      <label class="recipe-search" id="recipeSearchLabel" hidden>Find a recipe
+        <input id="recipeSearch" type="search" placeholder="Search dishes or ingredients" autocomplete="off">
+      </label>
+      <p id="recipeSearchStatus" class="recipe-details" role="status" hidden></p>
       <div class="recipe-picks" id="recipePicks" hidden></div>
     </article>
   </section>
@@ -241,11 +363,30 @@ main {
     <button type="button" data-say="What ingredients do I need?">Ingredients</button>
     <button type="button" data-say="Go back a step">Back</button>
   </div>
+  <div class="attachment" id="attachment" hidden>
+    <img id="photoPreview" alt="Photo attached to your next message" hidden>
+    <div class="attachment-info" role="status">
+      <span class="attachment-name" id="photoName"></span>
+      <span class="attachment-status" id="photoStatus"></span>
+    </div>
+    <button class="btn" id="removePhoto" type="button" aria-label="Remove attached photo">Remove</button>
+  </div>
   <div class="talk-row">
     <form class="text-form" id="textForm">
+      <button class="attach" id="uploadPhoto" type="button" aria-label="Upload a photo for this message" title="Upload photo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m21 11-8.5 8.5a6 6 0 0 1-8.5-8.5L13 2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"></path>
+        </svg>
+      </button>
+      <input id="photoInput" type="file" accept="image/jpeg,image/png,image/webp" hidden aria-label="Choose a photo">
       <label for="textInput" hidden>Type a message</label>
       <input id="textInput" autocomplete="off" enterkeyhint="send" placeholder="Type, or tap the mic">
-      <button class="send" type="submit">Send</button>
+      <button class="send" type="submit" aria-label="Send message" title="Send message">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m22 2-7 20-4-9-9-4Z"></path>
+          <path d="M22 2 11 13"></path>
+        </svg>
+      </button>
     </form>
     <button class="talk" id="talk" type="button" aria-label="Talk to the coach" data-state="idle">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -274,6 +415,19 @@ main {
     recipeName: $("recipeName"), stepCount: $("stepCount"), progress: $("progress"),
     stepText: $("stepText"), doneWhen: $("doneWhen"), timerBtn: $("timerBtn"),
     recipePicks: $("recipePicks"),
+    recipeDetails: $("recipeDetails"), ingredientsPanel: $("ingredientsPanel"), ingredientsList: $("ingredientsList"),
+    startCooking: $("startCooking"), recipeSearchLabel: $("recipeSearchLabel"), recipeSearch: $("recipeSearch"),
+    recipeSearchStatus: $("recipeSearchStatus"),
+    uploadPhoto: $("uploadPhoto"), photoInput: $("photoInput"), attachment: $("attachment"),
+    photoPreview: $("photoPreview"), photoName: $("photoName"), photoStatus: $("photoStatus"), removePhoto: $("removePhoto"),
+    profileButton: $("profileButton"), profileDialog: $("profileDialog"), closeProfile: $("closeProfile"),
+    profileForm: $("profileForm"), profileName: $("profileName"), profileSkill: $("profileSkill"),
+    profileDietary: $("profileDietary"), saveProfile: $("saveProfile"), profileStatus: $("profileStatus"),
+    historyButton: $("historyButton"), historyDialog: $("historyDialog"), closeHistory: $("closeHistory"),
+    newChatButton: $("newChatButton"),
+    historyStatus: $("historyStatus"), historyOverview: $("historyOverview"), historyList: $("historyList"),
+    historyDetail: $("historyDetail"), historySessionTitle: $("historySessionTitle"), historyTurns: $("historyTurns"),
+    moreHistory: $("moreHistory"), olderHistory: $("olderHistory"), backHistory: $("backHistory"),
   };
 
   const state = {
@@ -281,9 +435,16 @@ main {
     onboarded: false, cooking: {}, visionAvailable: false,
     stream: null, listening: false, recognition: null, typingEl: null,
     timer: { id: null, remaining: 0, key: null }, wakeLock: null, audioUnlocked: false,
+    awaitingReply: false, replyBubble: null, speechBuffer: "", streamed: false,
+    speechPending: 0, speechEpoch: 0, muteReply: false,
+    photo: null, preparingPhoto: false, photoRequest: 0,
+    requests: new Map(), requestSequence: 0, profileLoading: false,
+    historyLoading: false, historyOffset: null, historySession: null, historyTurnOffset: null,
+    exiting: false,
   };
 
-  // --- session id: kept on the phone so a reload resumes the same step ----
+  // Profile identity persists; the chat ID exists only in this page's memory.
+  const randomId = () => crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   function clientId() {
     const key = "lh_cooking_client_id";
     try {
@@ -296,62 +457,356 @@ main {
     } catch (e) { return "anon-" + String(Math.random()).slice(2, 12); }
   }
   const CLIENT_ID = clientId();
+  let chatId = randomId();
 
   // --- connection ---------------------------------------------------------
   function connect() {
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${proto}//${location.host}/ws?client_id=${encodeURIComponent(CLIENT_ID)}`);
+    const ws = new WebSocket(`${proto}//${location.host}/ws?client_id=${encodeURIComponent(CLIENT_ID)}&chat_id=${encodeURIComponent(chatId)}`);
     state.ws = ws;
     setConn("connecting", "Connecting");
     ws.onopen = () => {
+      if (state.ws !== ws || state.exiting) return;
       state.retry = 0;
+      recipesLoaded = null; // A restarted server may have rebuilt the recipe index.
       setConn("open", "Connected");
       while (state.queue.length) ws.send(state.queue.shift());
     };
-    ws.onmessage = (event) => handle(JSON.parse(event.data));
+    ws.onmessage = (event) => { if (state.ws === ws && !state.exiting) handle(JSON.parse(event.data)); };
     ws.onclose = () => {
+      if (state.ws !== ws || state.exiting) return;
+      rejectSettings("Connection lost. Reconnect and try again.");
+      if (state.awaitingReply && state.queue.length === 0) {
+        state.awaitingReply = false;
+        state.replyBubble = null;
+        state.speechBuffer = "";
+        stopSpeaking();
+        hideTyping();
+        addNote("Connection lost before the reply finished. Please ask again after reconnecting.");
+      }
       setConn("closed", "Reconnecting");
       const wait = Math.min(1000 * 2 ** state.retry++, 15000);
-      setTimeout(connect, wait);
+      setTimeout(() => { if (state.ws === ws && !state.exiting) connect(); }, wait);
     };
   }
   function setConn(s, text) { els.conn.dataset.state = s; els.conn.textContent = text; }
 
+  function rejectSettings(message) {
+    for (const pending of state.requests.values()) {
+      clearTimeout(pending.timeout); pending.reject(new Error(message));
+    }
+    state.requests.clear();
+  }
+  function clearChat() {
+    // Detach the socket first: late replies and retry timers belong to the old dish.
+    const previous = state.ws; state.ws = null; previous?.close();
+    rejectSettings("A new chat was started. Please reopen the panel.");
+    pauseForDialog(); cameraOff();
+    state.wakeLock?.release().catch(() => {}); state.wakeLock = null;
+    if (state.timer.id) clearInterval(state.timer.id);
+    state.timer = { id: null, remaining: 0, key: null };
+    clearPhoto(); hideTyping();
+    state.queue = []; state.retry = 0;
+    state.awaitingReply = false; state.replyBubble = null;
+    state.speechBuffer = ""; state.streamed = false; state.muteReply = false;
+    els.textInput.value = ""; els.log.replaceChildren();
+    els.hint.textContent = "Tap the mic and ask.";
+    els.profileDialog.close(); els.historyDialog.close();
+    setOnboarded(false);
+    renderCooking({ recipe: null, step: null, total_steps: 0 });
+  }
+  function newChat() {
+    clearChat(); state.exiting = false; chatId = randomId();
+    connect();
+  }
+  els.newChatButton.addEventListener("click", newChat);
+  window.addEventListener("pagehide", () => { state.exiting = true; clearChat(); });
+  // Back/forward cache can restore the old JavaScript heap without a page load.
+  window.addEventListener("pageshow", event => { if (event.persisted) newChat(); });
+
   function handle(data) {
-    if (data.type === "thinking") { showTyping(); return; }
+    if (data.type === "settings_result") {
+      const pending = state.requests.get(data.request_id);
+      if (pending) {
+        clearTimeout(pending.timeout); state.requests.delete(data.request_id);
+        if (data.error) pending.reject(new Error(data.error)); else pending.resolve(data);
+      }
+      return; // Settings and history never enter the chat or speech queue.
+    }
+    if (data.type === "thinking") {
+      state.awaitingReply = true;
+      state.replyBubble = null;
+      state.speechBuffer = "";
+      state.streamed = false;
+      state.muteReply = false;
+      showTyping(); return;
+    }
+    if (data.type === "delta") {
+      hideTyping();
+      state.streamed = true;
+      if (!state.replyBubble) state.replyBubble = addMsg("coach", "");
+      state.replyBubble.textContent += data.text;
+      els.log.scrollTop = els.log.scrollHeight;
+      state.speechBuffer += data.text;
+      flushSpeech(false);
+      return;
+    }
     if (data.type === "pong") return;
     hideTyping();
     if ("vision_available" in data) state.visionAvailable = data.vision_available;
     if (data.profile) setOnboarded(Boolean(data.profile.complete));
     if (data.cooking) renderCooking(data.cooking);
     if (data.message) {
-      const bubble = addMsg("coach", data.message);
+      const streamed = data.type === "response" && state.streamed;
+      const bubble = streamed ? state.replyBubble : addMsg("coach", data.message);
+      if (streamed) bubble.textContent = data.message;
       if (data.vision) noteVision(bubble, data.vision);
-      speak(data.message);
+      if (data.sources?.length) noteSources(bubble, data.sources);
+      if (data.type === "response") state.awaitingReply = false;
+      if (streamed) {
+        flushSpeech(true);
+        if (!state.speechPending) afterSpeaking();
+      } else if (!state.muteReply) speak(data.message);
+      state.replyBubble = null;
+      state.streamed = false;
     }
-    if (data.image_error) addNote(`Camera frame not used: ${data.image_error}`);
+    if (data.image_error) addNote(`Image not used: ${data.image_error}`);
   }
+
+  // --- profile and past sessions -----------------------------------------
+  function settingsRequest(type, fields = {}) {
+    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return Promise.reject(new Error("Connect to the coach, then try again."));
+    const request_id = `${CLIENT_ID.slice(0, 32)}-${++state.requestSequence}`;
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        state.requests.delete(request_id); reject(new Error("The coach took too long to respond. Try again."));
+      }, 90000);
+      state.requests.set(request_id, { resolve, reject, timeout });
+      try { state.ws.send(JSON.stringify({ type, request_id, ...fields })); }
+      catch (error) { clearTimeout(timeout); state.requests.delete(request_id); reject(new Error("Could not send the request. Please reconnect.")); }
+    });
+  }
+  function dialogStatus(element, text, error = false) {
+    element.textContent = text; element.dataset.error = String(error);
+  }
+  function pauseForDialog() {
+    stopSpeaking();
+    if (state.recognition) { state.recognition.onend = null; state.recognition.abort(); state.recognition = null; state.listening = false; setTalk("idle"); }
+  }
+  async function openProfile() {
+    pauseForDialog();
+    els.profileDialog.showModal();
+    state.profileLoading = true;
+    els.saveProfile.disabled = true;
+    els.profileName.disabled = els.profileSkill.disabled = els.profileDietary.disabled = true;
+    dialogStatus(els.profileStatus, "Loading profile...");
+    try {
+      const { profile } = await settingsRequest("profile_get");
+      els.profileName.value = profile.cook_name || "";
+      els.profileDietary.value = profile.dietary || "";
+      // Keep a custom experience description entered through the chat.
+      for (const option of Array.from(els.profileSkill.options)) if (option.dataset.custom) option.remove();
+      const skill = profile.skill_level || "";
+      if (!Array.from(els.profileSkill.options).some(option => option.value === skill)) {
+        const option = document.createElement("option"); option.value = skill; option.textContent = skill; option.dataset.custom = "true";
+        els.profileSkill.appendChild(option);
+      }
+      els.profileSkill.value = skill;
+      els.saveProfile.disabled = false;
+      els.profileName.disabled = els.profileSkill.disabled = els.profileDietary.disabled = false;
+      dialogStatus(els.profileStatus, "");
+    } catch (error) { dialogStatus(els.profileStatus, error.message, true); }
+    finally { state.profileLoading = false; }
+  }
+  async function saveProfile(event) {
+    event.preventDefault();
+    if (state.profileLoading || els.saveProfile.disabled) return;
+    state.profileLoading = true; els.saveProfile.disabled = true;
+    els.profileName.disabled = els.profileSkill.disabled = els.profileDietary.disabled = true;
+    dialogStatus(els.profileStatus, "Saving profile...");
+    try {
+      const result = await settingsRequest("profile_save", { profile: {
+        cook_name: els.profileName.value.trim(), skill_level: els.profileSkill.value, dietary: els.profileDietary.value.trim(),
+      }});
+      setOnboarded(Boolean(result.onboarding.complete));
+      if (result.cooking) renderCooking(result.cooking);
+      els.profileDialog.close();
+      addNote("Profile saved. Your coach will use these details in your next reply.");
+      if (!result.onboarding.complete && result.onboarding.question) addMsg("coach", result.onboarding.question);
+    } catch (error) { dialogStatus(els.profileStatus, error.message, true); }
+    finally {
+      state.profileLoading = false; els.saveProfile.disabled = false;
+      els.profileName.disabled = els.profileSkill.disabled = els.profileDietary.disabled = false;
+    }
+  }
+  const historyDate = ts => new Date(ts * 1000).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+  async function loadHistory(offset = 0) {
+    if (state.historyLoading) return;
+    state.historyLoading = true; els.moreHistory.disabled = true;
+    dialogStatus(els.historyStatus, "Loading sessions...");
+    try {
+      const result = await settingsRequest("history_list", { offset });
+      if (!offset) els.historyList.replaceChildren();
+      for (const session of result.sessions) {
+        const button = document.createElement("button"); button.type = "button"; button.className = "btn history-entry";
+        const title = document.createElement("strong"); title.textContent = session.recipe_name || session.dish || "Cooking session";
+        const detail = document.createElement("span"); detail.className = "history-date";
+        detail.textContent = `${historyDate(session.started_at)} · ${session.turn_count} ${session.turn_count === 1 ? "exchange" : "exchanges"}`;
+        button.append(title, detail); button.addEventListener("click", () => loadHistoryDetail(session.session_id));
+        els.historyList.appendChild(button);
+      }
+      state.historyOffset = result.next_offset;
+      els.moreHistory.hidden = result.next_offset === null;
+      dialogStatus(els.historyStatus, !offset && !result.sessions.length ? "No usage yet. Your cooking sessions will appear here." : "");
+    } catch (error) { dialogStatus(els.historyStatus, error.message, true); }
+    finally { state.historyLoading = false; els.moreHistory.disabled = false; }
+  }
+  async function loadHistoryDetail(session_id, offset = 0) {
+    if (state.historyLoading) return;
+    state.historyLoading = true; els.olderHistory.disabled = true; els.backHistory.disabled = true;
+    dialogStatus(els.historyStatus, "Loading conversation...");
+    try {
+      const result = await settingsRequest("history_detail", { session_id, offset });
+      const entries = result.turns.map(turn => {
+        const entry = document.createElement("article"); entry.className = "history-turn";
+        const date = document.createElement("span"); date.className = "history-date"; date.textContent = historyDate(turn.ts); entry.appendChild(date);
+        for (const [label, text] of [["You", turn.user_text], ["Coach", turn.assistant_text], ["Photo description", turn.vision]]) {
+          if (!text) continue;
+          const message = document.createElement("p"); message.className = "history-message";
+          const who = document.createElement("b"); who.textContent = label; message.append(who, text); entry.appendChild(message);
+        }
+        return entry;
+      });
+      if (!offset) els.historyTurns.replaceChildren(...entries); else els.historyTurns.prepend(...entries);
+      state.historySession = session_id; state.historyTurnOffset = result.next_offset;
+      els.historySessionTitle.textContent = result.session.recipe_name || result.session.dish || "Cooking session";
+      els.historyOverview.hidden = true; els.historyDetail.hidden = false;
+      els.olderHistory.hidden = result.next_offset === null;
+      dialogStatus(els.historyStatus, !offset && !result.turns.length ? "No cooking questions recorded in this session yet." : "");
+    } catch (error) { dialogStatus(els.historyStatus, error.message, true); }
+    finally { state.historyLoading = false; els.olderHistory.disabled = false; els.backHistory.disabled = false; }
+  }
+  els.profileButton.addEventListener("click", openProfile);
+  els.closeProfile.addEventListener("click", () => els.profileDialog.close());
+  els.profileForm.addEventListener("submit", saveProfile);
+  els.historyButton.addEventListener("click", () => {
+    pauseForDialog(); els.historyDialog.showModal();
+    els.historyOverview.hidden = false; els.historyDetail.hidden = true;
+    els.historyList.replaceChildren(); els.moreHistory.hidden = true;
+    loadHistory();
+  });
+  els.closeHistory.addEventListener("click", () => els.historyDialog.close());
+  els.moreHistory.addEventListener("click", () => loadHistory(state.historyOffset));
+  els.olderHistory.addEventListener("click", () => loadHistoryDetail(state.historySession, state.historyTurnOffset));
+  els.backHistory.addEventListener("click", () => {
+    els.historyOverview.hidden = false; els.historyDetail.hidden = true; dialogStatus(els.historyStatus, "");
+  });
 
   // --- sending ------------------------------------------------------------
   function ask(text) {
     text = (text || "").trim();
-    if (!text) return;
+    if (state.preparingPhoto) { addNote("Please wait for your photo to finish preparing."); return false; }
+    if (!text && !state.photo) return false;
+    if (state.awaitingReply) { addNote("Please wait for the current reply to finish."); return false; }
+    if (state.photo && !state.visionAvailable) {
+      addNote("Photo analysis is unavailable. Set up a vision model in the launcher's Azure settings, then restart the coach.");
+      return false;
+    }
+    if (!text) text = "What can you see in this photo?";
     unlockAudio();
     stopSpeaking();
-    addMsg("cook", text);
+    state.muteReply = false;
+    state.awaitingReply = true;
+    const bubble = addMsg("cook", text);
     const payload = { type: "ask", message: text };
-    const frame = captureFrame();
+    const photo = state.photo;
+    const frame = photo?.data || captureFrame();
     if (frame) payload.image = frame;
+    if (photo) {
+      payload.image_source = "upload";
+      const preview = document.createElement("img");
+      preview.className = "sent-photo"; preview.src = photo.data; preview.alt = "Photo sent with this message";
+      bubble.appendChild(preview);
+    }
     const body = JSON.stringify(payload);
     if (state.ws && state.ws.readyState === WebSocket.OPEN) state.ws.send(body);
     else { state.queue.push(body); addNote("Not connected yet. Your message will send when the connection is back."); }
+    if (photo) clearPhoto();
+    return true;
   }
 
   els.textForm.addEventListener("submit", (e) => {
     e.preventDefault();
-    ask(els.textInput.value);
-    els.textInput.value = "";
+    if (ask(els.textInput.value)) els.textInput.value = "";
   });
+
+  // --- photo for the next prompt -----------------------------------------
+  function clearPhoto() {
+    state.photoRequest += 1; // Ignore a decode still running after Remove or a replacement.
+    state.photo = null; state.preparingPhoto = false;
+    els.photoInput.value = "";
+    els.photoPreview.removeAttribute("src"); els.photoPreview.hidden = true;
+    els.attachment.hidden = true;
+  }
+  async function preparePhoto(file) {
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      throw new Error("Choose a JPEG, PNG or WebP photo.");
+    }
+    if (file.size > 20_000_000) throw new Error("Choose a photo smaller than 20 MB.");
+    const url = URL.createObjectURL(file);
+    try {
+      const image = new Image();
+      await new Promise((resolve, reject) => {
+        image.onload = resolve;
+        image.onerror = () => reject(new Error("This photo could not be opened. Try a different JPEG, PNG or WebP file."));
+        image.src = url;
+      });
+      if (!image.naturalWidth || !image.naturalHeight) throw new Error("This photo is empty or damaged.");
+      let scale = Math.min(1, 1280 / Math.max(image.naturalWidth, image.naturalHeight));
+      const canvas = document.createElement("canvas");
+      // Re-encoding removes file metadata and fits the server's 1.5 MB limit.
+      for (let attempt = 0; attempt < 4; attempt++, scale *= 0.7) {
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        const data = canvas.toDataURL("image/jpeg", 0.8);
+        if (data.startsWith("data:image/jpeg;base64,") && data.split(",")[1].length * 3 / 4 <= 1_500_000) return data;
+      }
+      throw new Error("This photo is too large to attach. Choose a smaller photo.");
+    } finally { URL.revokeObjectURL(url); }
+  }
+  async function attachPhoto(file) {
+    if (!file) return; // Cancelling the picker preserves the previous attachment.
+    clearPhoto();
+    const request = state.photoRequest;
+    state.preparingPhoto = true;
+    els.attachment.hidden = false; els.photoName.textContent = file.name;
+    els.photoStatus.textContent = "Preparing photo...";
+    try {
+      const data = await preparePhoto(file);
+      if (request !== state.photoRequest) return;
+      state.photo = { data };
+      els.photoPreview.src = data; els.photoPreview.hidden = false;
+      els.photoStatus.textContent = "Attached to your next message. Not uploaded until you send.";
+    } catch (error) {
+      if (request !== state.photoRequest) return;
+      clearPhoto(); addNote(error.message || "Could not attach this photo. Please try another file.");
+    } finally {
+      if (request === state.photoRequest) state.preparingPhoto = false;
+    }
+  }
+  els.uploadPhoto.addEventListener("click", () => {
+    if (!state.onboarded) { addNote("Finish the setup questions, then attach a photo to your cooking question."); return; }
+    els.photoInput.click();
+  });
+  els.photoInput.addEventListener("change", () => {
+    const file = els.photoInput.files?.[0];
+    els.photoInput.value = ""; // Allow selecting the same file again.
+    attachPhoto(file);
+  });
+  els.removePhoto.addEventListener("click", clearPhoto);
   els.chips.addEventListener("click", (e) => {
     const say = e.target.closest("button")?.dataset.say;
     if (say) ask(say);
@@ -360,6 +815,8 @@ main {
     const name = e.target.closest("button")?.dataset.recipe;
     if (name) ask(`Let's make ${name}`);
   });
+  els.startCooking.addEventListener("click", () => ask("Start cooking"));
+  els.recipeSearch.addEventListener("input", () => renderRecipePicks());
 
   // --- conversation log ---------------------------------------------------
   function addMsg(who, text) {
@@ -371,6 +828,23 @@ main {
     return div;
   }
   function addNote(text) { return addMsg("note", text); }
+  function noteSources(bubble, sources) {
+    const links = document.createElement("div");
+    links.className = "seen";
+    links.append("Web sources: ");
+    for (const source of sources) {
+      let url;
+      try { url = new URL(source.url); } catch { continue; }
+      if (!["https:", "http:"].includes(url.protocol) || url.username || url.password) continue;
+      const link = document.createElement("a");
+      link.href = url.href;
+      link.textContent = source.title || url.hostname;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      links.append(link, " ");
+    }
+    bubble.appendChild(links);
+  }
   function noteVision(bubble, vision) {
     const seen = document.createElement("span");
     const hazards = vision.hazards || [];
@@ -393,6 +867,7 @@ main {
   }
 
   let recipesLoaded = null;
+  let recipeOptions = [];
   async function loadRecipes() {
     if (!recipesLoaded) {
       recipesLoaded = fetch("/api/recipes").then((r) => r.json()).then((d) => d.recipes || []).catch(() => []);
@@ -400,7 +875,25 @@ main {
     return recipesLoaded;
   }
 
+  function renderRecipePicks() {
+    const terms = els.recipeSearch.value.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    const recipes = recipeOptions.filter((r) => {
+      const text = [r.name, ...(r.aliases || []), ...(r.ingredients || [])].join(" ").toLowerCase();
+      return terms.every((term) => text.includes(term));
+    });
+    els.recipePicks.replaceChildren(...recipes.map((r) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "btn"; b.dataset.recipe = r.name;
+      b.textContent = r.time_minutes ? `${r.name} · ${r.time_minutes} min` : r.name;
+      return b;
+    }));
+    els.recipePicks.hidden = recipes.length === 0;
+    els.recipeSearchStatus.textContent = recipes.length ? `${recipes.length} recipes` : "No recipes found. Try another dish or ingredient.";
+    els.recipeSearchStatus.hidden = false;
+  }
+
   async function renderCooking(c) {
+    const previous = state.cooking;
     state.cooking = c;
     const total = c.total_steps || 0;
     els.progress.replaceChildren(...Array.from({ length: total }, (_, i) => {
@@ -413,6 +906,12 @@ main {
     }));
     els.doneWhen.hidden = true;
     els.recipePicks.hidden = true;
+    els.recipeSearchLabel.hidden = true;
+    els.recipeSearchStatus.hidden = true;
+    els.ingredientsPanel.hidden = true;
+    els.ingredientsList.replaceChildren();
+    els.recipeDetails.hidden = true;
+    els.startCooking.hidden = true;
     setTimerFor(c);
 
     if (!c.recipe) {
@@ -424,17 +923,24 @@ main {
       }
       els.stepText.textContent = "What are we cooking?";
       const recipes = await loadRecipes();
-      els.recipePicks.replaceChildren(...recipes.map((r) => {
-        const b = document.createElement("button");
-        b.type = "button"; b.className = "btn"; b.dataset.recipe = r.name;
-        b.textContent = r.time_minutes ? `${r.name} · ${r.time_minutes} min` : r.name;
-        return b;
-      }));
-      els.recipePicks.hidden = recipes.length === 0;
+      if (state.cooking !== c) return; // A new chat may have opened while recipes loaded.
+      recipeOptions = recipes;
+      els.recipeSearchLabel.hidden = false;
+      renderRecipePicks();
       return;
     }
 
     els.recipeName.textContent = c.recipe;
+    const preparing = c.step === null || c.step === undefined;
+    els.recipeDetails.textContent = [c.serves ? `Serves ${c.serves}` : "", c.time_minutes ? `About ${c.time_minutes} min` : ""].filter(Boolean).join(" · ");
+    els.recipeDetails.hidden = !els.recipeDetails.textContent;
+    const ingredients = c.ingredients || [];
+    els.ingredientsList.replaceChildren(...ingredients.map((text) => {
+      const li = document.createElement("li"); li.textContent = text; return li;
+    }));
+    els.ingredientsPanel.hidden = ingredients.length === 0;
+    if (previous.recipe !== c.recipe || (previous.step == null) !== preparing) els.ingredientsPanel.open = preparing;
+    els.startCooking.hidden = !preparing;
     if (c.step === null || c.step === undefined) {
       els.stepCount.textContent = `${total} steps`;
       els.stepText.textContent = "Get your ingredients out, then say “start”.";
@@ -574,7 +1080,8 @@ main {
   }
   els.talk.addEventListener("click", () => {
     if (state.listening) state.recognition?.stop();
-    else if (speechSynthesis?.speaking) stopSpeaking();
+    else if (window.speechSynthesis?.speaking) stopSpeaking();
+    else if (state.awaitingReply) return;
     else listen();
   });
   function setTalk(s) { els.talk.dataset.state = s; }
@@ -594,21 +1101,55 @@ main {
     state.audioUnlocked = true;
     speechSynthesis.speak(new SpeechSynthesisUtterance(""));
   }
-  function speak(text) {
-    if (!els.voiceOut.checked || !("speechSynthesis" in window) || !text) return afterSpeaking();
-    speechSynthesis.cancel();
+  function flushSpeech(final) {
+    // Wait for a sentence boundary; a token is too small to speak naturally.
+    // Requiring whitespace after a period keeps decimals such as 2.5 intact.
+    let match;
+    while ((match = /[.!?]["')\u201d\u2019]*\s+|[\u3002\uff01\uff1f]/.exec(state.speechBuffer))) {
+      const end = match.index + match[0].length;
+      speak(state.speechBuffer.slice(0, end).trim(), true);
+      state.speechBuffer = state.speechBuffer.slice(end);
+    }
+    if (final && state.speechBuffer.trim()) speak(state.speechBuffer.trim(), true);
+    if (final) state.speechBuffer = "";
+  }
+  function speak(text, append = false) {
+    if (!els.voiceOut.checked || !("speechSynthesis" in window) || !text || state.muteReply) return afterSpeaking();
+    if (!append) {
+      speechSynthesis.cancel();
+      state.speechEpoch += 1;
+      state.speechPending = 0;
+    }
+    const epoch = state.speechEpoch;
+    state.speechPending += 1;
     const u = new SpeechSynthesisUtterance(text);
     if (voice) u.voice = voice;
     u.rate = 1.0;
     u.onstart = () => setTalk("speaking");
-    u.onend = u.onerror = () => { setTalk("idle"); afterSpeaking(); };
+    let finished = false;
+    u.onend = u.onerror = () => {
+      if (finished || epoch !== state.speechEpoch) return;
+      finished = true;
+      state.speechPending -= 1;
+      if (!state.speechPending) { setTalk("idle"); afterSpeaking(); }
+    };
     speechSynthesis.speak(u);
   }
-  function stopSpeaking() { if ("speechSynthesis" in window) speechSynthesis.cancel(); setTalk(state.listening ? "listening" : "idle"); }
+  function stopSpeaking() {
+    state.speechEpoch += 1;
+    state.speechPending = 0;
+    state.muteReply = true;
+    if ("speechSynthesis" in window) speechSynthesis.cancel();
+    setTalk(state.listening ? "listening" : "idle");
+  }
+  els.voiceOut.addEventListener("change", () => {
+    if (!els.voiceOut.checked) stopSpeaking();
+  });
   function afterSpeaking() {
     // Hands-free: once the coach finishes talking, listen for the next question.
-    if (els.handsFree.checked && !state.listening && document.visibilityState === "visible") {
-      setTimeout(() => { if (!state.listening && !speechSynthesis?.speaking) listen(); }, 350);
+    if (!state.exiting && els.handsFree.checked && !state.listening && !state.awaitingReply && !state.speechPending && !els.profileDialog.open && !els.historyDialog.open && document.visibilityState === "visible") {
+      const expectedChat = chatId;
+      setTimeout(() => { if (!state.exiting && expectedChat === chatId && els.handsFree.checked && !state.listening && !state.awaitingReply && !state.speechPending && !els.profileDialog.open && !els.historyDialog.open && !window.speechSynthesis?.speaking) listen(); }, 350);
     }
   }
 

@@ -36,24 +36,6 @@ CHATBOT = os.path.join(os.path.dirname(HERE), "chatbot")
 sys.path.insert(0, CHATBOT)
 
 
-def load_key_from_env_files():
-    """Find an API key the way the app does: environment, then chatbot/.env."""
-    if os.getenv("OPENAI_API_KEY"):
-        return os.getenv("OPENAI_API_KEY")
-    for candidate in (os.path.join(CHATBOT, ".env"),):
-        if not os.path.exists(candidate):
-            continue
-        with open(candidate, encoding="utf-8") as handle:
-            for line in handle:
-                if line.strip().startswith("OPENAI_API_KEY="):
-                    value = line.split("=", 1)[1].strip().strip('"').strip("'")
-                    # Skip the placeholder shipped in .env.example
-                    if value and not value.startswith("your_"):
-                        os.environ["OPENAI_API_KEY"] = value
-                        return value
-    return None
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -65,16 +47,16 @@ def main():
     parser.add_argument("--prompt", default="Say hello in one short sentence.")
     args = parser.parse_args()
 
-    if not load_key_from_env_files():
-        print("FAIL  No OPENAI_API_KEY found in the environment or chatbot/.env")
-        return 2
-
     if args.model:
         os.environ["AZURE_DEPLOYMENT_NAME"] = args.model
 
     from config import load_azure_openai_config
+    from api_client import base_url, is_hkust_genai
 
     config = load_azure_openai_config()
+    if not config.configured:
+        print("FAIL  Fill OPENAI_API_KEY in chatbot/.env, then run this check again.")
+        return 2
     kwargs = config.completion_kwargs()
 
     if args.budget:
@@ -98,16 +80,22 @@ def main():
     if args.effort:
         kwargs["reasoning_effort"] = args.effort
 
-    print(f"endpoint    {config.azure_endpoint}")
+    print(f"endpoint    {base_url(config)}")
     print(f"deployment  {config.deployment_name}")
-    print(f"api-version {config.api_version}")
+    if not is_hkust_genai(config):
+        print(f"api-version {config.api_version}")
     print(f"reasoning   {config.is_reasoning_model}")
     print(f"parameters  {json.dumps(kwargs)}")
     print()
 
-    url = (f"{config.azure_endpoint}/openai/deployments/{config.deployment_name}"
-           f"/chat/completions?api-version={config.api_version}")
+    if is_hkust_genai(config):
+        url = f"{base_url(config)}/chat/completions"
+    else:
+        url = (f"{config.azure_endpoint}/openai/deployments/{config.deployment_name}"
+               f"/chat/completions?api-version={config.api_version}")
     body = {"messages": [{"role": "user", "content": args.prompt}]}
+    if is_hkust_genai(config):
+        body["model"] = config.deployment_name
     body.update(kwargs)
 
     request = urllib.request.Request(
@@ -121,21 +109,21 @@ def main():
         with urllib.request.urlopen(request, timeout=60) as response:
             payload = json.loads(response.read())
     except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", "replace")[:400]
+        detail = exc.read().decode("utf-8", "replace")[:400].replace(config.api_key, "[hidden]")
         print(f"FAIL  HTTP {exc.code} after {time.time() - started:.1f}s")
         print(f"      {detail}")
         if exc.code == 404:
-            print("\n      A 404 here usually means the api-version is wrong."
-                  "\n      The HKUST proxy serves gpt-5-mini on 2024-10-21 only;"
-                  "\n      the newer preview versions 404.")
+            if is_hkust_genai(config):
+                print("\n      Check the HKUST GenAI base URL and model name.")
+            else:
+                print("\n      Check the Azure deployment and api-version.")
         elif exc.code == 403:
             print("\n      A 403 means the deployment name is not one this key"
                   "\n      can reach -- either it does not exist, or it is outside"
                   "\n      the model groups the message above lists.")
         elif exc.code == 401:
-            print("\n      A 401 means the key is wrong. Note that chatbot/.env"
-                  "\n      ships a placeholder value; the working key lives in the"
-                  "\n      repository-root .env.")
+            print("\n      Check OPENAI_API_KEY in chatbot/.env. An exported OS value"
+                  "\n      overrides that file. The repository-root .env is not read.")
         elif exc.code == 400 and "temperature" in detail:
             print("\n      gpt-5 accepts temperature=1 only. config.completion_kwargs()"
                   "\n      handles this; a call site passing temperature directly does not.")

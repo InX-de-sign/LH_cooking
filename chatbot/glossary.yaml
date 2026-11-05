@@ -203,8 +203,8 @@
       text: "Do not wash raw chicken under the tap; splashing spreads bacteria around the sink, and cooking kills them anyway."
       source: "starter:unverified"
     - facet: doneness
-      text: "Cooked chicken is opaque white all the way through, and the juices run clear rather than pink."
-      source: "starter:unverified"
+      text: "Use a food thermometer: the thickest part of chicken must reach at least 74 degrees Celsius. Colour, clear juices and a camera image cannot confirm safety."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
 
 - name: "olive oil"
   kind: ingredient
@@ -221,8 +221,8 @@
   aliases: ["oil fire", "pan on fire", "fire in the pan", "pan fire", "flames"]
   facts:
     - facet: safety
-      text: "If oil in a pan catches fire, turn off the heat and cover the pan with a metal lid or baking tray. Never pour water on it."
-      source: "starter:unverified"
+      text: "For a small pan fire, only if safe, slide a metal lid over the pan and turn off the heat. Do not move the pan, add water or lift the lid before it cools. If you cannot safely cover it, leave and call emergency services."
+      source: "https://www.usfa.fema.gov/gallery/pictographs/pictograph34.html"
     - facet: safety
       text: "If a fire does not go out once covered, leave the kitchen, close the door and call the emergency services."
       source: "starter:unverified"
@@ -252,12 +252,12 @@
   facts:
     - facet: safety
       text: "For a minor burn, hold it under cool running water for about twenty minutes. Get medical help for large, deep or blistering burns."
-      source: "starter:unverified"
+      source: "https://www.nhs.uk/conditions/burns-and-scalds/"
 
 - name: "leftovers"
   kind: topic
   aliases: ["storing leftovers", "fridge", "reheat", "reheating"]
   facts:
     - facet: storage
-      text: "Refrigerate cooked food within two hours, and reheat leftovers until they are steaming hot all the way through."
-      source: "starter:unverified"
+      text: "Refrigerate cooked food in shallow containers within two hours, or one hour above 32 degrees Celsius, and reheat leftovers to 74 degrees Celsius using a food thermometer."
+      source: "https://www.fda.gov/food/buy-store-serve-safe-food/safe-food-handling"

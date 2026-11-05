@@ -44,6 +44,7 @@ from typing import Any, Dict, List, Optional
 
 from knowledge_base import KnowledgeBase, Subject, classify_facet
 from conversation_state import ConversationStore, Episode, Visit
+from web_search import explicit_search
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,8 @@ _NUMBER_WORDS = {
 }
 NAV_PATTERNS = (
     ("stop", r"\b(stop cooking|cancel (the )?recipe|forget (the )?recipe|"
-             r"change (the )?recipe|different recipe|something else to cook)\b"),
+             r"change (the )?(recipe|dish)|different recipe|something else to cook|"
+             r"switch (the )?(dish|recipe)|(make|cook) something else)\b"),
     ("start", r"\b(let'?s (start|begin|go)|start cooking|start over|start again|"
               r"from the (top|beginning|start)|i'?m ready to start|begin)\b"),
     ("previous", r"\b(go back|previous step|step before|back a step|back one step|"
@@ -112,7 +114,15 @@ def detect_navigation(text: str) -> Optional[tuple]:
     """
     if classify_facet(text) == "doneness":
         return None
+    if explicit_search(text):
+        return None
+    if re.search(r"\bnext time\b", (text or "").lower()):
+        return None
     cleaned = _clean(text)
+    if cleaned in ("start", "start please"):
+        return ("start",)
+    if cleaned in ("back", "back please"):
+        return ("previous",)
     goto = _GOTO.search(cleaned)
     if goto:
         raw = goto.group(1)
@@ -126,8 +136,33 @@ def detect_navigation(text: str) -> Optional[tuple]:
 # Phrases that mean "I want to cook this one now", as opposed to asking about
 # a recipe while cooking another.
 SWITCH_PATTERN = re.compile(
-    r"\b(let'?s (make|cook|do)|i'?m (making|cooking)|i want to (make|cook)|"
-    r"switch to|change to|instead|start)\b")
+    r"\b(let'?s (make|cook|do)|i'?m (making|cooking)|"
+    r"i want to (make|cook|change)|"
+    r"switch to|change to|instead|"
+    r"change (the )?(dish|recipe)|switch (the )?(dish|recipe)|"
+    r"(make|cook) something else|start)\b")
+
+# Follow-ups that pick a dish the coach just named ("the one you mentioned").
+RECIPE_ANAPHORA_PICK = re.compile(
+    r"\b(the one (you|u) mentioned|that one|the .+ one)\b")
+
+# Unlock the session with no replacement dish. Deliberately excludes bare
+# "start" so "let's start" still only rewinds the current recipe's steps.
+CLEAR_RECIPE_PATTERN = re.compile(
+    r"\b(i want to change|change (the )?(dish|recipe)|switch (the )?(dish|recipe)|"
+    r"(make|cook) something else|different recipe|something else to cook|"
+    r"stop cooking|cancel (the )?recipe|forget (the )?recipe)\b")
+
+
+def wants_recipe_switch(text: str) -> bool:
+    """True when the cook is changing or confirming a dish, not just asking about one."""
+    cleaned = _clean(text)
+    return bool(SWITCH_PATTERN.search(cleaned) or RECIPE_ANAPHORA_PICK.search(cleaned))
+
+
+def wants_recipe_clear(text: str) -> bool:
+    """True when the cook wants to drop the current dish without naming a new one."""
+    return bool(CLEAR_RECIPE_PATTERN.search(_clean(text)))
 
 
 def is_social(text: str) -> bool:
@@ -220,15 +255,37 @@ class ContextBuilder:
             return None
         return self.knowledge.subject_by_id(visit.recipe_id, source="recipe")
 
+    def _recipe_from_recent(self, visit: Visit) -> Optional[Subject]:
+        """Find a recipe named in recent chat that is not the one currently cooking."""
+        current_id = visit.recipe_id
+        for turn in reversed(self.store.recent_turns(visit.session_id, limit=6)):
+            for text in (turn.get("assistant_text"), turn.get("user_text")):
+                found = self.knowledge.resolve_recipe(text or "")
+                if found is not None and found.id != current_id:
+                    return found
+        return None
+
     def _maybe_switch_recipe(self, visit: Visit, message: str,
                              recipe: Optional[Subject]) -> Optional[Subject]:
         named = self.knowledge.resolve_recipe(message)
-        if named is None or named == recipe:
+        switch = wants_recipe_switch(message)
+        # "the one you mentioned" / switch with no name: recover from recent chat.
+        if named is None and switch and (
+                detect_navigation(message) != ("start",) or RECIPE_ANAPHORA_PICK.search(_clean(message))):
+            named = self._recipe_from_recent(visit)
+        if named is None:
+            # Explicit change/cancel with no target unlocks the session.
+            # Do not clear on bare "start" or a failed "that one" anaphora.
+            if recipe is not None and wants_recipe_clear(message):
+                self.store.set_recipe(visit, None, None)
+                return None
+            return recipe
+        if named == recipe:
             return recipe
         # With nothing on the go, naming a dish starts it. Mid-recipe, only an
-        # explicit "let's make X instead" switches -- otherwise "is aglio olio
-        # spicy?" asked during the stir-fry would throw away the cook's place.
-        if recipe is None or SWITCH_PATTERN.search(_clean(message)):
+        # explicit switch -- otherwise "is aglio olio spicy?" mid-cook would
+        # throw away the cook's place.
+        if recipe is None or switch:
             self.store.set_recipe(visit, named.id, named.name)
             return self.knowledge.subject_by_id(named.id, source="recipe")
         return recipe
@@ -292,9 +349,13 @@ class ContextBuilder:
         visit = self.store.current_visit(user_id)
         language = visit.language or detect_language(message)
 
+        previous_recipe_id = visit.recipe_id
         recipe = self._maybe_switch_recipe(visit, message, self.active_recipe(visit))
 
         nav = detect_navigation(message)
+        # Choosing a dish always previews ingredients, even for "start curry".
+        if recipe and recipe.id != previous_recipe_id:
+            nav = None
         if nav and nav[0] == "stop":
             self.store.set_recipe(visit, None, None)
             recipe = None

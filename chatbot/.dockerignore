@@ -1,25 +1,16 @@
-# Build context for the chatbot service.
-
-# Secrets never belong in an image layer - supply via compose `environment:`
-# or the Lighthouse .env.lighthouse file.
 .env
+.env.*
 *.env
+!.env.example
 !*.env.example
-
-# Runtime state, recreated on first run (CREATE TABLE IF NOT EXISTS)
-memory.db
-*.db-journal
-*.db-wal
-*.db-shm
-logs/
-
-# Derived, and rebuilt during the image build so it cannot drift from
-# recipes.yaml and glossary.yaml. Shipping a local copy would mask a stale one.
-knowledge.db
-
-__pycache__/
+.venv
+__pycache__
 *.pyc
+*.db
+*.db-*
+*.backup
 *.pyo
+*.log
 archived_chatbot/
 static/*.backup
-*.log
+logs

@@ -18,9 +18,9 @@ Not decided here. Pick one with environment variables:
         VLM_BASE_URL   e.g. https://api.hunyuan.cloud.tencent.com/v1
         VLM_API_KEY
         VLM_MODEL
-    VLM_PROVIDER=azure                an Azure OpenAI deployment that takes
-                                      images, on the same endpoint and key as
-                                      the chat model
+    VLM_PROVIDER=azure                an image-capable HKUST GenAI model or
+                                      direct Azure deployment, using the same
+                                      endpoint and key as the chat model
         VLM_MODEL      deployment name (defaults to AZURE_DEPLOYMENT_NAME)
 
 A provider that fits neither shape is one subclass of VisionProvider: take
@@ -210,6 +210,7 @@ class VisionProvider:
 
     def __init__(self, config: VisionConfig):
         self.config = config
+        self.last_error = None
 
     @property
     def available(self) -> bool:
@@ -220,11 +221,25 @@ class VisionProvider:
         if not self.available:
             return None
         started = time.monotonic()
+        self.last_error = None
         try:
             reply = await self._complete(image, mime, request)
         except Exception as exc:
             # A failed look must never cost the cook their answer.
-            logger.warning("VLM %s failed: %s", self.name, exc)
+            status = getattr(exc, "status_code", None)
+            if status == 401:
+                self.last_error = "HKUST rejected the API key for this vision endpoint (HTTP 401)."
+            elif status == 403:
+                self.last_error = "This API key cannot use the selected vision model (HTTP 403)."
+            elif status == 404:
+                self.last_error = "The selected vision endpoint or model was not found (HTTP 404)."
+            elif status:
+                self.last_error = f"The vision API returned HTTP {status}."
+            elif type(exc).__name__ in ("APITimeoutError", "APIConnectionError"):
+                self.last_error = "Could not connect to the vision API. Check the network and endpoint."
+            else:
+                self.last_error = "The vision API request failed. Check the model settings."
+            logger.warning("VLM %s failed: %s", self.name, self.last_error)
             return None
         latency = int((time.monotonic() - started) * 1000)
 
@@ -233,6 +248,7 @@ class VisionProvider:
             # Unstructured but non-empty is still worth having.
             summary = " ".join((reply or "").split())[:300]
             if not summary:
+                self.last_error = "The vision model returned an empty reply. Try a larger output token budget."
                 logger.warning("VLM %s returned nothing (%d ms)", self.name, latency)
                 return None
             data = {"summary": summary}
@@ -305,14 +321,14 @@ class OpenAICompatibleVision(VisionProvider):
 
 
 class AzureVision(VisionProvider):
-    """An Azure OpenAI deployment that accepts images, on the chat model's endpoint."""
+    """An image-capable model on the configured HKUST or Azure endpoint."""
 
     name = "azure"
 
     def __init__(self, config: VisionConfig):
         super().__init__(config)
         from config import load_azure_openai_config
-        from openai import AsyncAzureOpenAI
+        from api_client import create_async_client
 
         self.chat_config = load_azure_openai_config()
         self.client = None
@@ -320,14 +336,12 @@ class AzureVision(VisionProvider):
             logger.error("VLM_PROVIDER=azure needs the chat-model slot (OPENAI_API_KEY, "
                          "AZURE_OPENAI_ENDPOINT) filled in - camera disabled")
             return
-        # Reuse the chat config's parameter logic: a gpt-5 deployment takes
+        # Reuse the chat config's parameter logic: a gpt-5 model takes
         # max_completion_tokens and temperature=1, a gpt-4o one does not.
         self.chat_config.deployment_name = config.model or self.chat_config.deployment_name
         config.model = self.chat_config.deployment_name
-        self.client = AsyncAzureOpenAI(
-            api_key=self.chat_config.api_key,
-            api_version=self.chat_config.api_version,
-            azure_endpoint=self.chat_config.azure_endpoint,
+        self.client = create_async_client(
+            self.chat_config,
             timeout=config.timeout_seconds,
             max_retries=0,
         )

@@ -3,6 +3,9 @@
 # the quote marks as part of the filename, which is how iteration 1 leaked
 # live API keys into public history.
 .env
+.env.lighthouse
+.env-save-*
+.deployment/
 *.env
 !*.env.example
 
@@ -16,6 +19,7 @@ env/
 
 # --- Runtime state (auto-created, not source) --------------------------
 chatbot/memory.db
+/memory.db
 chatbot/logs/
 *.log
 *.db-journal
@@ -23,7 +27,7 @@ chatbot/logs/
 *.db-shm
 
 # knowledge.db is derived: knowledge_base.py rebuilds it from
-# park_knowledge.py plus species.yaml. Committing it would let the two drift.
+# recipes.yaml plus glossary.yaml. Committing it would let the two drift.
 # The sources are both text and both tracked, so nothing is lost.
 chatbot/knowledge.db
 chatbot/knowledge.db.backup

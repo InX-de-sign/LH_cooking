@@ -19,7 +19,7 @@ help:
 	@echo "  make health        - health endpoint (model + vision provider)"
 	@echo "  make check-model   - verify the Azure deployment answers correctly"
 	@echo "  make knowledge     - rebuild chatbot/knowledge.db from the YAML"
-	@echo "  make test          - scripted cooking session against the real model"
+	@echo "  make test          - offline regression tests (no API key needed)"
 	@echo ""
 	@echo "Lighthouse (production)"
 	@echo "  make lighthouse-up   - build and deploy"
@@ -60,10 +60,9 @@ check-model:
 knowledge:
 	cd chatbot && python knowledge_base.py --rebuild
 
-# There is no pytest suite. This runs the scripted session in cook_main.py,
-# which exercises onboarding, step navigation, retrieval and the model.
+# Offline regression suite; live API checks are separate.
 test:
-	cd chatbot && python cook_main.py
+	python -m unittest discover -s tests -v
 
 # --- shells --------------------------------------------------------------
 shell-chatbot:

@@ -59,15 +59,15 @@ def _session_payload(session_id: str, message: str) -> dict:
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, client_id: str = Query(None)):
+async def websocket_endpoint(websocket: WebSocket, client_id: str = Query(None), chat_id: str = Query(None)):
     """The phone's conversation channel.
 
-    The phone keeps a random id in localStorage and sends it as ?client_id=,
-    so reloading the page resumes the same session -- and the same recipe
-    step -- instead of starting onboarding again.
+    client_id identifies the saved profile/history. chat_id is generated for
+    each page load or New chat; reconnects within that page reuse it.
     """
     await websocket.accept()
     session_id = (client_id or "").strip()[:64] or f"web_{uuid.uuid4().hex[:12]}"
+    chat_token = assistant.store.bind_chat((chat_id or "").strip()[:64] or None)
     logger.info("Phone connected: %s", session_id)
 
     try:
@@ -88,6 +88,26 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str = Query(None))
             if kind == "ping":
                 await websocket.send_json({"type": "pong"})
                 continue
+            if kind in ("profile_get", "profile_save", "history_list", "history_detail"):
+                request_id = data.get("request_id")
+                if not isinstance(request_id, str) or not 1 <= len(request_id) <= 64:
+                    continue
+                try:
+                    if kind == "profile_get":
+                        result = {"profile": await asyncio.to_thread(assistant.store.get_profile, session_id)}
+                    elif kind == "profile_save":
+                        profile = await asyncio.to_thread(assistant.store.save_profile, session_id, data.get("profile"))
+                        result = {"profile": profile, "onboarding": assistant.onboarding_state(session_id),
+                                  "cooking": assistant.cooking_state(session_id)}
+                    elif kind == "history_list":
+                        result = await asyncio.to_thread(assistant.store.history, session_id, data.get("offset", 0))
+                    else:
+                        result = await asyncio.to_thread(assistant.store.history_detail, session_id,
+                                                        data.get("session_id"), data.get("offset", 0))
+                    await websocket.send_json({"type": "settings_result", "request_id": request_id, **result})
+                except ValueError as exc:
+                    await websocket.send_json({"type": "settings_result", "request_id": request_id, "error": str(exc)})
+                continue
 
             message = (data.get("message") or "").strip()
             if not message:
@@ -106,7 +126,18 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str = Query(None))
                         f"{len(image[0])} bytes" if image else "none")
             await websocket.send_json({"type": "thinking"})
 
-            result = await assistant.process_message(message, session_id, image=image)
+            image_source = "upload" if data.get("image_source") == "upload" else "camera"
+            if image_source == "upload" and (image_error or image is None):
+                await websocket.send_json({"type": "response", **assistant._result(
+                    session_id, "The photo could not be attached. Choose another JPEG, PNG or WebP photo and try again."),
+                    "image_error": image_error or "No photo was received."})
+                continue
+
+            async def send_delta(text):
+                await websocket.send_json({"type": "delta", "text": text})
+
+            result = await assistant.process_message(
+                message, session_id, image=image, on_delta=send_delta, image_source=image_source)
             payload = {"type": "response", **result}
             if image_error:
                 payload["image_error"] = image_error
@@ -116,6 +147,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str = Query(None))
         logger.info("Phone disconnected: %s", session_id)
     except Exception as exc:
         logger.error("WebSocket error for %s: %s", session_id, exc, exc_info=True)
+    finally:
+        assistant.store.reset_chat_binding(chat_token)
 
 
 @app.get("/health")

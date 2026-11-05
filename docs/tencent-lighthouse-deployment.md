@@ -1,89 +1,121 @@
-# Tencent Lighthouse Deployment
+# Tencent Lighthouse deployment and phone test
 
-This deployment keeps Azure OpenAI as the chatbot model provider and uses a
-Tencent Lighthouse instance in Hong Kong to run the application containers.
+This runs the cooking coach and Caddy using `docker-compose.lighthouse.yml`.
+Azure chat and vision remain remote API calls. No local inference models or
+camera hardware services are needed. This guide is prepared; deployment and
+real-phone checks have not been performed.
 
-## Before deployment
+## Prepare the server
 
-1. Create an Ubuntu 22.04 or 24.04 Lighthouse instance with at least 4 vCPU,
-   8 GB RAM, and 60 GB SSD. CPU inference is supported; no GPU is required.
-2. Point an `A` record for the chosen domain to the Lighthouse public IPv4
-   address. DNS must resolve before Caddy can obtain its TLS certificate.
-3. In the Lighthouse firewall, allow inbound TCP `22`, `80`, and `443`.
-   Keep `5000`, `5432`, `6379`, and `6333` closed. The production stack does
-   not expose those ports.
-4. Rotate any API keys that were committed or copied into older `.env` files.
-   Never commit `.env.lighthouse`.
+Use a Lighthouse Linux server with Docker Engine 28+ and Docker Compose v2.33.1+
+(the compose file uses [`gw_priority`](https://docs.docker.com/reference/compose-file/services/#gw_priority)). Point a domain's DNS A record at the
+server's public IPv4 address. Allow inbound TCP 80 and 443 for Caddy; restrict
+SSH access to your own IP. The app's port 8000 stays private to Docker.
+If another proxy already occupies ports 80/443, integrate this domain there
+before starting another Caddy instance.
 
-## Install Docker on Lighthouse
+## Configure and start
+
+### Using the Python desktop app
+
+Run `python app.py` in the local project folder, or double-click
+`Start Cooking Coach.pyw` on Windows. Save the key in the **Azure settings** tab.
+In **Lighthouse**, fill the public domain, SSH server address, username, SSH port,
+optional private-key file and a folder name within the remote user's home.
+The same model settings are used for local runs and deployments.
+
+Before the first deployment, connect once with your usual SSH client and verify
+the server fingerprint, for example `ssh ubuntu@your-server-ip`. The app uses
+existing known hosts and SSH key/agent authentication, with no password prompts.
+For an encrypted private key, unlock it in your SSH agent first. The remote user
+must be able to use Docker without an interactive sudo password.
+
+Click **Check server**, then **Deploy to Lighthouse**. The app checks Docker
+versions, transfers a restricted source archive and `.env.lighthouse` over SSH,
+runs Compose with health waiting, and verifies `https://<domain>/health` from
+your computer. It preserves Docker data volumes. It replaces the application
+files and model settings in the selected folder and recreates the containers.
+The app does not provision Lighthouse, install Docker, configure DNS or open ports.
+
+You can also choose **Prepare bundle** without SSH details. It writes the private
+`.deployment/lh-cooking.tar.gz` archive, which includes the API key. Copy it to
+your prepared Linux server, extract it in a dedicated application folder and run
+`sh deploy.sh`. Server connection details are remembered in the gitignored
+`.deployment/server.json`; SSH private-key contents are never packaged.
+
+There is no live server yet, so the SSH deployment flow has only been tested with
+simulated responses. Complete the phone acceptance checks after your first deployment.
+
+### Using the command line
+
+On the server, in your checkout of this repository:
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y ca-certificates curl git
-curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker "$USER"
-newgrp docker
-docker compose version
-```
-
-## Deploy
-
-```bash
-git clone <your-private-repository-url> pal-op
-cd pal-op
 cp .env.lighthouse.example .env.lighthouse
 nano .env.lighthouse
+```
+
+Fill these fields locally on the server; never commit the real settings file:
+
+```dotenv
+DOMAIN=cook.your-domain.example
+OPENAI_API_KEY=your_actual_hkust_key
+AZURE_OPENAI_ENDPOINT=https://hkust.azure-api.net
+AZURE_OPENAI_API_VERSION=2024-10-21
+AZURE_DEPLOYMENT_NAME=gpt-5-mini
+VLM_PROVIDER=azure
+VLM_MODEL=gpt-5-mini
+```
+
+Use deployment names permitted for your HKUST account. The vision deployment
+must accept images. Caddy obtains TLS certificates for `DOMAIN` automatically
+once DNS and inbound ports work.
+
+```bash
+chmod 600 .env.lighthouse
+docker compose --env-file .env.lighthouse -f docker-compose.lighthouse.yml config --quiet
 docker compose --env-file .env.lighthouse -f docker-compose.lighthouse.yml up -d --build
 docker compose --env-file .env.lighthouse -f docker-compose.lighthouse.yml ps
+curl -fsS https://cook.your-domain.example/health
+docker compose --env-file .env.lighthouse -f docker-compose.lighthouse.yml logs --tail=100 chatbot caddy
 ```
 
-The first build can take several minutes because it installs PyTorch,
-Ultralytics, and OpenCV. The model file `inference/models/best_animal_v3.onnx`
-must be present in the repository or copied to that path before startup.
+Avoid sharing unredacted compose output or logs containing conversations.
+`/health` reports configuration and app readiness; it does not test Azure access.
+An actual chat question and camera question below verify the models.
 
-## Verify
+## Real-phone acceptance checks
 
-```bash
-curl -fsS https://your-domain.example/health
-curl -fsS https://your-domain.example/vision/health
-docker compose --env-file .env.lighthouse -f docker-compose.lighthouse.yml logs --tail=100 chatbot yolo_inference caddy
-```
+- [ ] Open the HTTPS domain in the phone's browser; no certificate warning.
+- [ ] Grant camera/microphone access; see the rear-camera preview.
+- [ ] Answer name, experience, allergies and dish; choose garlic pasta.
+- [ ] Say "start", "next", "back", "repeat" and "step 4"; confirm the displayed step.
+- [ ] Ask a recipe question; text arrives progressively and sentence speech
+      starts before the whole answer finishes. It should not repeat at the end.
+- [ ] Enable hands-free mode; listening resumes after the final spoken sentence,
+      without transcribing the coach's own reply.
+- [ ] Ask "what food can you see?" with the camera on; confirm an accurate
+      camera observation appears. A preview alone does not verify vision.
+- [ ] Start a step timer and check its chime and reset behavior.
+- [ ] Reload the page; confirm the recipe and step resume on the same phone.
+- [ ] Turn off the network during a reply; see interruption feedback, reconnect,
+      then ask again. A partial reply must not advance the step twice.
+- [ ] Turn off voice output and camera; typed questions still work.
 
-The web interface and chatbot WebSockets use the domain root. ESP32 camera
-uploads and WebSockets use the same domain under `/vision/...`, for example:
+Record phone model, OS, browser version and any failed checks. Browser speech
+recognition and autoplay vary across devices; use typed input where unavailable.
 
-```text
-wss://your-domain.example/vision/ws/esp32/camera/esp32_camera_1
-https://your-domain.example/vision/upload_batch
-```
+## Updates and data
 
-Update the ESP32 firmware host from the old Tailscale hostname to the new
-domain and retain port `443`. Use TLS-capable client methods in the firmware.
-
-## RTSP input
-
-MediaMTX is private to the Docker network by default. This is appropriate for
-ESP32 image uploads. If an external camera must publish RTSP to Lighthouse,
-add a `ports` mapping for `8554:8554` to the `mediamtx` service and allow TCP
-8554 only from the camera's fixed source IP in both the Lighthouse firewall
-and the host firewall.
-
-## Persistent data and updates
-
-`chatbot_data` stores the SQLite conversation database at
-`/app/data/memory.db`; `chatbot_logs` stores application logs. Back up both
-volumes before upgrades:
-
-```bash
-docker run --rm -v pal_op_chatbot_data:/source -v "$PWD":/backup alpine \
-  tar czf /backup/chatbot-data-backup.tgz -C /source .
-docker run --rm -v pal_op_chatbot_logs:/source -v "$PWD":/backup alpine \
-  tar czf /backup/chatbot-logs-backup.tgz -C /source .
-```
-
-To update the application:
+Conversation profiles and text observations persist in the `lh_cooking_chatbot_data`
+Docker volume; Caddy certificates persist in its own volumes. Camera frames are
+not saved. Back up the data volume before upgrades. From the server checkout:
 
 ```bash
 git pull
 docker compose --env-file .env.lighthouse -f docker-compose.lighthouse.yml up -d --build
 ```
+
+Rebuilding refreshes recipe knowledge. Do not add `down -v` to routine updates;
+that deletes persistent volumes. Changes to production env values need `up -d`
+to recreate the container, rather than a simple restart.

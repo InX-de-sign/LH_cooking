@@ -43,7 +43,15 @@ with a real domain.
 
 1. **Onboarding** (first four answers of a session, no model call): name,
    kitchen experience, allergies / foods avoided, and what they're cooking.
-   The dish answer is resolved to a recipe if one matches.
+   The dish answer is resolved to a recipe if one matches. Selection returns
+   an ingredient preview with quantities and serving size before step 1, without
+   a model call. Saying `start` or tapping **Start cooking** begins the tutorial.
+   Switching to another recipe also returns its preview first, including for
+   commands such as `start chicken curry`. The cooking payload always includes
+   `ingredients`, `serves` and `time_minutes`, including after reconnecting.
+   The saved recipe picker searches names, aliases and ingredient text across
+   50 curated recipes. Ingredient lists are indexed in `recipe_ingredients`;
+   YAML remains the source of truth.
 2. **Navigation** is decided by pattern, not by the model: `start`, `next`,
    `go back`, `repeat`, `step 4`, `stop cooking`. It moves the step pointer
    before the prompt is built. "Is it done?" is a doneness question, not
@@ -57,7 +65,11 @@ with a real domain.
    "done when" cue, so the model and the camera judge against the same
    target.
 5. **Persona**: `step` for navigation, `safety` for a safety facet or a
-   hazard the camera saw, `help` otherwise.
+   hazard the camera saw, `help` otherwise. Model text streams as WebSocket
+   `delta` events; one final `response` carries the full text and updated state.
+   The browser queues complete sentences for speech as they arrive, without
+   speaking the final response a second time. Interrupted streams retain the
+   text already delivered and append an interruption notice.
 
 The recipe and step pointer live on the session, not on the current topic,
 so "what does emulsify mean?" in the middle of step 6 doesn't lose the
@@ -83,8 +95,10 @@ onboarding, step navigation, timers and retrieval all work, and replies are
 the recipe notes read back verbatim instead of model-written answers. Good
 enough to test the app before any model is chosen.
 
-`GET /health` shows what is live: `model.configured`, the deployment, and the
-vision provider.
+`GET /health` shows configuration: `model.configured`, the deployment, and the
+vision provider. It does not prove connectivity. Run
+`python scripts/check_setup.py --live --image food.jpg` from the repository root
+to test actual chat streaming and vision access; this uses API quota.
 
 The coach's standing instructions (tone, length, grounding rules, the
 `step` / `help` / `safety` personas) are plain text in
@@ -186,9 +200,12 @@ technique doneness heat timing substitution safety equipment storage tip`.
 A recipe's `techniques:` list links it to glossary entries, so a technique
 question asked mid-recipe reaches the technique's own facts.
 
-**The current content is starter material** -- three recipes and about
-twenty glossary entries, all marked `source: starter:unverified`. Review the
-quantities, times and safety figures before anyone cooks from them.
+There are five recipes. Ingredient/step consistency has been reviewed and key
+chicken, egg, leftover and fire guidance corrected with cited safety sources.
+The salad is adapted from USDA's Nutrition.gov recipe. House recipes have not
+been kitchen-tested; original facts and glossary notes still marked
+`starter:unverified` need further review. Timers and photos do not establish
+safe internal temperatures.
 
 After editing either YAML file:
 
@@ -211,10 +228,54 @@ non-zero on failure. gpt-5 gotchas: `temperature` must be 1, the api-version
 must stay `2024-10-21`, and a small completion budget returns an empty string
 rather than an error.
 
-## Known gaps
+## Validation and remaining checks
 
-- Replies are not streamed to the phone; it speaks once the whole answer
-  arrives.
-- "What do I do next time?" is read as "next step". Navigation patterns live
-  in `context_builder.NAV_PATTERNS`.
-- `docs/` still describes the zoo system and has not been rewritten.
+The browser header has Profile and History dialogs. A `profiles` table stores
+name, experience and dietary needs for the browser's existing random user ID.
+Upgrading an existing database seeds it from the latest completed visit; edits
+update the active visit without changing its recipe or step. New visits copy
+the profile and start onboarding at today's dish.
+
+Profile/history commands use the existing WebSocket: `profile_get`,
+`profile_save`, `history_list`, and `history_detail`, with a `request_id` for
+matching `settings_result` replies. History queries use the connected user's ID
+and return paginated session summaries or chronological turns. They do not call
+the model or enter the chat/speech queue. History retains text and stored vision
+descriptions, not photo bytes. Clearing browser storage changes its identity.
+
+The WebSocket also receives a `chat_id`, generated in memory on each page load
+or New chat. It binds the store's current-visit lookup through a task-local
+ContextVar, which propagates through `asyncio.to_thread`. Each page/chat has
+separate recipe state, recent turns and delivered facts while sharing the
+browser's profile/history identity. Reconnects reuse the chat ID; reopening,
+refreshing, or restoring an exited page creates a fresh one. The browser clears
+drafts, attachments, timers, camera/voice activity and pending requests when
+starting over, and ignores replies from the old socket. Existing clients that
+omit `chat_id` retain the legacy idle-session behavior.
+
+`chatbot/web_search.py` sends a Responses API request with a required
+`web_search` tool. Search requires both a completed `web_search_call` and usable
+URL citations; plain model text never counts as a successful lookup. Search
+errors are sanitized and cached for five minutes in a running browser service
+to avoid repeated failing requests. Desktop queries start a fresh worker and
+can retry immediately. Source links travel in the WebSocket `sources` field.
+Search receives the current cooking context, including dietary requirements.
+Step navigation and immediate safety responses continue through the usual path.
+
+`WEB_SEARCH_ENABLED`, `AZURE_RESPONSES_BASE_URL` and
+`WEB_SEARCH_TIMEOUT_SECONDS` propagate through local launches and Lighthouse
+bundles. A custom base reuses the existing key and the `api-key` header.
+Live checks on 2026-11-03 returned HTTP 404 at both documented v1 Responses
+route candidates on the configured HKUST gateway. Search is implemented but
+needs provider-enabled access before a real result can be verified.
+
+`python -m unittest discover -s tests -v` runs offline regression tests with
+temporary databases and mocked model calls. No developer API keys are loaded.
+`node tests/test_browser.cjs` checks streamed sentence speech using browser
+stubs, when Node.js is available.
+
+- Azure still needs the real key and account-permitted deployment names.
+- Real phone, microphone, camera, speech and HTTPS behavior need testing on a
+  deployed domain; see `tencent-lighthouse-deployment.md` for acceptance checks.
+- Kitchen testing and review of remaining unverified glossary content are open.
+- Older HTML documents under `docs/` describe the zoo system and are historical.

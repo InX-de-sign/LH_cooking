@@ -20,9 +20,13 @@
 #                 overview substitution safety equipment storage tip
 #                 doneness timing heat
 #
-# STARTER CONTENT. These three recipes exist to exercise the pipeline. Their
-# source is marked `starter:unverified` -- review the quantities and times
-# before anyone cooks from them, then replace the source with a real one.
+# Original house recipes: ingredient/step consistency reviewed 2026-11-03;
+# not kitchen-tested. Safety claims cite external guidance separately.
+# Timers are reminders, never evidence that food is safe to eat.
+# Additional house recipes below are practical drafts, not kitchen-tested.
+# Expanded to 50 familiar dishes on 2026-11-04. This is a curated selection,
+# not a measured search-popularity ranking. New instructions are original
+# house drafts; safety temperatures use FoodSafety.gov guidance.
 
 - name: "Tomato and Egg Stir-fry"
   aliases: ["tomato egg", "egg and tomato", "tomato and eggs", "eggs and tomatoes"]
@@ -51,8 +55,8 @@
     - text: "Add the tomato wedges and stir-fry until they soften and release their juice, about 2 to 3 minutes."
       done_when: "The tomatoes are soft at the edges and there is a little red sauce in the pan."
       timer_seconds: 150
-    - text: "Stir in the sugar and the rest of the salt, then return the eggs and fold everything together for 30 seconds."
-      done_when: "The eggs are coated in sauce and just cooked through."
+    - text: "Stir in the sugar and the rest of the salt, then return the eggs and fold together until fully set, starting with about 30 seconds. Check that the egg mixture reaches 71 degrees Celsius with a food thermometer; continue cooking if needed."
+      done_when: "The eggs are fully set with no liquid egg remaining and the egg mixture measures at least 71 degrees Celsius."
       timer_seconds: 30
     - text: "Taste, adjust the salt, scatter the green spring onion over the top and serve."
   facts:
@@ -69,8 +73,11 @@
       text: "Chives or a little chopped onion can stand in for spring onion."
       source: "starter:unverified"
     - facet: storage
-      text: "Leftover tomato and egg keeps in the fridge in a covered container for up to two days; reheat until steaming hot."
-      source: "starter:unverified"
+      text: "Refrigerate tomato and egg in shallow covered containers within two hours, or one hour above 32 degrees Celsius; reheat to 74 degrees Celsius."
+      source: "https://www.fda.gov/food/buy-store-serve-safe-food/safe-food-handling"
+    - facet: safety
+      text: "Cook the egg mixture to at least 71 degrees Celsius, using a food thermometer; a timer or camera cannot confirm its internal temperature."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
 
 - name: "Spaghetti Aglio e Olio"
   aliases: ["aglio e olio", "aglio olio", "garlic and oil pasta", "garlic spaghetti", "garlic pasta"]
@@ -133,14 +140,14 @@
       done_when: "The surface looks dry, not wet or shiny."
     - text: "Season both sides with salt and pepper, then wash your hands before touching anything else."
     - text: "Heat the oil in a heavy frying pan over medium-high heat."
-      done_when: "The oil shimmers and a drop of water sizzles hard."
+      done_when: "The oil shimmers and flows easily; never add water to hot oil."
     - text: "Lay the chicken in the pan, presentation side down, and leave it alone for 5 to 6 minutes."
       done_when: "The underside is deep golden brown and releases from the pan without sticking."
       timer_seconds: 330
-    - text: "Flip the chicken, add the butter, and cook for another 5 to 6 minutes, spooning the melted butter over the top."
-      done_when: "The thickest part reaches 74 degrees Celsius on a thermometer, or the juices run clear when pierced."
+    - text: "Flip the chicken, reduce the heat to medium, add the butter, and cook for about 5 to 6 more minutes, spooning butter over the top. Check the thickest part of each breast with a food thermometer and keep cooking until both reach 74 degrees Celsius."
+      done_when: "The thickest part of each breast measures at least 74 degrees Celsius on a food thermometer. Colour, clear juices and elapsed time cannot confirm safety."
       timer_seconds: 330
-    - text: "Move the chicken to a board and let it rest for 5 minutes before slicing."
+    - text: "Move the cooked chicken to a clean board, using clean utensils, and let it rest for 5 minutes before slicing."
       timer_seconds: 300
   facts:
     - facet: overview
@@ -148,10 +155,10 @@
       source: "starter:unverified"
     - facet: safety
       text: "Chicken is safe to eat when the thickest part reaches 74 degrees Celsius, which is 165 degrees Fahrenheit."
-      source: "starter:unverified"
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
     - facet: safety
       text: "Use a separate board and knife for raw chicken, and wash anything that touched it with hot soapy water."
-      source: "starter:unverified"
+      source: "https://www.fda.gov/food/buy-store-serve-safe-food/safe-food-handling"
     - facet: tip
       text: "If the chicken sticks when you try to flip it, wait another minute; it releases on its own once a crust forms."
       source: "starter:unverified"
@@ -159,5 +166,1319 @@
       text: "Boneless chicken thighs work too; they take a little longer and stay juicier."
       source: "starter:unverified"
     - facet: storage
-      text: "Cooked chicken keeps for up to three days in the fridge; refrigerate it within two hours of cooking."
-      source: "starter:unverified"
+      text: "Refrigerate cooked chicken in shallow covered containers within two hours, or one hour above 32 degrees Celsius; reheat to 74 degrees Celsius."
+      source: "https://www.fda.gov/food/buy-store-serve-safe-food/safe-food-handling"
+
+- name: "Tomato and Cucumber Salad"
+  aliases: ["cucumber salad", "tomato cucumber salad", "tomato salad"]
+  serves: 12
+  time_minutes: 75
+  difficulty: easy
+  techniques: ["season to taste"]
+  ingredients:
+    - "4 large tomatoes, cubed"
+    - "1 large cucumber, chopped"
+    - "1 cup chopped red onion"
+    - "1 cup chopped green pepper"
+    - "one third cup chopped parsley"
+    - "one third cup apple cider vinegar"
+    - "1 tablespoon olive oil"
+    - "2 cloves garlic, minced"
+    - "half a teaspoon each of salt, black pepper and sugar"
+  steps:
+    - text: "Wash hands and rinse produce under running water before chopping. Combine tomatoes, cucumber, onion, pepper and parsley in a large bowl."
+      done_when: "Vegetables are mixed."
+    - text: "In a small bowl, stir vinegar, oil, garlic, salt, pepper and sugar into a dressing."
+    - text: "Mix the dressing through the vegetables."
+      done_when: "Vegetables are coated."
+    - text: "Cover and refrigerate for at least one hour before serving."
+      timer_seconds: 3600
+  facts:
+    - facet: overview
+      text: "This large salad makes twelve side portions and needs an hour in the fridge."
+      source: "https://www.nutrition.gov/recipes/tomato-and-cucumber-salad"
+    - facet: timing
+      text: "Allow at least one hour of refrigeration after mixing."
+      source: "https://www.nutrition.gov/recipes/tomato-and-cucumber-salad"
+
+- name: "Banana Oat Porridge"
+  aliases: ["oatmeal", "porridge", "banana oats", "oat porridge"]
+  serves: 1
+  time_minutes: 10
+  difficulty: easy
+  techniques: ["simmer"]
+  ingredients:
+    - "half a cup rolled oats, not steel-cut oats"
+    - "1 cup water"
+    - "1 ripe banana"
+  steps:
+    - text: "Put the oats and water in a small saucepan and bring to a gentle simmer."
+      done_when: "Small bubbles appear."
+    - text: "Reduce the heat and stir often until the oats soften and thicken, about 5 minutes. Follow the oat packet if its cooking time differs."
+      done_when: "Oats are tender and the porridge is creamy."
+      timer_seconds: 300
+    - text: "Turn off the heat. Peel and mash the banana, stir it into the porridge, and let it cool enough to eat."
+  facts:
+    - facet: overview
+      text: "This house recipe is a single portion of rolled-oat porridge sweetened with banana; it has not been kitchen-tested."
+      source: "house-notes:kitchen-untested"
+    - facet: substitution
+      text: "Steel-cut oats need different water and cooking times; follow their packet rather than this rolled-oat recipe."
+      source: "house-notes:kitchen-untested"
+
+- name: "Spicy Shrimp Glass Noodles"
+  aliases: ["shrimp glass noodles", "prawn glass noodles", "spicy shrimp vermicelli", "spicy prawn vermicelli", "fried rice vermicelli with shrimp", "chinese fried spicy rice noodle and shrimp"]
+  serves: 2
+  time_minutes: 25
+  difficulty: medium
+  techniques: ["stir-fry", "season to taste"]
+  ingredients:
+    - "120 grams dry glass noodles, also called mung bean vermicelli"
+    - "250 grams peeled, deveined raw shrimp"
+    - "2 tablespoons neutral oil"
+    - "2 shallots, thinly sliced"
+    - "3 garlic cloves, sliced"
+    - "3 spring onions, cut into short lengths"
+    - "1 small red chilli, sliced, optional"
+    - "2 tablespoons light soy sauce"
+    - "1 tablespoon oyster sauce"
+    - "1 teaspoon sugar"
+    - "one third cup water"
+  steps:
+    - text: "Soak the glass noodles according to the packet until pliable, then drain. Mix soy sauce, oyster sauce, sugar and water in a cup."
+      done_when: "The noodles bend without snapping and the sauce is mixed."
+    - text: "Pat the shrimp dry. Heat 1 tablespoon oil in a wok over medium-high heat and cook the shrimp in one layer, turning once, until the flesh is pearly, opaque and firm. Remove to a clean plate."
+      done_when: "The shrimp flesh is pearly or white and opaque throughout."
+      timer_seconds: 240
+    - text: "Add the remaining oil, shallots, garlic, spring onion whites and optional chilli. Stir-fry for about one minute without burning the garlic."
+      done_when: "The shallots soften and the garlic smells fragrant."
+      timer_seconds: 60
+    - text: "Add noodles and sauce. Toss over medium heat for 2 to 4 minutes, separating the strands, until the noodles are tender and most sauce has been absorbed. Add a splash of water if the pan dries before they soften."
+      done_when: "The noodles are tender, glossy and lightly browned by the sauce, with no puddle in the pan."
+      timer_seconds: 180
+    - text: "Return the cooked shrimp, add spring onion greens, toss until hot and serve immediately."
+      done_when: "The shrimp is hot and evenly mixed through the noodles."
+  facts:
+    - facet: overview
+      text: "This is a photo-inspired reconstruction of shrimp with thin, translucent noodles, shallots and spring onions; the exact original seasoning is unknown."
+      source: "house-notes:photo-reconstruction"
+    - facet: substitution
+      text: "The noodles in the photo look like glass noodles, but thin rice vermicelli can be used instead; follow its packet soaking time."
+      source: "house-notes:photo-reconstruction"
+    - facet: tip
+      text: "Start without chilli for a mild version, then add chilli oil or sliced chilli at the table to control the heat."
+      source: "house-notes:kitchen-untested"
+    - facet: safety
+      text: "Cook shrimp until the flesh is pearly or white and opaque; keep raw seafood and its utensils apart from ready-to-eat food."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
+
+- name: "Egg Fried Rice"
+  aliases: ["fried rice with egg", "egg rice", "chinese egg fried rice"]
+  serves: 2
+  time_minutes: 15
+  difficulty: easy
+  techniques: ["stir-fry", "beat eggs"]
+  ingredients:
+    - "3 cups cooked rice, chilled promptly after cooking"
+    - "2 eggs"
+    - "2 spring onions, sliced"
+    - "2 tablespoons neutral oil"
+    - "1 tablespoon light soy sauce"
+    - "quarter teaspoon salt, or to taste"
+  steps:
+    - text: "Break up the cold rice with a fork and beat the eggs in a bowl."
+    - text: "Heat 1 tablespoon oil in a wok over medium-high heat. Scramble the eggs until fully set, then remove them to a plate."
+      done_when: "No liquid egg remains."
+    - text: "Add the remaining oil and rice; stir-fry for 3 to 4 minutes, breaking up clumps until steaming hot."
+      done_when: "The rice grains are separate and hot throughout."
+      timer_seconds: 210
+    - text: "Stir in soy sauce, salt, eggs and spring onions. Toss for one minute and serve hot."
+      done_when: "The sauce coats the rice evenly."
+  facts:
+    - facet: tip
+      text: "Rice that has been chilled promptly is easier to separate in a hot pan than freshly cooked rice."
+      source: "house-notes:kitchen-untested"
+    - facet: safety
+      text: "Refrigerate cooked rice promptly in shallow containers within two hours, or within one hour above 32 degrees Celsius."
+      source: "https://www.foodsafety.gov/food-poisoning/bacteria-and-viruses"
+
+- name: "Garlic Soy Noodles"
+  aliases: ["soy garlic noodles", "garlic noodles", "soy sauce noodles"]
+  serves: 2
+  time_minutes: 15
+  difficulty: easy
+  techniques: ["boil pasta", "stir-fry", "season to taste"]
+  ingredients:
+    - "200 grams dried wheat noodles"
+    - "4 garlic cloves, minced"
+    - "2 tablespoons light soy sauce"
+    - "1 teaspoon sugar"
+    - "1 tablespoon neutral oil"
+    - "2 spring onions, sliced"
+  steps:
+    - text: "Cook noodles according to the packet, drain and reserve a few tablespoons of cooking water."
+      done_when: "The noodles are tender but still springy."
+    - text: "Mix soy sauce and sugar. Warm oil in a pan over medium heat and stir the garlic for 30 seconds."
+      done_when: "The garlic is fragrant but not brown."
+      timer_seconds: 30
+    - text: "Add noodles and sauce. Toss for one minute, loosening with a little reserved water if needed."
+      done_when: "Each strand is coated and no dry clumps remain."
+      timer_seconds: 60
+    - text: "Scatter spring onions on top and serve."
+  facts:
+    - facet: substitution
+      text: "Rice noodles can replace wheat noodles; use their packet cooking directions and check the sauce if avoiding gluten."
+      source: "house-notes:kitchen-untested"
+
+- name: "Ginger Scallion Steamed Fish"
+  aliases: ["steamed fish", "ginger fish", "chinese steamed fish"]
+  serves: 2
+  time_minutes: 20
+  difficulty: medium
+  techniques: ["season to taste"]
+  ingredients:
+    - "2 boneless white fish fillets, about 150 grams each"
+    - "20 grams ginger, cut into thin strips"
+    - "3 spring onions, cut into thin strips"
+    - "2 tablespoons light soy sauce"
+    - "1 tablespoon neutral oil"
+    - "2 tablespoons water"
+  steps:
+    - text: "Put the fillets on a heatproof plate that fits inside a steamer. Scatter half the ginger and spring onions over them."
+    - text: "Steam over simmering water with the lid on for about 8 to 10 minutes, then check the thickest part with a food thermometer. Continue until it reaches 63 degrees Celsius."
+      done_when: "The thickest part measures at least 63 degrees Celsius."
+      timer_seconds: 540
+    - text: "Carefully lift out the hot plate. Mix soy sauce and water and pour around the fish; add the remaining ginger and spring onions."
+    - text: "Heat oil in a small pan until shimmering, then carefully spoon it over the aromatics and serve."
+      done_when: "The aromatics sizzle and smell fragrant."
+  facts:
+    - facet: safety
+      text: "Fish should reach 63 degrees Celsius at its thickest part; steam and elapsed time alone cannot confirm doneness."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
+
+- name: "Garlic Bok Choy"
+  aliases: ["bok choy stir fry", "pak choi", "garlic pak choi"]
+  serves: 2
+  time_minutes: 12
+  difficulty: easy
+  techniques: ["stir-fry", "season to taste"]
+  ingredients:
+    - "400 grams baby bok choy, halved and rinsed"
+    - "3 garlic cloves, sliced"
+    - "1 tablespoon neutral oil"
+    - "2 tablespoons water"
+    - "1 tablespoon light soy sauce"
+  steps:
+    - text: "Rinse between the bok choy leaves and drain well."
+    - text: "Heat oil over medium-high heat and stir the garlic for 20 seconds."
+      done_when: "The garlic smells fragrant but stays pale."
+      timer_seconds: 20
+    - text: "Add bok choy and toss for two minutes. Add water, cover and steam for two more minutes."
+      done_when: "The stems are crisp-tender and the leaves have wilted."
+      timer_seconds: 240
+    - text: "Uncover, add soy sauce and toss briefly before serving."
+  facts:
+    - facet: tip
+      text: "Drying the rinsed leaves reduces splattering when they meet the hot oil."
+      source: "house-notes:kitchen-untested"
+
+- name: "Garlic Butter Shrimp"
+  aliases:
+    - "butter garlic prawns"
+    - "garlic prawns"
+    - "butter shrimp"
+    - "stir-fry shrimp"
+    - "shrimp stir-fry"
+    - "garlic butter shrimp"
+    - "garlic-butter shrimp"
+    - "simple garlic butter shrimp"
+  serves: 2
+  time_minutes: 15
+  difficulty: easy
+  techniques: ["sauté", "season to taste"]
+  ingredients:
+    - "300 grams peeled, deveined raw shrimp"
+    - "3 garlic cloves, minced"
+    - "1 tablespoon neutral oil"
+    - "1 tablespoon butter"
+    - "1 tablespoon lemon juice"
+    - "1 tablespoon chopped parsley"
+  steps:
+    - text: "Pat shrimp dry and arrange them in a single layer in a pan with warm oil over medium-high heat."
+    - text: "Cook, turning once, until the shrimp are pearly, opaque and firm; transfer to a clean plate."
+      done_when: "The flesh is opaque throughout."
+      timer_seconds: 240
+    - text: "Lower heat to medium, melt butter and stir in garlic for 30 seconds."
+      done_when: "The garlic smells fragrant without browning."
+      timer_seconds: 30
+    - text: "Return shrimp, add lemon juice and parsley, toss briefly and serve."
+  facts:
+    - facet: safety
+      text: "Shrimp is done when its flesh is pearly or white and opaque, rather than translucent."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
+
+- name: "Mushroom Tofu Stir-fry"
+  aliases: ["tofu mushroom", "stir fried tofu", "mushroom and tofu"]
+  serves: 2
+  time_minutes: 20
+  difficulty: easy
+  techniques: ["stir-fry", "season to taste"]
+  ingredients:
+    - "300 grams firm tofu, drained and cubed"
+    - "200 grams mushrooms, sliced"
+    - "2 garlic cloves, minced"
+    - "1 tablespoon neutral oil"
+    - "2 tablespoons light soy sauce"
+    - "1 teaspoon sugar"
+    - "2 tablespoons water"
+  steps:
+    - text: "Pat the tofu dry. Mix soy sauce, sugar and water in a small bowl."
+    - text: "Heat oil over medium-high heat. Brown tofu on two sides, then move it to a plate."
+      done_when: "The tofu has light golden edges."
+      timer_seconds: 300
+    - text: "Cook mushrooms until they release moisture and begin to brown; stir in garlic for 30 seconds."
+      done_when: "Most mushroom liquid has evaporated."
+      timer_seconds: 240
+    - text: "Return tofu, add sauce, toss until hot and serve."
+  facts:
+    - facet: substitution
+      text: "Broccoli or bok choy can replace mushrooms, though the vegetables may need a splash of water to soften."
+      source: "house-notes:kitchen-untested"
+
+- name: "Sesame Cucumber Salad"
+  aliases: ["smashed cucumber", "chinese cucumber salad", "cucumber sesame salad"]
+  serves: 2
+  time_minutes: 15
+  difficulty: easy
+  techniques: ["season to taste"]
+  ingredients:
+    - "1 large cucumber"
+    - "1 tablespoon rice vinegar"
+    - "1 teaspoon light soy sauce"
+    - "1 teaspoon sesame oil"
+    - "1 teaspoon sugar"
+    - "1 teaspoon toasted sesame seeds"
+  steps:
+    - text: "Wash the cucumber, gently crush it with the flat of a knife and cut it into bite-size pieces."
+    - text: "Mix vinegar, soy sauce, sesame oil and sugar in a bowl until the sugar dissolves."
+    - text: "Toss cucumber with dressing, sprinkle with sesame seeds and serve chilled."
+      done_when: "The cucumber pieces are evenly coated."
+  facts:
+    - facet: tip
+      text: "Crushing the cucumber creates rough surfaces that hold more dressing."
+      source: "house-notes:kitchen-untested"
+
+- name: "Chicken Congee"
+  aliases: ["chicken rice porridge", "chicken jook", "chicken juk"]
+  serves: 3
+  time_minutes: 55
+  difficulty: easy
+  techniques: ["simmer", "season to taste"]
+  ingredients:
+    - "three quarters cup uncooked white rice, rinsed"
+    - "6 cups water or low-salt chicken stock"
+    - "250 grams boneless chicken thigh"
+    - "10 grams ginger, sliced"
+    - "2 spring onions, sliced"
+    - "salt to taste"
+  steps:
+    - text: "Bring rice, water or stock, and ginger to a boil. Lower to a gentle simmer and stir occasionally for about 35 minutes."
+      done_when: "The grains break down and the liquid becomes creamy."
+      timer_seconds: 2100
+    - text: "Add chicken thigh and simmer until its thickest part reaches 74 degrees Celsius on a food thermometer."
+      done_when: "The chicken measures at least 74 degrees Celsius."
+      timer_seconds: 900
+    - text: "Remove chicken to a clean board, shred it, return it to the pot and stir. Add hot water if the porridge is too thick."
+    - text: "Season with salt and spring onions and serve hot."
+  facts:
+    - facet: safety
+      text: "Chicken must reach 74 degrees Celsius in its thickest part before it is shredded and served."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
+
+- name: "Miso Tofu Soup"
+  aliases: ["miso soup", "tofu miso soup"]
+  serves: 2
+  time_minutes: 15
+  difficulty: easy
+  techniques: ["simmer"]
+  ingredients:
+    - "3 cups water"
+    - "2 tablespoons white miso paste"
+    - "150 grams soft tofu, cubed"
+    - "1 tablespoon dried wakame"
+    - "1 spring onion, sliced"
+  steps:
+    - text: "Bring the water to a simmer and add dried wakame. Let it expand for about 5 minutes."
+      done_when: "The seaweed is soft and unfurled."
+      timer_seconds: 300
+    - text: "Add tofu and heat gently for two minutes without stirring hard."
+      done_when: "The tofu is hot but holds its shape."
+      timer_seconds: 120
+    - text: "Turn off the heat. Stir miso with a ladle of hot broth in a cup until smooth, then return it to the pot."
+    - text: "Add spring onion, taste and serve."
+  facts:
+    - facet: tip
+      text: "Mixing miso in a cup first helps it disperse without lumps."
+      source: "house-notes:kitchen-untested"
+
+- name: "Broccoli Garlic Pasta"
+  aliases: ["garlic broccoli pasta", "broccoli spaghetti"]
+  serves: 2
+  time_minutes: 20
+  difficulty: easy
+  techniques: ["boil pasta", "al dente", "season to taste"]
+  ingredients:
+    - "200 grams dried spaghetti"
+    - "250 grams broccoli florets"
+    - "3 garlic cloves, sliced"
+    - "2 tablespoons olive oil"
+    - "quarter teaspoon chilli flakes, optional"
+    - "salt to taste"
+  steps:
+    - text: "Boil salted water and cook spaghetti according to the packet. Add broccoli for the last three minutes."
+      done_when: "The pasta is tender with a little bite and broccoli is bright green."
+    - text: "Reserve half a cup of cooking water, then drain pasta and broccoli."
+    - text: "Warm oil and garlic in a pan over low heat until the garlic turns pale gold; add optional chilli."
+      done_when: "The garlic is fragrant, not dark brown."
+      timer_seconds: 180
+    - text: "Toss in pasta and broccoli with a splash of cooking water. Season with salt and serve."
+      done_when: "A light glossy coating clings to the pasta."
+  facts:
+    - facet: tip
+      text: "Reserved pasta water helps the garlic oil coat the noodles evenly."
+      source: "house-notes:kitchen-untested"
+
+- name: "Soy Glazed Chicken Rice Bowl"
+  aliases: ["soy chicken rice", "chicken rice bowl", "soy chicken bowl"]
+  serves: 2
+  time_minutes: 25
+  difficulty: medium
+  techniques: ["sear", "season to taste"]
+  ingredients:
+    - "300 grams boneless chicken thigh, cut into bite-size pieces"
+    - "2 cups cooked rice"
+    - "2 tablespoons light soy sauce"
+    - "1 tablespoon honey"
+    - "1 tablespoon water"
+    - "1 tablespoon neutral oil"
+    - "1 spring onion, sliced"
+  steps:
+    - text: "Mix soy sauce, honey and water. Pat chicken dry and keep raw chicken and its utensils separate from cooked rice."
+    - text: "Heat oil over medium-high heat and sear the chicken, turning until browned. Check the thickest pieces with a food thermometer and continue cooking until they reach 74 degrees Celsius."
+      done_when: "Every thick piece tested reaches at least 74 degrees Celsius."
+      timer_seconds: 480
+    - text: "Pour sauce into the pan and simmer briefly until it coats the cooked chicken."
+      done_when: "The sauce looks glossy and clings to the pieces."
+      timer_seconds: 90
+    - text: "Serve over hot rice and scatter spring onion on top."
+  facts:
+    - facet: safety
+      text: "Chicken must reach 74 degrees Celsius; a browned outside does not show whether the inside is safe."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
+
+- name: "Tomato Tofu Soup"
+  aliases: ["tofu tomato soup", "chinese tomato tofu soup"]
+  serves: 2
+  time_minutes: 20
+  difficulty: easy
+  techniques: ["simmer", "season to taste"]
+  ingredients:
+    - "2 medium tomatoes, diced"
+    - "250 grams soft tofu, cubed"
+    - "2 cups water or vegetable stock"
+    - "1 spring onion, sliced"
+    - "1 teaspoon neutral oil"
+    - "salt to taste"
+  steps:
+    - text: "Heat oil in a saucepan and cook tomatoes for three minutes until they soften."
+      done_when: "The tomatoes release juice."
+      timer_seconds: 180
+    - text: "Add water or stock and simmer for five minutes."
+      done_when: "The broth tastes lightly of tomato."
+      timer_seconds: 300
+    - text: "Slide in tofu and simmer gently for three minutes without breaking the cubes."
+      done_when: "The tofu is hot throughout."
+      timer_seconds: 180
+    - text: "Season with salt, add spring onion and serve."
+  facts:
+    - facet: substitution
+      text: "Firm tofu holds its shape better than soft tofu if the soup will be stirred often."
+      source: "house-notes:kitchen-untested"
+
+- name: "Soy Garlic Green Beans"
+  aliases: ["garlic green beans", "stir fried green beans", "soy green beans"]
+  serves: 2
+  time_minutes: 15
+  difficulty: easy
+  techniques: ["stir-fry", "season to taste"]
+  ingredients:
+    - "300 grams green beans, trimmed"
+    - "3 garlic cloves, minced"
+    - "1 tablespoon neutral oil"
+    - "2 tablespoons water"
+    - "1 tablespoon light soy sauce"
+  steps:
+    - text: "Rinse and dry the trimmed beans."
+    - text: "Heat oil over medium-high heat and stir-fry beans for three minutes."
+      done_when: "The beans have a few browned spots."
+      timer_seconds: 180
+    - text: "Add water, cover and cook for about five minutes until the beans are tender."
+      done_when: "A bean bends easily and is hot through the centre."
+      timer_seconds: 300
+    - text: "Uncover, add garlic and soy sauce, and toss for one minute."
+      done_when: "The garlic is fragrant and the pan is nearly dry."
+      timer_seconds: 60
+  facts:
+    - facet: tip
+      text: "A short covered cook softens the beans before the garlic goes in, so the garlic is less likely to burn."
+      source: "house-notes:kitchen-untested"
+
+- name: "Scallion Pancakes"
+  aliases: ["cong you bing", "spring onion pancakes", "chinese scallion pancakes"]
+  serves: 2
+  time_minutes: 35
+  difficulty: medium
+  techniques: ["season to taste"]
+  ingredients:
+    - "1 cup all-purpose flour, plus extra for dusting"
+    - "half a cup hot water, added gradually"
+    - "3 spring onions, finely sliced"
+    - "quarter teaspoon salt"
+    - "2 tablespoons neutral oil, divided"
+  steps:
+    - text: "Mix flour and salt. Gradually stir in enough hot water to form a soft, non-sticky dough; knead briefly, cover and rest for 15 minutes."
+      done_when: "The dough is smooth enough to roll without cracking."
+      timer_seconds: 900
+    - text: "Divide dough in two. Roll each piece thin, brush with a little oil, scatter with spring onions, roll up into a log, coil and roll flat again."
+      done_when: "Two thin, round pancakes hold the spring onions inside."
+    - text: "Heat remaining oil in a pan over medium heat. Cook pancakes for about three to four minutes per side, adjusting heat to avoid scorching."
+      done_when: "Both sides are golden and the centre is cooked, with no raw dough."
+      timer_seconds: 420
+    - text: "Drain briefly, cut into wedges and serve warm."
+  facts:
+    - facet: tip
+      text: "Rolling and coiling the filled dough creates the flaky layers associated with scallion pancakes."
+      source: "house-notes:kitchen-untested"
+
+- name: "Spaghetti Bolognese"
+  aliases: ["bolognese", "spaghetti bolognaise", "meat sauce pasta", "spag bol"]
+  serves: 2
+  time_minutes: 45
+  difficulty: easy
+  techniques: ["simmer", "boil pasta"]
+  ingredients:
+    - "200 grams dried spaghetti"
+    - "250 grams minced beef"
+    - "1 tablespoon olive oil"
+    - "1 small onion, finely diced"
+    - "1 carrot, finely diced"
+    - "2 garlic cloves, minced"
+    - "400 grams canned chopped tomatoes"
+    - "1 tablespoon tomato paste"
+    - "1 teaspoon dried oregano"
+    - "salt and black pepper to taste"
+  steps:
+    - text: "Heat olive oil in a saucepan over medium heat. Add onion and carrot and soften for 7 minutes, then stir in garlic for 30 seconds."
+      done_when: "The onion is soft and the carrot has started to soften."
+    - text: "Add minced beef and break it into small pieces while cooking. Stir in tomato paste, canned tomatoes and oregano. Wash utensils that touched raw beef before reusing them."
+    - text: "Simmer gently for 25 minutes, stirring occasionally. Check that the beef and sauce reach at least 71 degrees Celsius with a food thermometer, then season with salt and pepper."
+      done_when: "The sauce is thick, the carrot is tender and the beef reaches 71 degrees Celsius."
+      timer_seconds: 1500
+    - text: "Meanwhile boil spaghetti in salted water following the packet directions. Reserve a mug of cooking water, drain, then toss spaghetti with sauce, adding a little reserved water to loosen it if needed."
+  facts:
+    - facet: safety
+      text: "Ground beef must reach at least 71 degrees Celsius, checked with a food thermometer."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
+
+- name: "Creamy Chicken Alfredo"
+  aliases: ["chicken alfredo", "fettuccine alfredo", "alfredo pasta"]
+  serves: 2
+  time_minutes: 30
+  difficulty: easy
+  techniques: ["boil pasta", "sear"]
+  ingredients:
+    - "200 grams fettuccine"
+    - "250 grams boneless chicken breast, cut into strips"
+    - "1 tablespoon olive oil"
+    - "1 tablespoon butter"
+    - "2 garlic cloves, minced"
+    - "150 millilitres cream"
+    - "40 grams grated Parmesan"
+    - "salt and black pepper to taste"
+  steps:
+    - text: "Boil fettuccine in salted water according to the packet. Reserve a mug of cooking water before draining."
+    - text: "Season chicken with salt and pepper. Heat olive oil in a frying pan over medium heat and cook the strips for about 6 to 8 minutes, turning, until the thickest pieces reach 74 degrees Celsius on a food thermometer. Use clean utensils for the cooked chicken."
+      done_when: "The thickest chicken pieces reach at least 74 degrees Celsius."
+    - text: "Transfer chicken to a clean plate. Lower the heat, melt butter in the pan and stir garlic for 30 seconds. Add cream and simmer gently for 2 minutes."
+    - text: "Take the pan off the heat. Stir in Parmesan, pasta and cooked chicken, adding reserved pasta water a spoonful at a time until coated. Taste and adjust salt and pepper."
+  facts:
+    - facet: safety
+      text: "Cook chicken to 74 degrees Celsius in the thickest part, checked with a food thermometer."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
+
+- name: "Macaroni and Cheese"
+  aliases: ["mac and cheese", "mac n cheese", "macaroni cheese"]
+  serves: 2
+  time_minutes: 25
+  difficulty: easy
+  techniques: ["boil pasta", "simmer"]
+  ingredients:
+    - "200 grams dried macaroni"
+    - "25 grams butter"
+    - "25 grams plain flour"
+    - "350 millilitres milk"
+    - "120 grams grated Cheddar"
+    - "half teaspoon mustard, optional"
+    - "salt and black pepper to taste"
+  steps:
+    - text: "Boil macaroni in salted water following the packet directions, then drain."
+    - text: "Melt butter in a saucepan over medium-low heat. Stir in flour and cook, stirring, for 1 minute."
+    - text: "Whisk in milk a little at a time until smooth. Bring to a gentle simmer and stir for about 5 minutes until thickened."
+      done_when: "The sauce coats the back of a spoon with no flour lumps."
+    - text: "Take off the heat and stir in Cheddar and optional mustard until melted. Fold in macaroni, taste and adjust salt and pepper."
+  facts:
+    - facet: tip
+      text: "Add the cheese off the heat to help the sauce stay smooth rather than oily."
+      source: "house-notes:kitchen-untested"
+
+- name: "Margherita Pizza"
+  aliases: ["cheese pizza", "margherita", "margarita pizza", "homemade pizza"]
+  serves: 2
+  time_minutes: 30
+  difficulty: easy
+  techniques: ["season to taste"]
+  ingredients:
+    - "1 ready-to-bake pizza dough ball, about 250 grams, thawed if frozen"
+    - "100 grams tomato passata"
+    - "125 grams mozzarella, drained and torn"
+    - "1 teaspoon olive oil"
+    - "6 fresh basil leaves, washed"
+    - "1 tablespoon plain flour for dusting"
+    - "quarter teaspoon salt"
+  steps:
+    - text: "Preheat the oven to the dough packet's recommended temperature, usually around 220 degrees Celsius. Lightly oil a baking tray, keeping any remaining oil for the topping."
+    - text: "Dust a clean worktop with flour and stretch or roll dough into a roughly 25 centimetre round. Transfer it to the prepared tray."
+    - text: "Mix passata with salt, spread over the dough leaving a small rim, then add mozzarella and the remaining olive oil."
+    - text: "Bake following the dough packet's time, starting checks around 12 minutes. Continue until the base is cooked through with no wet dough and the cheese bubbles. Use oven gloves to remove the tray, scatter basil over the pizza and slice."
+      done_when: "The underside is golden, the centre has no raw dough and the cheese has melted."
+  facts:
+    - facet: tip
+      text: "Drain mozzarella well and avoid overloading the centre so the pizza base can bake through."
+      source: "house-notes:kitchen-untested"
+
+- name: "Fluffy Pancakes"
+  aliases: ["pancakes", "american pancakes", "breakfast pancakes"]
+  serves: 2
+  time_minutes: 20
+  difficulty: easy
+  techniques: ["beat eggs"]
+  ingredients:
+    - "150 grams plain flour"
+    - "2 teaspoons baking powder"
+    - "1 tablespoon sugar"
+    - "quarter teaspoon salt"
+    - "1 egg"
+    - "180 millilitres milk"
+    - "1 tablespoon melted butter"
+    - "2 teaspoons neutral oil for the pan"
+  steps:
+    - text: "Mix flour, baking powder, sugar and salt in a bowl. In another bowl beat the egg with milk and melted butter."
+    - text: "Pour the wet mixture into the dry ingredients and stir just until combined. A few small lumps are fine; do not taste raw batter."
+    - text: "Warm a lightly oiled frying pan over medium-low heat. Pour in small ladlefuls, keeping them apart. Cook until bubbles appear and the edges start to set, about 2 minutes."
+    - text: "Flip and cook the other side for about 1 to 2 minutes, until golden and cooked through with no wet batter in the centre. Repeat with the remaining batter and oil."
+      done_when: "Each pancake is golden on both sides with a fluffy, fully cooked centre."
+  facts:
+    - facet: tip
+      text: "Mix pancake batter gently and stop as soon as the flour is moistened to avoid tough pancakes."
+      source: "house-notes:kitchen-untested"
+
+- name: "French Toast"
+  aliases: ["eggy bread", "breakfast french toast"]
+  serves: 2
+  time_minutes: 15
+  difficulty: easy
+  techniques: ["beat eggs"]
+  ingredients:
+    - "4 slices bread"
+    - "2 eggs"
+    - "80 millilitres milk"
+    - "1 teaspoon sugar"
+    - "quarter teaspoon ground cinnamon"
+    - "1 tablespoon butter"
+  steps:
+    - text: "Beat eggs, milk, sugar and cinnamon in a shallow dish until evenly mixed."
+    - text: "Dip each bread slice into the mixture on both sides, letting excess drip back into the dish."
+    - text: "Melt half the butter in a frying pan over medium-low heat. Add two slices and cook about 3 minutes per side; adjust heat so the outside does not burn before the centre cooks."
+    - text: "Check that the egg-soaked centre reaches 71 degrees Celsius with a food thermometer and has no liquid egg. Repeat with the remaining butter and bread, and serve hot."
+      done_when: "Both sides are golden and the egg mixture in the centre reaches 71 degrees Celsius."
+  facts:
+    - facet: safety
+      text: "Cook egg dishes to at least 71 degrees Celsius, checked with a food thermometer."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
+
+- name: "Scrambled Eggs"
+  aliases: ["scramble eggs", "scrambled egg", "breakfast eggs"]
+  serves: 2
+  time_minutes: 10
+  difficulty: easy
+  techniques: ["beat eggs"]
+  ingredients:
+    - "4 eggs"
+    - "1 tablespoon butter"
+    - "2 tablespoons milk, optional"
+    - "quarter teaspoon salt"
+    - "black pepper to taste"
+  steps:
+    - text: "Crack eggs into a bowl. Add salt and optional milk, and beat until no streaks of white remain."
+    - text: "Melt butter in a non-stick pan over medium-low heat. Pour in eggs and wait briefly for the edges to set."
+    - text: "Gently push the eggs from the edges towards the centre with a spatula, folding repeatedly until no liquid egg remains."
+    - text: "Check the egg mixture reaches at least 71 degrees Celsius with a food thermometer. Add pepper and transfer to plates promptly to avoid drying them out."
+      done_when: "The eggs form fully set curds and reach at least 71 degrees Celsius."
+  facts:
+    - facet: safety
+      text: "Cook egg dishes to at least 71 degrees Celsius, checked with a food thermometer."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
+
+- name: "Cheese Omelette"
+  aliases: ["omelette", "omelet", "cheese omelet"]
+  serves: 1
+  time_minutes: 10
+  difficulty: easy
+  techniques: ["beat eggs"]
+  ingredients:
+    - "2 eggs"
+    - "1 teaspoon butter"
+    - "25 grams grated Cheddar"
+    - "a pinch of salt"
+    - "black pepper to taste"
+  steps:
+    - text: "Beat the eggs with salt and pepper until evenly mixed. Melt butter in a small non-stick frying pan over medium-low heat."
+    - text: "Pour in eggs, tilt to coat the base, then gently pull set edges towards the centre, tilting so uncooked egg fills the gaps."
+    - text: "When the top is nearly set, scatter cheese over half. Fold the other half over the cheese with a spatula."
+    - text: "Cook gently, turning if needed, until the centre reaches 71 degrees Celsius on a food thermometer and no liquid egg remains. Slide onto a plate."
+      done_when: "The cheese is melted and the egg centre reaches at least 71 degrees Celsius."
+  facts:
+    - facet: safety
+      text: "Cook egg dishes to at least 71 degrees Celsius, checked with a food thermometer."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
+
+- name: "Grilled Cheese Sandwich"
+  aliases: ["grilled cheese", "cheese toastie", "toasted cheese sandwich"]
+  serves: 1
+  time_minutes: 10
+  difficulty: easy
+  techniques: []
+  ingredients:
+    - "2 slices bread"
+    - "50 grams Cheddar, sliced"
+    - "2 teaspoons softened butter"
+  steps:
+    - text: "Butter one side of each bread slice. Put cheese between the unbuttered sides so the butter faces outwards."
+    - text: "Place the sandwich in a frying pan over medium-low heat and cook about 3 minutes until the underside is golden."
+    - text: "Flip carefully with a spatula. Cook the second side for about 3 minutes, lowering the heat if the bread browns before the cheese melts."
+      done_when: "Both sides are crisp and golden and the cheese is melted inside."
+    - text: "Transfer to a plate, let cool briefly, then cut in half."
+  facts:
+    - facet: tip
+      text: "Thin slices of cheese melt more evenly before the bread gets too dark."
+      source: "house-notes:kitchen-untested"
+
+- name: "Shakshuka"
+  aliases: ["eggs in tomato sauce", "shakshouka"]
+  serves: 2
+  time_minutes: 30
+  difficulty: easy
+  techniques: ["simmer"]
+  ingredients:
+    - "4 eggs"
+    - "1 tablespoon olive oil"
+    - "1 small onion, diced"
+    - "1 red pepper, diced"
+    - "2 garlic cloves, minced"
+    - "400 grams canned chopped tomatoes"
+    - "1 teaspoon ground cumin"
+    - "1 teaspoon paprika"
+    - "quarter teaspoon salt, or to taste"
+  steps:
+    - text: "Heat olive oil in a frying pan with a lid over medium heat. Soften onion and pepper for about 7 minutes."
+    - text: "Stir in garlic, cumin and paprika for 30 seconds. Add tomatoes and salt and simmer for about 10 minutes until thickened."
+    - text: "Make four wells in the sauce and crack an egg into each. Cover and cook gently for about 7 to 10 minutes, checking and continuing as needed."
+    - text: "Cook until every egg white and yolk is firm. Check that the egg dish reaches at least 71 degrees Celsius with a food thermometer, then serve."
+      done_when: "Egg whites and yolks are firm and the egg dish reaches at least 71 degrees Celsius."
+  facts:
+    - facet: safety
+      text: "Cook eggs until whites and yolks are firm and egg dishes to 71 degrees Celsius; this version uses fully cooked eggs."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
+
+- name: "Chicken Curry"
+  aliases: ["easy chicken curry", "curry chicken", "coconut chicken curry"]
+  serves: 2
+  time_minutes: 35
+  difficulty: easy
+  techniques: ["simmer"]
+  ingredients:
+    - "300 grams boneless chicken thighs, cut into bite-size pieces"
+    - "1 tablespoon neutral oil"
+    - "1 onion, diced"
+    - "2 garlic cloves, minced"
+    - "2 teaspoons grated ginger"
+    - "1 tablespoon curry powder"
+    - "200 grams canned chopped tomatoes"
+    - "200 millilitres coconut milk"
+    - "half teaspoon salt, or to taste"
+  steps:
+    - text: "Heat oil in a saucepan over medium heat. Soften onion for 6 minutes, then stir in garlic and ginger for 30 seconds."
+    - text: "Stir in curry powder for 20 seconds. Add chicken and turn to coat, then add tomatoes, coconut milk and salt. Wash hands and utensils that touched raw chicken."
+    - text: "Bring to a gentle simmer, cover loosely and cook for about 18 to 20 minutes, stirring occasionally and adding a splash of water if too thick."
+      timer_seconds: 1200
+    - text: "Measure the thickest chicken pieces with a food thermometer. Continue cooking until they reach 74 degrees Celsius, then taste the sauce and adjust salt."
+      done_when: "The chicken reaches at least 74 degrees Celsius in its thickest pieces."
+  facts:
+    - facet: safety
+      text: "Cook chicken to at least 74 degrees Celsius, checked with a food thermometer rather than colour or elapsed time."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
+
+- name: "Butter Chicken"
+  aliases: ["murgh makhani", "butter chicken curry"]
+  serves: 2
+  time_minutes: 40
+  difficulty: easy
+  techniques: ["simmer"]
+  ingredients:
+    - "300 grams boneless chicken thighs, diced"
+    - "2 tablespoons plain yogurt"
+    - "2 teaspoons garam masala, divided"
+    - "2 tablespoons butter, divided"
+    - "2 garlic cloves, minced"
+    - "2 teaspoons grated ginger"
+    - "250 millilitres tomato passata"
+    - "100 millilitres cream"
+    - "half teaspoon paprika"
+    - "half teaspoon salt, or to taste"
+  steps:
+    - text: "Mix chicken with yogurt and 1 teaspoon garam masala in a bowl. Wash hands and utensils that touched raw chicken."
+    - text: "Melt 1 tablespoon butter in a saucepan over medium-low heat. Stir garlic and ginger for 30 seconds, then add remaining garam masala, paprika, passata and salt. Simmer for 5 minutes."
+    - text: "Add the chicken and all its yogurt mixture to the sauce. Simmer gently for about 20 minutes, stirring regularly; add a splash of water if the sauce sticks."
+    - text: "Check the thickest chicken pieces reach 74 degrees Celsius on a food thermometer. Stir in cream and remaining butter, heat gently until hot throughout, then taste and adjust salt."
+      done_when: "The thickest chicken pieces reach 74 degrees Celsius and the sauce is hot throughout."
+  facts:
+    - facet: safety
+      text: "Chicken and any marinade that touched it must be cooked thoroughly; chicken must reach 74 degrees Celsius."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
+
+- name: "Chickpea Curry"
+  aliases: ["chana masala", "chickpea masala", "chana curry"]
+  serves: 2
+  time_minutes: 30
+  difficulty: easy
+  techniques: ["simmer"]
+  ingredients:
+    - "400 gram can chickpeas, drained and rinsed"
+    - "1 tablespoon neutral oil"
+    - "1 onion, diced"
+    - "2 garlic cloves, minced"
+    - "2 teaspoons grated ginger"
+    - "1 teaspoon ground cumin"
+    - "1 teaspoon garam masala"
+    - "400 grams canned chopped tomatoes"
+    - "100 millilitres water"
+    - "1 teaspoon lemon juice"
+    - "half teaspoon salt, or to taste"
+  steps:
+    - text: "Heat oil in a saucepan over medium heat. Soften onion for 6 minutes, then add garlic and ginger and stir for 30 seconds."
+    - text: "Stir in cumin and garam masala, then add tomatoes, chickpeas, water and salt."
+    - text: "Simmer gently for 15 minutes, stirring occasionally. Mash a spoonful of chickpeas against the side of the pan to thicken the sauce."
+      done_when: "The chickpeas are hot throughout and the sauce coats them."
+      timer_seconds: 900
+    - text: "Stir in lemon juice, taste and adjust salt. Serve hot."
+  facts:
+    - facet: tip
+      text: "Mashing a few chickpeas gives the sauce body without adding cream."
+      source: "house-notes:kitchen-untested"
+
+- name: "Red Lentil Dal"
+  aliases: ["dal", "dahl", "lentil dal", "red lentil dahl"]
+  serves: 2
+  time_minutes: 35
+  difficulty: easy
+  techniques: ["simmer"]
+  ingredients:
+    - "150 grams dried split red lentils, rinsed"
+    - "600 millilitres water"
+    - "1 tablespoon neutral oil"
+    - "1 small onion, diced"
+    - "2 garlic cloves, minced"
+    - "1 teaspoon grated ginger"
+    - "1 teaspoon ground cumin"
+    - "half teaspoon ground turmeric"
+    - "1 tomato, diced"
+    - "half teaspoon salt, or to taste"
+    - "1 teaspoon lemon juice"
+  steps:
+    - text: "Put rinsed lentils, water and turmeric in a saucepan. Bring to a boil, then reduce to a gentle simmer and cook for about 20 minutes, stirring and adding water if needed."
+      done_when: "The lentils are completely soft and starting to break down."
+    - text: "Meanwhile heat oil in a frying pan over medium heat. Soften onion for 6 minutes, then stir in garlic, ginger and cumin for 30 seconds."
+    - text: "Add tomato to the frying pan and cook until soft. Stir this mixture into the lentils with the salt and simmer together for 5 minutes."
+    - text: "Stir in lemon juice. Add a little water if too thick, heat through and taste for salt."
+  facts:
+    - facet: tip
+      text: "Split red lentils soften without soaking; keep stirring near the end because thick dal can catch on the pan."
+      source: "house-notes:kitchen-untested"
+
+- name: "Mapo Tofu"
+  aliases: ["mapo doufu", "ma po tofu", "spicy pork tofu"]
+  serves: 2
+  time_minutes: 25
+  difficulty: easy
+  techniques: ["stir-fry", "simmer"]
+  ingredients:
+    - "400 grams firm tofu, cubed"
+    - "150 grams minced pork"
+    - "1 tablespoon neutral oil"
+    - "2 garlic cloves, minced"
+    - "1 teaspoon grated ginger"
+    - "1 tablespoon doubanjiang chilli bean paste"
+    - "200 millilitres water"
+    - "1 teaspoon light soy sauce"
+    - "1 teaspoon cornflour mixed with 1 tablespoon cold water"
+    - "1 spring onion, sliced"
+    - "quarter teaspoon ground Sichuan pepper, optional"
+  steps:
+    - text: "Heat oil in a wok over medium-high heat. Add pork and break it into small pieces while cooking. Wash utensils that touched raw pork before reusing them."
+    - text: "Stir in garlic, ginger and doubanjiang for 30 seconds. Add water and soy sauce and bring to a simmer."
+    - text: "Gently add tofu and simmer for 6 to 8 minutes. Check the pork and sauce reach at least 71 degrees Celsius with a food thermometer."
+    - text: "Stir the cornflour slurry again and gently fold it in. Simmer for another minute until glossy, then add spring onion and optional Sichuan pepper."
+      done_when: "The tofu is hot throughout, the sauce is thickened and the pork reaches at least 71 degrees Celsius."
+  facts:
+    - facet: safety
+      text: "Ground pork must reach at least 71 degrees Celsius, checked with a food thermometer."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
+
+- name: "Kung Pao Chicken"
+  aliases: ["kung po chicken", "gong bao chicken", "gongbao chicken"]
+  serves: 2
+  time_minutes: 25
+  difficulty: medium
+  techniques: ["stir-fry"]
+  ingredients:
+    - "300 grams boneless chicken thighs, diced"
+    - "2 tablespoons light soy sauce, divided"
+    - "2 teaspoons cornflour, divided"
+    - "1 tablespoon rice vinegar"
+    - "2 teaspoons sugar"
+    - "3 tablespoons water"
+    - "1 tablespoon neutral oil"
+    - "1 red pepper, diced"
+    - "2 garlic cloves, minced"
+    - "1 teaspoon grated ginger"
+    - "2 dried chillies, optional"
+    - "30 grams roasted unsalted peanuts"
+    - "2 spring onions, sliced"
+  steps:
+    - text: "Mix chicken with 1 tablespoon soy sauce and 1 teaspoon cornflour. In a separate bowl mix remaining soy sauce and cornflour with vinegar, sugar and water. Wash hands after handling chicken."
+    - text: "Heat oil in a wok over medium-high heat. Stir-fry chicken for about 5 minutes, then add pepper, garlic, ginger and optional chillies and cook for another 3 minutes."
+    - text: "Stir the sauce again and pour it into the wok. Toss and simmer until thickened, continuing until the thickest chicken pieces reach 74 degrees Celsius on a food thermometer."
+      done_when: "The sauce is glossy and the thickest chicken pieces reach at least 74 degrees Celsius."
+    - text: "Use clean utensils to fold in peanuts and spring onions, then serve hot."
+  facts:
+    - facet: safety
+      text: "Chicken must reach 74 degrees Celsius in the thickest pieces, checked with a food thermometer."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
+    - facet: substitution
+      text: "For a peanut allergy, omit peanuts and check every packaged ingredient for allergens and cross-contact warnings."
+      source: "house-notes:kitchen-untested"
+
+- name: "Sweet and Sour Chicken"
+  aliases: ["sweet sour chicken", "sweet and sour chicken stir fry"]
+  serves: 2
+  time_minutes: 30
+  difficulty: easy
+  techniques: ["stir-fry"]
+  ingredients:
+    - "300 grams boneless chicken breast, diced"
+    - "1 tablespoon neutral oil"
+    - "1 red pepper, diced"
+    - "1 small onion, diced"
+    - "150 grams pineapple chunks, drained"
+    - "3 tablespoons ketchup"
+    - "2 tablespoons rice vinegar"
+    - "1 tablespoon light soy sauce"
+    - "1 tablespoon sugar"
+    - "80 millilitres water"
+    - "2 teaspoons cornflour mixed with 1 tablespoon cold water"
+  steps:
+    - text: "Mix ketchup, vinegar, soy sauce, sugar and 80 millilitres water in a bowl. Keep this sauce separate from the raw chicken."
+    - text: "Heat oil in a frying pan over medium-high heat. Cook chicken for about 6 minutes, turning regularly, then add onion and pepper and stir-fry for 3 minutes."
+    - text: "Add pineapple and sauce and simmer for 3 minutes. Measure the thickest chicken pieces with a food thermometer and continue cooking until they reach 74 degrees Celsius."
+    - text: "Stir the cornflour slurry again, add it and simmer for 1 minute until the sauce thickens. Serve using clean utensils."
+      done_when: "The sauce coats the chicken and the thickest pieces reach at least 74 degrees Celsius."
+  facts:
+    - facet: safety
+      text: "Cook chicken to at least 74 degrees Celsius, checked with a food thermometer."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
+
+- name: "Beef and Broccoli"
+  aliases: ["beef broccoli", "broccoli beef", "beef and broccoli stir fry"]
+  serves: 2
+  time_minutes: 25
+  difficulty: easy
+  techniques: ["stir-fry", "blanch", "rest meat"]
+  ingredients:
+    - "250 grams beef steak, thinly sliced"
+    - "300 grams broccoli, cut into small florets"
+    - "1 tablespoon neutral oil"
+    - "2 garlic cloves, minced"
+    - "1 teaspoon grated ginger"
+    - "1 tablespoon light soy sauce"
+    - "1 tablespoon oyster sauce"
+    - "1 teaspoon sugar"
+    - "80 millilitres water"
+    - "1 teaspoon cornflour mixed with 1 tablespoon cold water"
+  steps:
+    - text: "Mix soy sauce, oyster sauce, sugar and 80 millilitres water. Blanch broccoli in boiling water for 2 minutes and drain well."
+    - text: "Heat oil in a wok over medium-high heat. Add beef in a single layer and sear, turning, until the thickest slices reach at least 63 degrees Celsius on a food thermometer."
+    - text: "Transfer beef to a clean plate and rest for at least 3 minutes. Meanwhile stir garlic and ginger in the wok for 30 seconds, add broccoli and sauce and bring to a simmer."
+      timer_seconds: 180
+    - text: "Stir and add the cornflour slurry. Simmer until thickened, then return the rested beef using clean utensils and toss briefly to coat."
+      done_when: "The broccoli is tender-crisp and the beef has reached 63 degrees Celsius followed by a 3-minute rest."
+  facts:
+    - facet: safety
+      text: "Whole-cut beef must reach at least 63 degrees Celsius followed by a rest of at least 3 minutes; ground beef needs 71 degrees Celsius."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
+
+- name: "Chicken Chow Mein"
+  aliases: ["chow mein", "chicken chowmein", "chicken fried noodles"]
+  serves: 2
+  time_minutes: 25
+  difficulty: easy
+  techniques: ["stir-fry"]
+  ingredients:
+    - "200 grams dried egg noodles"
+    - "250 grams boneless chicken breast, thinly sliced"
+    - "2 tablespoons neutral oil, divided"
+    - "2 garlic cloves, minced"
+    - "1 carrot, cut into thin matchsticks"
+    - "150 grams cabbage, shredded"
+    - "2 spring onions, sliced"
+    - "1 tablespoon light soy sauce"
+    - "1 tablespoon oyster sauce"
+    - "2 tablespoons water"
+  steps:
+    - text: "Cook egg noodles following the packet instructions, drain and loosen with a fork. Mix soy sauce, oyster sauce and water in a small bowl."
+    - text: "Heat 1 tablespoon oil in a wok over medium-high heat. Stir-fry chicken until the thickest pieces reach at least 74 degrees Celsius on a food thermometer. Transfer to a clean plate with clean utensils."
+    - text: "Add remaining oil, garlic, carrot and cabbage. Stir-fry for 3 to 4 minutes until the vegetables soften slightly."
+    - text: "Add noodles, sauce, cooked chicken and spring onions. Toss for 2 minutes until everything is hot and evenly coated."
+      done_when: "The noodles are hot, vegetables tender-crisp and chicken has reached 74 degrees Celsius."
+  facts:
+    - facet: safety
+      text: "Cook chicken to at least 74 degrees Celsius, checked with a food thermometer."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
+
+- name: "Shrimp Pad Thai"
+  aliases: ["pad thai", "prawn pad thai", "shrimp fried rice noodles"]
+  serves: 2
+  time_minutes: 30
+  difficulty: medium
+  techniques: ["stir-fry", "beat eggs"]
+  ingredients:
+    - "150 grams dried flat rice noodles"
+    - "200 grams raw peeled shrimp, thawed if frozen"
+    - "2 eggs, beaten"
+    - "2 tablespoons neutral oil, divided"
+    - "2 garlic cloves, minced"
+    - "2 tablespoons tamarind puree, ready-to-use, not concentrate"
+    - "1 tablespoon fish sauce"
+    - "1 tablespoon sugar"
+    - "3 tablespoons water"
+    - "100 grams bean sprouts, rinsed"
+    - "2 spring onions, sliced"
+    - "20 grams roasted peanuts, crushed"
+    - "half a lime, cut into wedges"
+  steps:
+    - text: "Prepare rice noodles following their packet instructions and drain. Mix tamarind puree, fish sauce, sugar and water in a bowl."
+    - text: "Heat 1 tablespoon oil in a wok over medium-high heat. Cook shrimp, turning, until pearly and opaque throughout. Transfer to a clean plate."
+    - text: "Add remaining oil and garlic, stir briefly, then add beaten eggs and scramble until fully set, reaching 71 degrees Celsius on a food thermometer."
+    - text: "Add noodles, tamarind sauce and bean sprouts. Toss until the noodles are tender and sprouts are thoroughly cooked, adding a splash of water if needed. Fold in cooked shrimp and spring onions and heat through. Sprinkle peanuts over the top and serve with lime wedges."
+      done_when: "Noodles are tender, sprouts are cooked, egg fully set and shrimp pearly and opaque throughout."
+  facts:
+    - facet: safety
+      text: "Cook shrimp until pearly and opaque throughout, and egg dishes to at least 71 degrees Celsius."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
+
+- name: "Teriyaki Salmon"
+  aliases: ["salmon teriyaki", "soy glazed salmon", "teriyaki fish"]
+  serves: 2
+  time_minutes: 20
+  difficulty: easy
+  techniques: ["sear", "simmer"]
+  ingredients:
+    - "2 salmon fillets, about 150 grams each, thawed if frozen"
+    - "1 teaspoon neutral oil"
+    - "2 tablespoons light soy sauce"
+    - "1 tablespoon honey"
+    - "1 tablespoon rice vinegar"
+    - "2 tablespoons water"
+    - "1 teaspoon grated ginger"
+    - "1 spring onion, sliced"
+  steps:
+    - text: "Pat salmon dry. In a bowl mix soy sauce, honey, rice vinegar, water and ginger. Keep this sauce separate from the raw fish."
+    - text: "Heat oil in a non-stick frying pan over medium heat. Add salmon skin-side down if it has skin and cook about 4 minutes, then turn carefully."
+    - text: "Pour the sauce around the salmon and simmer gently for about 3 to 5 minutes, spooning sauce over the fish. Continue until the thickest part of each fillet reaches at least 63 degrees Celsius on a food thermometer."
+      done_when: "Each salmon fillet reaches at least 63 degrees Celsius in the thickest part."
+    - text: "Transfer salmon to plates using clean utensils. If the sauce is thin, simmer briefly until lightly syrupy, then spoon over fish and scatter with spring onion."
+  facts:
+    - facet: safety
+      text: "Cook salmon to at least 63 degrees Celsius in the thickest part, checked with a food thermometer."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
+
+- name: "Vegetable Bibimbap"
+  aliases: ["bibimbap", "korean rice bowl", "vegetarian bibimbap"]
+  serves: 2
+  time_minutes: 35
+  difficulty: medium
+  techniques: ["stir-fry"]
+  ingredients:
+    - "150 grams uncooked rice, rinsed"
+    - "water for rice, following packet directions"
+    - "2 eggs"
+    - "1 carrot, cut into thin matchsticks"
+    - "1 courgette, cut into thin matchsticks"
+    - "100 grams spinach, washed"
+    - "100 grams mushrooms, sliced"
+    - "1 tablespoon neutral oil, divided"
+    - "2 teaspoons sesame oil"
+    - "1 tablespoon light soy sauce"
+    - "1 tablespoon gochujang"
+    - "2 teaspoons rice vinegar"
+    - "1 teaspoon sugar"
+    - "2 teaspoons water for sauce"
+  steps:
+    - text: "Cook rice with water following the packet or rice cooker directions. Mix gochujang, vinegar, sugar and 2 teaspoons water separately for the serving sauce."
+    - text: "Use a little neutral oil to stir-fry carrot and courgette over medium heat until tender-crisp, then move to a plate. Cook mushrooms in a little more oil until softened, then wilt spinach in the same pan. Season the cooked vegetables with soy sauce and sesame oil."
+    - text: "Use the remaining neutral oil to fry eggs over medium-low heat until both whites and yolks are firm."
+      done_when: "The egg whites and yolks are fully firm."
+    - text: "Divide hot rice between bowls. Arrange vegetables and one cooked egg on each, add gochujang sauce to taste, then mix before eating."
+  facts:
+    - facet: safety
+      text: "Cook eggs until both the white and yolk are firm; this rice bowl uses fully cooked eggs."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
+
+- name: "Beef Tacos"
+  aliases: ["tacos", "ground beef tacos", "minced beef tacos"]
+  serves: 2
+  time_minutes: 25
+  difficulty: easy
+  techniques: ["stir-fry", "simmer"]
+  ingredients:
+    - "250 grams minced beef"
+    - "1 teaspoon neutral oil"
+    - "1 small onion, diced"
+    - "1 teaspoon ground cumin"
+    - "1 teaspoon paprika"
+    - "1 tablespoon tomato paste"
+    - "80 millilitres water"
+    - "quarter teaspoon salt"
+    - "6 small tortillas"
+    - "1 tomato, diced"
+    - "50 grams lettuce, washed and shredded"
+    - "40 grams grated Cheddar"
+  steps:
+    - text: "Wash and prepare tomato and lettuce before handling raw beef, and keep them on a clean plate. Heat oil in a frying pan over medium heat and soften onion for 5 minutes."
+    - text: "Add beef and break it into small pieces as it cooks. Stir in cumin, paprika, tomato paste, salt and water. Wash utensils that touched raw beef."
+    - text: "Simmer for 5 to 8 minutes until the filling is thick and the beef reaches at least 71 degrees Celsius on a food thermometer. Warm tortillas following the packet directions."
+      done_when: "The beef filling reaches at least 71 degrees Celsius."
+    - text: "Use clean utensils to fill tortillas with beef, tomato, lettuce and cheese, and serve promptly."
+  facts:
+    - facet: safety
+      text: "Ground beef must reach at least 71 degrees Celsius, checked with a food thermometer."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
+
+- name: "Bean and Rice Burritos"
+  aliases: ["burritos", "bean burrito", "vegetarian burrito", "rice burrito"]
+  serves: 2
+  time_minutes: 30
+  difficulty: easy
+  techniques: ["simmer"]
+  ingredients:
+    - "100 grams uncooked rice, rinsed"
+    - "water for rice, following packet directions"
+    - "400 gram can black beans, drained and rinsed"
+    - "1 teaspoon neutral oil"
+    - "1 small onion, diced"
+    - "1 teaspoon ground cumin"
+    - "100 grams tomato salsa"
+    - "2 large flour tortillas"
+    - "50 grams grated Cheddar"
+    - "1 avocado, peeled, stone removed and flesh sliced"
+  steps:
+    - text: "Cook rice with water following the packet directions. Meanwhile heat oil in a frying pan over medium heat and soften onion for 5 minutes."
+    - text: "Add cumin, beans and salsa and simmer for 5 minutes until hot throughout. Mash some beans with a spoon if the filling seems loose."
+    - text: "Warm tortillas following the packet directions. Divide rice, hot bean filling, cheese and avocado between the centres, leaving space at the edges."
+    - text: "Fold the short sides in, then roll each tortilla tightly around its filling. Serve immediately while the filling is hot."
+  facts:
+    - facet: tip
+      text: "Keep burrito filling away from the edges so the tortilla can fold and hold together."
+      source: "house-notes:kitchen-untested"
+
+- name: "Chilli con Carne"
+  aliases: ["chili con carne", "beef chili", "beef chilli"]
+  serves: 2
+  time_minutes: 45
+  difficulty: easy
+  techniques: ["simmer"]
+  ingredients:
+    - "250 grams minced beef"
+    - "1 tablespoon neutral oil"
+    - "1 onion, diced"
+    - "2 garlic cloves, minced"
+    - "1 teaspoon ground cumin"
+    - "1 teaspoon paprika"
+    - "half teaspoon chilli powder, or to taste"
+    - "400 grams canned chopped tomatoes"
+    - "400 gram can kidney beans, drained and rinsed"
+    - "100 millilitres water"
+    - "half teaspoon salt, or to taste"
+  steps:
+    - text: "Heat oil in a saucepan over medium heat and soften onion for 6 minutes. Stir in garlic for 30 seconds."
+    - text: "Add beef and break it into small pieces while cooking. Stir in cumin, paprika and chilli powder, then tomatoes, canned kidney beans, water and salt. Wash utensils that touched raw beef."
+    - text: "Simmer gently for about 25 minutes, stirring occasionally and adding a splash of water if it sticks. Check the beef and sauce reach at least 71 degrees Celsius on a food thermometer."
+      timer_seconds: 1500
+      done_when: "The sauce is thickened and the beef reaches at least 71 degrees Celsius."
+    - text: "Taste the sauce, adjust salt and chilli if desired, and serve hot. This recipe uses canned beans; do not replace them with uncooked dried kidney beans."
+  facts:
+    - facet: safety
+      text: "Ground beef must reach at least 71 degrees Celsius, checked with a food thermometer."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
+
+- name: "Chicken Noodle Soup"
+  aliases: ["chicken soup", "chicken noodles soup", "chicken noodle broth"]
+  serves: 2
+  time_minutes: 35
+  difficulty: easy
+  techniques: ["simmer"]
+  ingredients:
+    - "250 grams boneless chicken breast"
+    - "1 litre chicken stock"
+    - "1 carrot, thinly sliced"
+    - "1 celery stalk, thinly sliced"
+    - "1 small onion, diced"
+    - "100 grams dried egg noodles"
+    - "black pepper to taste"
+    - "salt to taste, if needed"
+  steps:
+    - text: "Put stock, carrot, celery and onion in a saucepan and bring to a simmer. Add chicken, then wash hands and utensils that touched the raw meat."
+    - text: "Simmer gently for about 15 to 20 minutes until vegetables are tender and the thickest part of the chicken reaches at least 74 degrees Celsius on a food thermometer."
+      done_when: "The chicken reaches at least 74 degrees Celsius in its thickest part."
+    - text: "Move chicken to a clean board using clean utensils. Add noodles to the simmering broth and cook following their packet timing. Meanwhile shred the cooked chicken with two clean forks."
+    - text: "Return shredded chicken to the soup and heat through. Taste before adding salt because stock may already be salty; add pepper and serve hot."
+  facts:
+    - facet: safety
+      text: "Cook chicken to at least 74 degrees Celsius in the thickest part, checked with a food thermometer."
+      source: "https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures"
+
+- name: "Tomato Soup"
+  aliases: ["creamy tomato soup", "easy tomato soup"]
+  serves: 2
+  time_minutes: 30
+  difficulty: easy
+  techniques: ["simmer"]
+  ingredients:
+    - "1 tablespoon olive oil"
+    - "1 small onion, finely diced"
+    - "2 garlic cloves, minced"
+    - "400 grams canned chopped tomatoes"
+    - "300 millilitres vegetable stock"
+    - "half teaspoon sugar, optional"
+    - "2 tablespoons cream, optional"
+    - "salt and black pepper to taste"
+  steps:
+    - text: "Heat olive oil in a saucepan over medium heat. Soften onion for about 6 minutes, then stir garlic for 30 seconds."
+    - text: "Add tomatoes, stock and optional sugar. Bring to a gentle simmer and cook for 15 minutes, stirring occasionally."
+      timer_seconds: 900
+    - text: "For a chunky soup, crush softened tomato pieces with a spoon. For a smoother soup, take the pan off the heat and use a hand blender with its head fully submerged to avoid hot splashes."
+    - text: "Stir in optional cream, return to low heat until hot throughout, then taste and adjust salt and pepper."
+      done_when: "The onion is tender and the soup is hot throughout."
+  facts:
+    - facet: equipment
+      text: "A hand blender is optional; crushed tomatoes make a chunky soup without blending."
+      source: "house-notes:kitchen-untested"
+
+- name: "Vegetable Stir-fry"
+  aliases: ["stir fried vegetables", "mixed vegetable stir fry", "veggie stir fry"]
+  serves: 2
+  time_minutes: 20
+  difficulty: easy
+  techniques: ["stir-fry"]
+  ingredients:
+    - "150 grams broccoli, cut into small florets"
+    - "1 carrot, thinly sliced"
+    - "1 red pepper, sliced"
+    - "100 grams mushrooms, sliced"
+    - "2 garlic cloves, minced"
+    - "1 tablespoon neutral oil"
+    - "1 tablespoon light soy sauce"
+    - "1 teaspoon sesame oil"
+    - "3 tablespoons water"
+    - "1 teaspoon cornflour mixed with 1 tablespoon cold water"
+  steps:
+    - text: "Wash and cut vegetables before heating the pan. Mix soy sauce, sesame oil and 3 tablespoons water in a small bowl."
+    - text: "Heat neutral oil in a wok over medium-high heat. Stir-fry broccoli and carrot for 2 minutes. Add mushrooms and pepper and stir-fry for 3 more minutes."
+    - text: "Stir in garlic for 30 seconds, then add the sauce. Cover for 1 to 2 minutes until the broccoli is tender-crisp."
+    - text: "Stir and add the cornflour slurry, then toss over heat until the sauce thickens and coats the vegetables. Serve hot."
+      done_when: "Vegetables are tender-crisp and the sauce is glossy without a raw cornflour taste."
+  facts:
+    - facet: tip
+      text: "Cut firm vegetables thinly and add them before softer vegetables so everything finishes together."
+      source: "house-notes:kitchen-untested"
+
+- name: "Crispy Roast Potatoes"
+  aliases: ["roast potatoes", "roasted potatoes", "crispy potatoes"]
+  serves: 2
+  time_minutes: 60
+  difficulty: easy
+  techniques: ["simmer"]
+  ingredients:
+    - "500 grams potatoes, peeled and cut into 4 centimetre chunks"
+    - "2 tablespoons neutral oil"
+    - "half teaspoon salt, divided"
+    - "black pepper to taste"
+    - "half teaspoon dried rosemary, optional"
+  steps:
+    - text: "Preheat the oven to 220 degrees Celsius. Put potatoes in a saucepan, cover with cold water, add half the salt and bring to a boil."
+    - text: "Simmer for about 8 minutes until the edges soften but the centres remain firm. Drain carefully, let steam escape, then shake gently in the dry pan to roughen the edges."
+    - text: "Spread potatoes on a baking tray, coat with oil, remaining salt, pepper and optional rosemary. Roast for about 40 minutes, turning halfway with a spatula."
+    - text: "Check that the outsides are crisp and golden and a fork slides easily through the centres. Continue roasting if needed, then remove the tray with oven gloves and serve."
+      done_when: "The edges are crisp and the centres are completely tender."
+  facts:
+    - facet: tip
+      text: "Leave space between potato pieces so their surfaces roast rather than steam."
+      source: "house-notes:kitchen-untested"
+
+- name: "Banana Bread"
+  aliases: ["banana loaf", "easy banana bread", "banana cake"]
+  serves: 8
+  time_minutes: 90
+  difficulty: easy
+  techniques: ["beat eggs"]
+  ingredients:
+    - "3 medium ripe bananas, peeled"
+    - "200 grams plain flour"
+    - "1 teaspoon baking powder"
+    - "half teaspoon bicarbonate of soda"
+    - "quarter teaspoon salt"
+    - "100 grams sugar"
+    - "2 eggs"
+    - "80 grams butter, melted and cooled slightly"
+    - "1 teaspoon vanilla extract"
+    - "1 teaspoon neutral oil for greasing the tin"
+  steps:
+    - text: "Preheat the oven to 175 degrees Celsius. Lightly oil a 900 gram loaf tin and line it with baking paper. Mash bananas in a mixing bowl."
+    - text: "Beat eggs, sugar, melted butter and vanilla into the mashed bananas. In another bowl mix flour, baking powder, bicarbonate of soda and salt. Do not taste raw batter."
+    - text: "Fold dry ingredients into the banana mixture just until no dry flour remains, then scrape into the prepared tin. Bake for about 50 to 60 minutes."
+      timer_seconds: 3000
+    - text: "Check a skewer inserted into the centre comes out without wet batter; bake longer if needed, loosely covering with foil if the top browns too quickly. Use oven gloves to remove the tin, cool for 10 minutes, then lift onto a rack and cool for at least 15 minutes before slicing."
+      done_when: "The loaf centre is set and a skewer comes out with no wet batter."
+  facts:
+    - facet: tip
+      text: "Very ripe, spotted bananas mash easily and give banana bread a stronger flavour."
+      source: "house-notes:kitchen-untested"

@@ -3,8 +3,7 @@ import logging
 import os
 from typing import AsyncGenerator, Dict, Any
 
-from openai import AsyncAzureOpenAI
-
+from api_client import create_async_client
 from config import load_azure_openai_config
 
 logger = logging.getLogger(__name__)
@@ -13,14 +12,12 @@ DEFAULT_PERSONA = "help"
 
 
 class StreamingOpenAI:
-    """Streaming Azure OpenAI client for real-time text generation."""
+    """Streaming HKUST GenAI or Azure client for real-time text generation."""
 
     def __init__(self):
         self.config = load_azure_openai_config()
-        self.client = AsyncAzureOpenAI(
-            api_key=self.config.api_key,
-            api_version=self.config.api_version,
-            azure_endpoint=self.config.azure_endpoint,
+        self.client = create_async_client(
+            self.config,
             timeout=float(os.getenv("AZURE_OPENAI_TIMEOUT_SECONDS", "30")),
             max_retries=1,
         )
@@ -104,11 +101,14 @@ class StreamingOpenAI:
         )
 
         accumulated = ""
-        async for chunk in stream:
-            if chunk.choices and chunk.choices[0].delta.content:
-                content = chunk.choices[0].delta.content
-                accumulated += content
-                yield content
+        try:
+            async for chunk in stream:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    content = chunk.choices[0].delta.content
+                    accumulated += content
+                    yield content
+        finally:
+            await stream.close()
         logger.info("Streaming completed: %d chars", len(accumulated))
 
     def _language_instruction(self, context: Dict[str, Any]) -> str:

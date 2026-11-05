@@ -48,6 +48,7 @@ import logging
 import os
 import re
 import sqlite3
+from contextlib import closing
 from typing import Any, Dict, List, Optional
 
 logging.basicConfig(level=logging.INFO)
@@ -174,6 +175,13 @@ CREATE TABLE IF NOT EXISTS recipe_steps (
     PRIMARY KEY (recipe_id, n)
 );
 
+CREATE TABLE IF NOT EXISTS recipe_ingredients (
+    recipe_id INTEGER NOT NULL REFERENCES subjects(id),
+    n INTEGER NOT NULL,
+    text TEXT NOT NULL,
+    PRIMARY KEY (recipe_id, n)
+);
+
 -- Which glossary entries a recipe relies on. Lets "how do I emulsify?" asked
 -- halfway through the pasta reach the technique's own facts.
 CREATE TABLE IF NOT EXISTS recipe_terms (
@@ -231,7 +239,8 @@ def classify_facet(question: str) -> Optional[str]:
 
 
 def _normalise(text: str) -> str:
-    return " ".join(str(text or "").lower().split())
+    # Hyphens count as spaces so "garlic-butter" matches "garlic butter".
+    return " ".join(str(text or "").lower().replace("-", " ").split())
 
 
 def _content_terms(query: str) -> List[str]:
@@ -364,6 +373,10 @@ class _Builder:
                               "recipes.yaml:summary")
 
             ingredients = [str(i).strip() for i in entry.get("ingredients") or [] if i]
+            self.conn.executemany(
+                "INSERT INTO recipe_ingredients (recipe_id, n, text) VALUES (?, ?, ?)",
+                [(recipe_id, n, text) for n, text in enumerate(ingredients)],
+            )
             if ingredients:
                 serving = f" (serves {serves})" if serves else ""
                 self.add_fact(recipe_id, RECIPE, name, "ingredients",
@@ -429,11 +442,10 @@ def build_knowledge_db(dest_path: str = DEFAULT_DB, recipes_yaml: str = None,
     recipes_yaml = recipes_yaml or os.path.join(HERE, "recipes.yaml")
     glossary_yaml = glossary_yaml or os.path.join(HERE, "glossary.yaml")
 
-    if os.path.exists(dest_path):
-        os.replace(dest_path, dest_path + ".backup")
-        logger.info("Existing knowledge db moved to %s.backup", dest_path)
-
-    conn = sqlite3.connect(dest_path)
+    # Build away from the live file, then copy the complete SQLite database in
+    # one backup operation. Renaming knowledge.db fails on Windows while another
+    # process still has it open (including a recently stopped local server).
+    conn = sqlite3.connect(":memory:")
     conn.executescript(SCHEMA)
 
     builder = _Builder(conn)
@@ -448,6 +460,9 @@ def build_knowledge_db(dest_path: str = DEFAULT_DB, recipes_yaml: str = None,
         table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
         for table in ("subjects", "recipe_steps", "recipe_terms", "facts", "aliases")
     }
+    os.makedirs(os.path.dirname(os.path.abspath(dest_path)), exist_ok=True)
+    with closing(sqlite3.connect(dest_path, timeout=10)) as target:
+        conn.backup(target)
     conn.close()
 
     logger.info("Built %s: %s", dest_path, counts)
@@ -489,9 +504,22 @@ class KnowledgeBase:
 
     def __init__(self, db_path: str = None, auto_build: bool = True):
         self.db_path = db_path or DEFAULT_DB
-        if auto_build and not os.path.exists(self.db_path):
-            logger.info("knowledge.db missing - building it now")
-            build_knowledge_db(self.db_path)
+        if auto_build:
+            sources = (os.path.join(HERE, "recipes.yaml"),
+                       os.path.join(HERE, "glossary.yaml"), __file__)
+            db_exists = os.path.exists(self.db_path)
+            source_is_newer = db_exists and any(
+                os.path.exists(path) and os.path.getmtime(path) > os.path.getmtime(self.db_path)
+                for path in sources
+            )
+            if not db_exists or source_is_newer:
+                logger.info("knowledge.db missing or outdated - building it now")
+                try:
+                    build_knowledge_db(self.db_path)
+                except PermissionError:
+                    if not db_exists:
+                        raise
+                    logger.warning("knowledge.db is in use; restart the running app to load updated recipes")
         self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         # Aliases are small and hit on every turn; keep them in memory and
@@ -578,11 +606,27 @@ class KnowledgeBase:
             " WHERE recipe_id = ? ORDER BY n", (recipe_id,))]
 
     def recipes(self) -> List[Dict[str, Any]]:
-        return [dict(row) for row in self._conn.execute(
+        recipes = [dict(row) for row in self._conn.execute(
             "SELECT s.id, s.name, s.serves, s.time_minutes, s.difficulty,"
             "       (SELECT COUNT(*) FROM recipe_steps r WHERE r.recipe_id = s.id) AS steps,"
             "       (SELECT COUNT(*) FROM facts f WHERE f.subject_id = s.id) AS facts"
             "  FROM subjects s WHERE s.kind = ? ORDER BY s.name", (RECIPE,))]
+        for recipe in recipes:
+            recipe["ingredients"] = self.ingredients(recipe["id"])
+            recipe["aliases"] = [row[0] for row in self._conn.execute(
+                "SELECT alias FROM aliases WHERE subject_id = ? ORDER BY alias", (recipe["id"],))]
+        return recipes
+
+    def ingredients(self, recipe_id: int) -> List[str]:
+        return [row[0] for row in self._conn.execute(
+            "SELECT text FROM recipe_ingredients WHERE recipe_id = ? ORDER BY n", (recipe_id,))]
+
+    def recipe_details(self, recipe_id: int) -> Dict[str, Any]:
+        row = self._conn.execute(
+            "SELECT serves, time_minutes FROM subjects WHERE id = ? AND kind = ?",
+            (recipe_id, RECIPE),
+        ).fetchone()
+        return {**dict(row), "ingredients": self.ingredients(recipe_id)} if row else {}
 
     def ingredients_text(self, recipe_id: int) -> Optional[str]:
         row = self._conn.execute(
