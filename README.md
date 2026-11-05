@@ -52,7 +52,8 @@ Already working, tested locally:
   dishes, not a measured ranking of search popularity; new recipes are house
   drafts and have not been kitchen-tested.
 - Built-in API web search integration for recipes and ingredients, with source
-  links. Live availability depends on gateway access; see the search section below.
+  links. **The HKUST GenAI API does not support online search**, so this only
+  works with other providers that expose Responses + `web_search` (see below).
 - Step timers, hands-free mode, camera preview
 - Paperclip button to the left of the browser chat input: choose a JPEG, PNG or
   WebP photo, preview it, then send it with your question. Remove clears the
@@ -63,9 +64,9 @@ Already working, tested locally:
 
 ## Task status
 
-- [ ] **Enable live web search at HKUST**: the configured key/gateway returned
-      HTTP 404 for both tested Responses routes on 2026-11-04. Chat access does
-      not establish built-in search access.
+- [ ] **Use online search with a non-HKUST API**: HKUST GenAI has no Responses /
+      `web_search` route (HTTP 404 on 2026-11-04). Point chat/search at another
+      provider that supports built-in web search, or wait until HKUST adds it.
 - [ ] **Kitchen-test recipes**: times are estimates; original house notes and
       glossary material still marked `starter:unverified` need practical review.
 - [ ] **Deploy and test a real phone over HTTPS**: needs your Lighthouse server
@@ -131,12 +132,14 @@ Results have clickable sources; new recipes are not automatically imported into
 the saved step-by-step recipe library. Search replies arrive after completion;
 ordinary chat replies still stream.
 
-**Current HKUST limitation:** a live check on 2026-11-03 returned HTTP 404 from
-both `https://hkust.azure-api.net/hkust-genai/v1/responses` and
-`https://hkust.azure-api.net/openai/v1/responses`. The code is ready, but online
-search has not succeeded with this gateway/key. HKUST needs to provide a
-Responses route and model with built-in web search enabled. The app reports
-the failure instead of presenting model knowledge as a search result.
+**HKUST GenAI does not support online search.** Live checks returned HTTP 404
+from both `https://hkust.azure-api.net/hkust-genai/v1/responses` and
+`https://hkust.azure-api.net/openai/v1/responses`. Chat and vision work on
+HKUST; Recipe search / “search online” only works when you configure a
+**different** API that exposes the Responses API with a built-in `web_search`
+tool (for example a direct Azure OpenAI resource with web search enabled).
+With HKUST alone, the app reports that search is unavailable instead of
+faking citations from model knowledge.
 
 Settings are in **Azure settings**, or `chatbot/.env`:
 
@@ -185,7 +188,7 @@ The launcher also opens with `python app.py`; it needs Python 3.10+ with Tkinter
    stays local; only Analyze sends the selected image to your configured model.
    Camera access stops after capture, when you leave this tab, or on app close.
 4. **Recipe search**: look up recipes or ingredients online and open source links.
-   This needs Responses / `web_search` access; the current HKUST test returns 404.
+   HKUST GenAI does not support this; use another API with Responses / `web_search`.
 5. **Lighthouse**: later, enter your domain, server address, SSH username and
    optional key-file path. **Check server** checks SSH/Docker; **Deploy** uploads
    the application and saved Azure settings, builds containers, and checks HTTPS.
