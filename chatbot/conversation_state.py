@@ -59,7 +59,10 @@ SESSION_IDLE_SECONDS = int(os.getenv("SESSION_IDLE_SECONDS", str(3 * 60 * 60)))
 # gap on the same subject should still start a new one.
 EPISODE_IDLE_SECONDS = int(os.getenv("EPISODE_IDLE_SECONDS", str(20 * 60)))
 
-PROFILE_LIMITS = (("cook_name", 80), ("skill_level", 120), ("dietary", 1000))
+PROFILE_LIMITS = (("cook_name", 80), ("skill_level", 120), ("dietary", 1000), ("notes", 2000))
+LANGUAGES = ("en", "yue", "zh")      # English, Cantonese, Mandarin
+MAX_SERVINGS = 24
+RATINGS = ("loved", "ok", "struggled")
 
 SCHEMA = """
 PRAGMA journal_mode=WAL;
@@ -146,6 +149,17 @@ CREATE TABLE IF NOT EXISTS custom_recipes (
     created_at  REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_custom_recipes_user ON custom_recipes(user_id, created_at DESC);
+
+-- "How did it go?" at the end of a recipe.
+CREATE TABLE IF NOT EXISTS feedback (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     TEXT NOT NULL,
+    session_id  TEXT,
+    recipe_name TEXT,
+    rating      TEXT,
+    note        TEXT,
+    created_at  REAL NOT NULL
+);
 """
 
 
@@ -156,14 +170,15 @@ class Visit:
         "session_id", "user_id", "started_at", "last_active", "language", "turn_count",
         "cook_name", "skill_level", "dietary", "dish", "recipe_id", "recipe_name", "step",
         "onboarding_step", "onboarding_started_at", "onboarding_completed_at",
-        "recipe_custom_id",
+        "recipe_custom_id", "servings", "suggestions",
     )
 
     def __init__(self, session_id, user_id, started_at, last_active, language, turn_count,
                  cook_name=None, skill_level=None, dietary=None, dish=None,
                  recipe_id=None, recipe_name=None, step=None,
                  onboarding_step="complete", onboarding_started_at=None,
-                 onboarding_completed_at=None, recipe_custom_id=None):
+                 onboarding_completed_at=None, recipe_custom_id=None, servings=None,
+                 suggestions=None):
         self.session_id = session_id
         self.user_id = user_id
         self.started_at = started_at
@@ -181,6 +196,9 @@ class Visit:
         self.onboarding_started_at = onboarding_started_at
         self.onboarding_completed_at = onboarding_completed_at
         self.recipe_custom_id = recipe_custom_id
+        self.servings = servings     # None = as written; else scaled to this many
+        # The dishes the coach last offered, in order, so "the first one" is clear.
+        self.suggestions = json.loads(suggestions) if suggestions else []
 
     @property
     def minutes_so_far(self) -> int:
@@ -263,9 +281,11 @@ class ConversationStore:
                 "step": "INTEGER", "chat_id": "TEXT",
                 "onboarding_step": "TEXT NOT NULL DEFAULT 'name'",
                 "onboarding_started_at": "REAL", "onboarding_completed_at": "REAL",
-                "recipe_custom_id": "INTEGER",
+                "recipe_custom_id": "INTEGER", "servings": "INTEGER", "suggestions": "TEXT",
             }),
             ("turns", {"vision": "TEXT"}),
+            ("profiles", {"notes": "TEXT", "language": "TEXT"}),
+            ("custom_recipes", {"favorite": "INTEGER NOT NULL DEFAULT 0", "last_used": "REAL"}),
         ):
             columns = {row["name"] for row in
                        self._conn.execute(f"PRAGMA table_info({table})").fetchall()}
@@ -288,7 +308,8 @@ class ConversationStore:
             row["language"], row["turn_count"], row["cook_name"], row["skill_level"],
             row["dietary"], row["dish"], row["recipe_id"], row["recipe_name"], row["step"],
             row["onboarding_step"], row["onboarding_started_at"],
-            row["onboarding_completed_at"], row["recipe_custom_id"],
+            row["onboarding_completed_at"], row["recipe_custom_id"], row["servings"],
+            row["suggestions"],
         )
 
     def bind_chat(self, chat_id):
@@ -319,7 +340,8 @@ class ConversationStore:
                 "INSERT INTO visits (session_id, user_id, started_at, last_active, language,"
                 " turn_count, onboarding_step, cook_name, skill_level, dietary, chat_id)"
                 " VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)",
-                (session_id, user_id, now, now, language or "en", "complete",
+                (session_id, user_id, now, now,
+                 language or (profile["language"] if profile and profile["language"] else "en"), "complete",
                  profile["cook_name"] if profile else None, profile["skill_level"] if profile else None,
                  profile["dietary"] if profile else None, chat_id),
             )
@@ -354,14 +376,49 @@ class ConversationStore:
         if recipe_id is not None and custom_id is not None:
             raise ValueError("A visit cooks either a catalog or an uploaded recipe, not both.")
         self._update_visit(visit.session_id, recipe_id=recipe_id, recipe_custom_id=custom_id,
-                           recipe_name=recipe_name, step=None)
+                           recipe_name=recipe_name, step=None, servings=None, suggestions=None)
         visit.recipe_id, visit.recipe_custom_id = recipe_id, custom_id
-        visit.recipe_name, visit.step = recipe_name, None
+        visit.recipe_name, visit.step, visit.servings = recipe_name, None, None
+        visit.suggestions = []
+        if custom_id is not None:
+            with self._lock:
+                self._conn.execute("UPDATE custom_recipes SET last_used = ? WHERE id = ?",
+                                   (time.time(), custom_id))
+                self._conn.commit()
         logger.info("Visit %s now cooking %r", visit.session_id, recipe_name)
+
+    def set_suggestions(self, visit: Visit, names: List[str]):
+        """Remember the dishes just offered, in order ("the first one")."""
+        names = [str(n)[:120] for n in names][:2]
+        self._update_visit(visit.session_id, suggestions=json.dumps(names) if names else None)
+        visit.suggestions = names
 
     def set_step(self, visit: Visit, step: Optional[int]):
         self._update_visit(visit.session_id, step=step)
         visit.step = step
+
+    def set_servings(self, visit: Visit, servings: Optional[int]):
+        """Scale the active recipe to this many servings (None = as written)."""
+        if servings is not None and (type(servings) is not int or not 1 <= servings <= MAX_SERVINGS):
+            raise ValueError(f"Servings must be a whole number from 1 to {MAX_SERVINGS}.")
+        self._update_visit(visit.session_id, servings=servings)
+        visit.servings = servings
+
+    def set_language(self, user_id: str, language: str) -> str:
+        """Remember the cook's language for this chat and future ones."""
+        if language not in LANGUAGES:
+            raise ValueError(f"Language must be one of {', '.join(LANGUAGES)}.")
+        visit = self.current_visit(user_id)
+        now = time.time()
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO profiles (user_id, language, updated_at) VALUES (?, ?, ?) "
+                "ON CONFLICT(user_id) DO UPDATE SET language = excluded.language",
+                (user_id, language, now))
+            self._conn.execute("UPDATE visits SET language = ? WHERE session_id = ?",
+                               (language, visit.session_id))
+            self._conn.commit()
+        return language
 
     # -- uploaded recipes ---------------------------------------------------
     def save_custom_recipe(self, visit: Visit, recipe: Dict[str, Any]) -> int:
@@ -385,11 +442,73 @@ class ConversationStore:
             return None
         return {"id": row["id"], "name": row["name"], **json.loads(row["data"])}
 
+    def list_custom_recipes(self, user_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """This browser's uploaded recipes: favourites first, then most recent."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, name, data, favorite, created_at, last_used FROM custom_recipes"
+                " WHERE user_id = ? ORDER BY favorite DESC, COALESCE(last_used, created_at) DESC"
+                " LIMIT ?", (user_id, limit)).fetchall()
+        recipes = []
+        for row in rows:
+            data = json.loads(row["data"])
+            recipes.append({"id": row["id"], "name": row["name"], "favorite": bool(row["favorite"]),
+                            "steps": len(data.get("steps") or []), "serves": data.get("serves"),
+                            "time_minutes": data.get("time_minutes"),
+                            "created_at": row["created_at"], "last_used": row["last_used"]})
+        return recipes
+
+    def set_custom_favorite(self, user_id: str, custom_id: Any, favorite: bool) -> bool:
+        if type(custom_id) is not int:
+            raise ValueError("Unknown recipe.")
+        with self._lock:
+            cur = self._conn.execute("UPDATE custom_recipes SET favorite = ? WHERE id = ? AND user_id = ?",
+                                     (1 if favorite else 0, custom_id, user_id))
+            self._conn.commit()
+        if not cur.rowcount:
+            raise ValueError("Unknown recipe.")
+        return bool(favorite)
+
+    # -- end of a recipe ------------------------------------------------------
+    def save_feedback(self, visit: Visit, rating: Optional[str], note: Optional[str]):
+        if rating is not None and rating not in RATINGS:
+            raise ValueError(f"Rating must be one of {', '.join(RATINGS)}.")
+        note = " ".join(str(note or "").split())[:300] or None
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO feedback (user_id, session_id, recipe_name, rating, note, created_at)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
+                (visit.user_id, visit.session_id, visit.recipe_name, rating, note, time.time()))
+            self._conn.commit()
+        if note:
+            self.add_note(visit.user_id, f"{visit.recipe_name}: {note}" if visit.recipe_name else note)
+        return note
+
+    def add_note(self, user_id: str, note: str):
+        """Append a 'for next time' note to the profile, keeping the newest."""
+        current = self.profile_notes(user_id)
+        lines = [line for line in (current or "").splitlines() if line.strip()] + [note.strip()]
+        text = "\n".join(lines)
+        while len(text) > 2000 and len(lines) > 1:
+            lines.pop(0)
+            text = "\n".join(lines)
+        self.update_profile(user_id, {"notes": text[-2000:]})
+
+    def profile_notes(self, user_id: str) -> Optional[str]:
+        with self._lock:
+            row = self._conn.execute("SELECT notes FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
+        return row["notes"] if row else None
+
+    def profile_language(self, user_id: str) -> str:
+        with self._lock:
+            row = self._conn.execute("SELECT language FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
+        return row["language"] if row and row["language"] in LANGUAGES else "en"
+
     # -- visit profile -----------------------------------------------------
     def get_profile(self, user_id: str) -> Dict[str, Any]:
         visit = self.current_visit(user_id)
         return {"cook_name": visit.cook_name or "", "skill_level": visit.skill_level or "",
-                "dietary": visit.dietary or ""}
+                "dietary": visit.dietary or "", "notes": self.profile_notes(user_id) or ""}
 
     @staticmethod
     def _clean_profile(values: dict, partial: bool) -> Dict[str, Optional[str]]:
@@ -402,12 +521,19 @@ class ConversationStore:
             value = values.get(field, "")
             if not isinstance(value, str) or len(value) > limit:
                 raise ValueError(f"{field.replace('_', ' ').capitalize()} must be text of at most {limit} characters.")
-            clean[field] = " ".join(value.split()) or None
+            if field == "notes":   # one note per line
+                clean[field] = "\n".join(" ".join(line.split()) for line in value.splitlines()
+                                         if line.strip()) or None
+            else:
+                clean[field] = " ".join(value.split()) or None
         return clean
 
     def save_profile(self, user_id: str, values: dict) -> Dict[str, Any]:
-        """Replace the whole profile (the Profile dialog)."""
-        return self._store_profile(user_id, self._clean_profile(values, partial=False))
+        """Replace the profile (the Profile dialog). Notes are kept if not sent."""
+        clean = self._clean_profile(values, partial=False)
+        if isinstance(values, dict) and "notes" not in values:
+            clean["notes"] = self.profile_notes(user_id)
+        return self._store_profile(user_id, clean)
 
     def update_profile(self, user_id: str, values: dict) -> Dict[str, Any]:
         """Change only the fields given (the model's update_cook_profile tool)."""
@@ -431,10 +557,10 @@ class ConversationStore:
     def _write_profile(self, user_id, values, now):
         # Caller holds the lock and commits the surrounding transaction.
         self._conn.execute(
-            "INSERT INTO profiles (user_id, cook_name, skill_level, dietary, updated_at) VALUES (?, ?, ?, ?, ?) "
+            "INSERT INTO profiles (user_id, cook_name, skill_level, dietary, notes, updated_at) VALUES (?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(user_id) DO UPDATE SET cook_name = excluded.cook_name, skill_level = excluded.skill_level, "
-            "dietary = excluded.dietary, updated_at = excluded.updated_at",
-            (user_id, values["cook_name"], values["skill_level"], values["dietary"], now))
+            "dietary = excluded.dietary, notes = excluded.notes, updated_at = excluded.updated_at",
+            (user_id, values["cook_name"], values["skill_level"], values["dietary"], values.get("notes"), now))
 
     # -- history ----------------------------------------------------------
     def history(self, user_id: str, offset: int = 0, limit: int = 20) -> Dict[str, Any]:

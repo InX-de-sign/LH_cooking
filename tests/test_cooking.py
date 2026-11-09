@@ -595,5 +595,185 @@ class AssistantTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual((await self.assistant.watch(self.user, frames))["status"], "unclear")
 
 
+class StageFeatureTests(unittest.IsolatedAsyncioTestCase):
+    """Idea cards, timers, servings, feedback notes, saved recipes and language."""
+
+    def setUp(self):
+        self.assistant = cook_api.assistant
+        self.user = f"stage-{self._testMethodName}"
+
+    def visit(self):
+        return self.assistant.store.current_visit(self.user)
+
+    def test_suggestion_cards_and_timers_reach_the_phone(self):
+        actions = {"suggestions": [], "timers": []}
+        run = lambda tool, **args: self.assistant.run_tool(self.user, tool, args, actions)
+        result = run("suggest_recipes", recipes=[{"recipe_name": "Egg Fried Rice", "why": "quick and forgiving"},
+                                                 {"recipe_name": "Beef Wellington"}, {"recipe_name": "Mapo Tofu"}])
+        self.assertEqual(result["shown"], ["Egg Fried Rice"], "never more than the first two, only catalog dishes")
+        self.assertEqual(result["not_in_catalog"], ["Beef Wellington"])
+        card = actions["suggestions"][0]
+        self.assertEqual((card["name"], card["why"]), ("Egg Fried Rice", "quick and forgiving"))
+        self.assertTrue(card["time_minutes"])
+        self.assertTrue(run("start_timer", label="Noodles  ", seconds=180)["ok"])
+        self.assertFalse(run("start_timer", label="x", seconds=2)["ok"])
+        self.assertFalse(run("start_timer", label="x", seconds="soon")["ok"])
+        self.assertEqual(actions["timers"], [{"label": "Noodles", "seconds": 180}])
+        self.assertIsNone(self.visit().recipe_id, "suggesting is not choosing")
+
+    def test_servings_scale_ingredients_steps_and_prompt(self):
+        run = lambda tool, **args: self.assistant.run_tool(self.user, tool, args)
+        self.assertFalse(run("scale_recipe", servings=4)["ok"], "nothing to scale yet")
+        run("choose_recipe", recipe_name="Spaghetti Aglio e Olio")
+        before = self.assistant.cooking_state(self.user)
+        base = before["serves"]
+        self.assertEqual(before["base_serves"], base)
+        scaled = run("scale_recipe", servings=base * 2)
+        self.assertEqual((scaled["serves"], scaled["originally_serves"]), (base * 2, base))
+        after = self.assistant.cooking_state(self.user)
+        self.assertEqual(after["serves"], base * 2)
+        self.assertNotEqual(after["ingredients"], before["ingredients"])
+        self.assertEqual(len(after["steps"]), len(before["steps"]))
+        prompt = self.assistant.context.build(self.user, "how much pasta?").text
+        self.assertIn(f"Scaled from {base} to {base * 2} servings", prompt)
+        self.assertEqual(self.assistant.set_servings(self.user, base)["serves"], base, "back to the original")
+        self.assertIsNone(self.visit().servings)
+        with self.assertRaises(ValueError):
+            self.assistant.set_servings(self.user, "4")
+        with self.assertRaises(ValueError):
+            self.assistant.set_servings(self.user, 99)
+        self.assistant.set_servings(self.user, base + 1)
+        run("choose_recipe", recipe_name="Mapo Tofu")
+        self.assertIsNone(self.visit().servings, "a new recipe starts as written")
+
+    async def test_finish_remembers_the_note_for_next_time(self):
+        self.assistant.run_tool(self.user, "choose_recipe", {"recipe_name": "Egg Fried Rice"})
+        self.assistant.run_tool(self.user, "go_to_step", {"step": 99})
+        with patch.object(self.assistant.model, "process_query_with_openai",
+                          AsyncMock(return_value="Glad it worked!")) as reply:
+            result = await self.assistant.finish(self.user, "loved", "  less salt  ")
+        self.assertEqual(result["message"], "Glad it worked!")
+        self.assertIn("I loved it", reply.call_args.kwargs["query"])
+        self.assertIn("Egg Fried Rice: less salt", self.assistant.store.profile_notes(self.user))
+        self.assertIn("Egg Fried Rice: less salt", self.assistant.context.build(self.user, "hi").text,
+                      "the coach sees past notes")
+        with self.assistant.store._lock:
+            row = self.assistant.store._conn.execute(
+                "SELECT rating, note, recipe_name FROM feedback WHERE user_id = ?", (self.user,)).fetchone()
+        self.assertEqual(tuple(row), ("loved", "less salt", "Egg Fried Rice"))
+        with patch.object(self.assistant.model, "process_query_with_openai", AsyncMock(return_value="ok")):
+            await self.assistant.finish(self.user, "amazing!!", "")
+        with self.assistant.store._lock:
+            ratings = [r[0] for r in self.assistant.store._conn.execute(
+                "SELECT rating FROM feedback WHERE user_id = ?", (self.user,))]
+        self.assertEqual(ratings, ["loved", None], "unknown ratings are not stored")
+
+    async def test_saved_recipes_can_be_starred_and_cooked_again(self):
+        store = self.assistant.store
+        visit = self.visit()
+        first = store.save_custom_recipe(visit, {"name": "Noodles", "serves": 2, "ingredients": ["noodles"],
+                                                 "steps": [{"text": "Boil."}, {"text": "Toss."}]})
+        second = store.save_custom_recipe(visit, {"name": "Toast", "ingredients": [], "steps": [{"text": "Toast."}]})
+        store.set_custom_favorite(self.user, first, True)
+        listed = store.list_custom_recipes(self.user)
+        self.assertEqual([r["name"] for r in listed], ["Noodles", "Toast"])
+        self.assertEqual((listed[0]["favorite"], listed[0]["steps"], listed[0]["serves"]), (True, 2, 2))
+        with self.assertRaises(ValueError):
+            store.set_custom_favorite("someone-else", first, False)
+        with self.assertRaises(ValueError):
+            store.set_custom_favorite(self.user, "1", True)
+        self.assertEqual(store.list_custom_recipes("someone-else"), [])
+        missing = await self.assistant.open_saved_recipe("someone-else", second)
+        self.assertIn("couldn't find", missing["message"])
+        with patch.object(self.assistant.model, "process_query_with_openai", AsyncMock(return_value="Here it is.")):
+            opened = await self.assistant.open_saved_recipe(self.user, second)
+        self.assertEqual((opened["cooking"]["recipe"], opened["cooking"]["custom"]), ("Toast", True))
+        self.assertEqual(store.list_custom_recipes(self.user)[1]["name"], "Toast")
+        self.assertTrue(store.list_custom_recipes(self.user)[1]["last_used"])
+
+    async def test_language_reaches_replies_greeting_and_prompts(self):
+        from streaming_openai import LANGUAGE_INSTRUCTIONS, StreamingOpenAI
+        store = self.assistant.store
+        with self.assertRaises(ValueError):
+            store.set_language(self.user, "fr")
+        store.set_language(self.user, "yue")
+        self.assertEqual(store.profile_language(self.user), "yue")
+        turn = self.assistant.context.build(self.user, "hello")
+        self.assertEqual(turn.language, "yue")
+        with patch("streaming_openai.create_async_client"):
+            messages = StreamingOpenAI().build_messages("hello", {"language": "yue", "prompt_context": "[QUESTION]\nhello"})
+        self.assertTrue(messages[-1]["content"].startswith(LANGUAGE_INSTRUCTIONS["yue"]))
+        model = self.assistant.model
+        with patch.object(model, "openai_client", object()), \
+                patch.object(model, "streaming_openai", SimpleNamespace(system_prompt="sys")), \
+                patch.object(model, "complete", AsyncMock(return_value="你好！")) as complete:
+            self.assertEqual(await self.assistant.greet(f"{self.user}-greet"), "你好！")
+            store.set_language(f"{self.user}-greet2", "zh")
+            await self.assistant.greet(f"{self.user}-greet2")
+        self.assertIn(LANGUAGE_INSTRUCTIONS["zh"], complete.call_args.args[0][1]["content"])
+
+
+class InstallAndShareTests(unittest.TestCase):
+    def test_install_files_and_share_target(self):
+        with TestClient(cook_api.app) as client:
+            manifest = client.get("/manifest.webmanifest")
+            self.assertEqual(manifest.headers["content-type"], "application/manifest+json")
+            data = manifest.json()
+            self.assertEqual(data["share_target"]["action"], "/share-target")
+            for icon in data["icons"]:
+                self.assertEqual(client.get(icon["src"]).status_code, 200, icon["src"])
+            worker = client.get("/sw.js")
+            self.assertEqual(worker.headers["service-worker-allowed"], "/")
+            self.assertIn("javascript", worker.headers["content-type"])
+
+            shared = client.get("/share-target", params={"title": "Noodles", "text": "Try this",
+                                                         "url": "https://recipes.example/n"}, follow_redirects=False)
+            self.assertEqual(shared.status_code, 303)
+            token = shared.headers["location"].split("share=")[1]
+            item = client.get(f"/api/shared/{token}").json()
+            self.assertEqual((item["title"], item["url"], item["image"]), ("Noodles", "https://recipes.example/n", None))
+            self.assertEqual(client.get(f"/api/shared/{token}").status_code, 404, "a share is picked up once")
+
+            posted = client.post("/share-target", data={"text": "From my gallery"},
+                                 files={"image": ("page.png", b"\x89PNG-bytes", "image/png")}, follow_redirects=False)
+            token = posted.headers["location"].split("share=")[1]
+            item = client.get(f"/api/shared/{token}").json()
+            self.assertEqual(item["text"], "From my gallery")
+            self.assertTrue(item["image"].startswith("data:image/png;base64,"))
+            ignored = client.post("/share-target", files={"image": ("x.svg", b"<svg/>", "image/svg+xml")},
+                                  follow_redirects=False)
+            item = client.get(f"/api/shared/{ignored.headers['location'].split('share=')[1]}").json()
+            self.assertIsNone(item["image"], "only JPEG, PNG and WebP are accepted")
+            big = client.post("/share-target", content=b"x", follow_redirects=False,
+                              headers={"content-length": str(cook_api.MAX_SHARE_BYTES + 1),
+                                       "content-type": "multipart/form-data; boundary=x"})
+            self.assertTrue(big.headers["location"].endswith("share=too-large"))
+
+    def test_websocket_language_servings_saved_recipes_and_feedback(self):
+        with TestClient(cook_api.app) as client:
+            with client.websocket_connect("/ws?client_id=ws-stage-features&lang=yue") as ws:
+                self.assertEqual(open_chat(ws)["language"], "yue")
+                ask(ws, "garlic pasta")
+                ws.send_json({"type": "set_servings", "request_id": "s1", "servings": 4})
+                scaled = ws.receive_json()
+                self.assertEqual(scaled["cooking"]["serves"], 4)
+                ws.send_json({"type": "set_servings", "request_id": "s2", "servings": "lots"})
+                self.assertIn("error", ws.receive_json())
+                ws.send_json({"type": "recipes_list", "request_id": "r1"})
+                self.assertEqual(ws.receive_json()["recipes"], [])
+                ws.send_json({"type": "recipe_favorite", "request_id": "f1", "recipe_id": 123456, "favorite": True})
+                self.assertEqual(ws.receive_json()["error"], "Unknown recipe.")
+                ws.send_json({"type": "recipe_open", "recipe_id": 123456})
+                self.assertEqual(ws.receive_json()["type"], "thinking")
+                self.assertIn("couldn't find", ws.receive_json()["message"])
+                ws.send_json({"type": "set_language", "language": "en"})
+                ws.send_json({"type": "set_language", "language": "klingon"})
+                ws.send_json({"type": "cook_feedback", "rating": "ok", "note": "more garlic"})
+                self.assertEqual(ws.receive_json()["type"], "thinking")
+                ws.receive_json()
+            self.assertEqual(cook_api.assistant.store.profile_language("ws-stage-features"), "en")
+            self.assertIn("more garlic", cook_api.assistant.store.profile_notes("ws-stage-features"))
+
+
 if __name__ == "__main__":
     unittest.main()

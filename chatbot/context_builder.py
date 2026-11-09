@@ -40,6 +40,7 @@ from typing import Any, Dict, List, Optional
 
 from knowledge_base import KnowledgeBase, Subject, classify_facet
 from conversation_state import ConversationStore, Episode, Visit
+from scaling import factor_for, scale_ingredient, scale_step
 from web_search import explicit_search
 
 logger = logging.getLogger(__name__)
@@ -178,10 +179,26 @@ class ActiveRecipe:
     serves: Optional[int] = None
     time_minutes: Optional[int] = None
     subject: Optional[Subject] = None   # knowledge-base subject, catalog only
+    base_serves: Optional[int] = None   # as written, before scaling
 
     @property
     def custom(self) -> bool:
         return self.kind == "custom"
+
+    @property
+    def scaled(self) -> bool:
+        return self.base_serves is not None and self.serves != self.base_serves
+
+    def scaled_to(self, servings: Optional[int]) -> "ActiveRecipe":
+        """This recipe with quantities rescaled for ``servings`` (no-op if None)."""
+        self.base_serves = self.serves
+        factor = factor_for(self.serves, servings)
+        if factor is None:
+            return self
+        self.ingredients = [scale_ingredient(i, factor) for i in self.ingredients]
+        self.steps = [{**s, "text": scale_step(s["text"], factor)} for s in self.steps]
+        self.serves = servings
+        return self
 
 
 _QUANTITY = re.compile(
@@ -255,7 +272,8 @@ class ContextBuilder:
                         "timer_seconds": s.get("timer_seconds")}
                        for i, s in enumerate(data.get("steps") or [])],
                 ingredients=list(data.get("ingredients") or []),
-                serves=data.get("serves"), time_minutes=data.get("time_minutes"))
+                serves=data.get("serves"), time_minutes=data.get("time_minutes")
+            ).scaled_to(visit.servings)
         if visit.recipe_id is None:
             return None
         subject = self.knowledge.subject_by_id(visit.recipe_id, source="recipe")
@@ -267,7 +285,7 @@ class ContextBuilder:
             steps=self.knowledge.steps(visit.recipe_id),
             ingredients=details.get("ingredients", []),
             serves=details.get("serves"), time_minutes=details.get("time_minutes"),
-            subject=subject)
+            subject=subject).scaled_to(visit.servings)
 
     def navigate(self, visit: Visit, nav: tuple, steps: List[Dict[str, Any]]) -> Optional[int]:
         """Move the step pointer. Returns the new 0-based step."""
@@ -389,11 +407,14 @@ class ContextBuilder:
         lines += ["[QUESTION]", turn.message]
         return "\n".join(lines)
 
-    @staticmethod
-    def cook_lines(visit: Visit) -> List[str]:
+    def cook_lines(self, visit: Visit) -> List[str]:
         lines = [f"Name: {visit.cook_name or 'not known yet'}.",
                  f"Kitchen experience: {visit.skill_level or 'not known yet'}.",
                  f"Allergies or foods they avoid: {visit.dietary or 'not known yet'}."]
+        notes = self.store.profile_notes(visit.user_id)
+        if notes:
+            lines.append("Their notes from past cooking (use them, e.g. less salt):")
+            lines += [f"- {line}" for line in notes.splitlines()[-8:]]
         lines.append(f"{visit.minutes_so_far} minutes into the session, "
                      f"{visit.turn_count} message{'s' if visit.turn_count != 1 else ''} so far.")
         return lines
@@ -401,12 +422,21 @@ class ContextBuilder:
     @staticmethod
     def recipe_lines(visit: Visit, recipe: Optional[ActiveRecipe]) -> List[str]:
         if recipe is None:
-            return ["No recipe chosen yet."]
+            lines = ["No recipe chosen yet."]
+            if visit.suggestions:
+                offered = ", ".join(f"{i}. {name}" for i, name in enumerate(visit.suggestions, 1))
+                lines.append(f"You just suggested, in this order: {offered}. \"The first one\" means "
+                             f"{visit.suggestions[0]}, not the first recipe in [CATALOG].")
+            return lines
         steps, total = recipe.steps, len(recipe.steps)
         origin = "uploaded by the cook" if recipe.custom else "from the catalog"
         about = ", ".join(filter(None, [f"serves {recipe.serves}" if recipe.serves else "",
                                         f"about {recipe.time_minutes} min" if recipe.time_minutes else ""]))
         lines = [f"Cooking: {recipe.name} ({origin}{', ' + about if about else ''}, {total} steps)."]
+        if recipe.scaled:
+            lines.append(f"Scaled from {recipe.base_serves} to {recipe.serves} servings: the "
+                         f"quantities below are already scaled. Scale any other amount the "
+                         f"same way; never scale times or temperatures.")
         if recipe.ingredients:
             lines.append("Ingredients:")
             lines += [f"- {item}" for item in recipe.ingredients]
@@ -502,6 +532,7 @@ def cooking_state(recipe: Optional[ActiveRecipe], step: Optional[int]) -> Dict[s
         "timer_seconds": current.get("timer_seconds"),
         "ingredients": recipe.ingredients if recipe else [],
         "serves": recipe.serves if recipe else None,
+        "base_serves": recipe.base_serves if recipe else None,
         "time_minutes": recipe.time_minutes if recipe else None,
     }
 

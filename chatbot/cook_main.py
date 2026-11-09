@@ -21,7 +21,12 @@ One turn:
     record              -> turn, episode facets, delivered facts
 
 Other entry points: greet() for a new chat, import_recipe() for an upload,
+open_saved_recipe() to cook an upload again, finish() for "how did it go?",
 watch() for the periodic camera check while a step is in progress.
+
+Tools can also hand the phone something to show: suggest_recipes adds idea
+cards and start_timer starts a named timer. They come back in the reply as
+``suggestions`` and ``timers``.
 """
 
 import asyncio
@@ -33,9 +38,9 @@ import re
 from typing import Any, Dict, List, Optional
 
 from context_builder import ContextBuilder, cooking_state, detect_navigation
-from conversation_state import ConversationStore
+from conversation_state import MAX_SERVINGS, RATINGS, ConversationStore
 from knowledge_base import KnowledgeBase, classify_facet
-from recipe_import import RecipeImportError, parse_recipe
+from recipe_import import RecipeImportError, fetch_recipe_page, parse_recipe
 from vision import VisionProvider, VisionRequest, load_vision_provider, to_data_url, wants_vision
 
 logging.basicConfig(level=logging.INFO)
@@ -107,7 +112,9 @@ class CookingAssistant:
         recipe = self.context.active_recipe(visit)
         reply = None
         if self.model.available:
+            from streaming_openai import LANGUAGE_INSTRUCTIONS
             prompt = "\n".join([
+                LANGUAGE_INSTRUCTIONS.get(visit.language, LANGUAGE_INSTRUCTIONS["en"]), "",
                 "[COOK]", *self.context.cook_lines(visit), "",
                 "[RECIPE]", *self.context.recipe_lines(visit, recipe), "",
                 "The cook has just opened the app. Greet them warmly in one or two short "
@@ -123,8 +130,52 @@ class CookingAssistant:
         return reply
 
     # -- tools the model can call ---------------------------------------------
-    def run_tool(self, user_id: str, name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    def run_tool(self, user_id: str, name: str, args: Dict[str, Any],
+                 actions: Optional[Dict[str, list]] = None) -> Dict[str, Any]:
+        """Run one tool. ``actions`` collects cards and timers for the phone."""
+        actions = actions if actions is not None else {"suggestions": [], "timers": []}
         visit = self.store.current_visit(user_id)
+        if name == "suggest_recipes":
+            catalog = {r["id"]: r for r in self.knowledge.recipes()}
+            cards, unknown = [], []
+            for item in (args.get("recipes") or [])[:2]:
+                item = item if isinstance(item, dict) else {"recipe_name": str(item)}
+                subject = self.knowledge.resolve_recipe(str(item.get("recipe_name") or ""))
+                if subject is None or any(c["name"] == subject.name for c in cards):
+                    unknown.append(item.get("recipe_name"))
+                    continue
+                info = catalog.get(subject.id, {})
+                cards.append({"name": subject.name, "why": " ".join(str(item.get("why") or "").split())[:120],
+                              "time_minutes": info.get("time_minutes"), "difficulty": info.get("difficulty")})
+            actions["suggestions"] = cards
+            self.store.set_suggestions(visit, [c["name"] for c in cards])
+            return {"ok": bool(cards), "shown": [c["name"] for c in cards],
+                    **({"not_in_catalog": unknown} if unknown else {})}
+        if name == "start_timer":
+            label = " ".join(str(args.get("label") or "Timer").split())[:40] or "Timer"
+            try:
+                seconds = int(args.get("seconds"))
+            except (TypeError, ValueError):
+                return {"ok": False, "error": "seconds must be a whole number."}
+            if not 5 <= seconds <= 6 * 60 * 60:
+                return {"ok": False, "error": "Timers run from 5 seconds to 6 hours."}
+            actions["timers"].append({"label": label, "seconds": seconds})
+            return {"ok": True, "label": label, "seconds": seconds}
+        if name == "scale_recipe":
+            recipe = self.context.active_recipe(visit)
+            if recipe is None:
+                return {"ok": False, "error": "No recipe is active."}
+            if not recipe.base_serves:
+                return {"ok": False, "error": "This recipe doesn't say how many it serves, so it "
+                                              "can't be scaled. Scale amounts in your reply instead."}
+            try:
+                servings = int(args.get("servings"))
+                self.store.set_servings(visit, None if servings == recipe.base_serves else servings)
+            except (TypeError, ValueError):
+                return {"ok": False, "error": f"servings must be 1 to {MAX_SERVINGS}."}
+            recipe = self.context.active_recipe(visit)
+            return {"ok": True, "serves": recipe.serves, "originally_serves": recipe.base_serves,
+                    "ingredients": recipe.ingredients}
         if name == "choose_recipe":
             wanted = str(args.get("recipe_name") or "")
             subject = self.knowledge.resolve_recipe(wanted)
@@ -135,7 +186,16 @@ class CookingAssistant:
                         "closest_catalog_recipes": close}
             self.store.set_recipe(visit, subject.id, subject.name)
             recipe = self.context.active_recipe(visit)
+            # "The first one, for 4 people": choose and scale in one call.
+            try:
+                servings = int(args.get("servings") or 0)
+            except (TypeError, ValueError):
+                servings = 0
+            if recipe.base_serves and 1 <= servings <= MAX_SERVINGS and servings != recipe.base_serves:
+                self.store.set_servings(visit, servings)
+                recipe = self.context.active_recipe(visit)
             return {"ok": True, "recipe": recipe.name, "serves": recipe.serves,
+                    "originally_serves": recipe.base_serves,
                     "time_minutes": recipe.time_minutes, "ingredients": recipe.ingredients,
                     "steps": [s["text"] for s in recipe.steps],
                     "status": "Loaded, not started. Show the ingredients as bullets and a "
@@ -219,9 +279,10 @@ class CookingAssistant:
 
             history = await asyncio.to_thread(self.store.recent_turns,
                                               turn.visit.session_id, HISTORY_TURNS)
+            actions = {"suggestions": [], "timers": []}
 
             async def tool_handler(name, args):
-                return await asyncio.to_thread(self.run_tool, user_id, name, args)
+                return await asyncio.to_thread(self.run_tool, user_id, name, args, actions)
 
             context = {
                 "prompt_context": turn.text,
@@ -243,7 +304,8 @@ class CookingAssistant:
                                     display_text, vision_note)
             return self._result(user_id, reply, observation=observation,
                                 sources=context.get("sources"),
-                                looked=len(images) if images and upload is None else 0)
+                                looked=len(images) if images and upload is None else 0,
+                                actions=actions)
 
         except Exception as exc:
             logger.error("Processing error: %s", exc, exc_info=True)
@@ -268,12 +330,15 @@ class CookingAssistant:
 
     # -- uploaded recipes -------------------------------------------------------
     async def import_recipe(self, user_id: str, text: str = "", image: Optional[tuple] = None,
-                            on_delta=None) -> Dict[str, Any]:
-        """Parse an uploaded recipe, make it the active one, and present it."""
+                            on_delta=None, url: str = "") -> Dict[str, Any]:
+        """Parse an uploaded recipe (text, photo or web link), make it active, present it."""
         if not self.model.available:
             return self._result(user_id, "Reading an uploaded recipe needs the AI model. "
                                          "Add your API key in the launcher's settings.")
         try:
+            if url:
+                page = await fetch_recipe_page(url)
+                text = f"{text}\n\n{page}".strip() if text else page
             recipe = await parse_recipe(self.model.streaming_openai.client, self.model.config,
                                         text, image)
         except RecipeImportError as exc:
@@ -286,6 +351,43 @@ class CookingAssistant:
             f"I just uploaded my own recipe for {recipe['name']}. Give me the overview.",
             user_id, on_delta=on_delta, display_text=f"Uploaded recipe: {recipe['name']}",
             allow_nav=False)
+
+    async def open_saved_recipe(self, user_id: str, custom_id: Any, on_delta=None) -> Dict[str, Any]:
+        """Cook one of this browser's uploaded recipes again."""
+        data = self.store.custom_recipe(custom_id, user_id) if type(custom_id) is int else None
+        if data is None:
+            return self._result(user_id, "I couldn't find that saved recipe.")
+        visit = self.store.current_visit(user_id)
+        await asyncio.to_thread(self.store.set_recipe, visit, None, data["name"], custom_id)
+        return await self.process_message(
+            f"I want to cook my saved recipe {data['name']} again. Give me the overview.",
+            user_id, on_delta=on_delta, display_text=f"Cook again: {data['name']}", allow_nav=False)
+
+    # -- end of a recipe ------------------------------------------------------------
+    def set_servings(self, user_id: str, servings: Any) -> Dict[str, Any]:
+        """The phone's servings stepper: rescale without a model call."""
+        visit = self.store.current_visit(user_id)
+        recipe = self.context.active_recipe(visit)
+        if recipe is None or not recipe.base_serves:
+            raise ValueError("This recipe can't be scaled.")
+        if type(servings) is not int:
+            raise ValueError(f"Servings must be a whole number from 1 to {MAX_SERVINGS}.")
+        self.store.set_servings(visit, None if servings == recipe.base_serves else servings)
+        return self.cooking_state(user_id)
+
+    async def finish(self, user_id: str, rating: Optional[str], note: str = "",
+                     on_delta=None) -> Dict[str, Any]:
+        """'How did it go?': remember the note for next time, then let the coach reply."""
+        visit = self.store.current_visit(user_id)
+        rating = rating if rating in RATINGS else None
+        note = await asyncio.to_thread(self.store.save_feedback, visit, rating, note)
+        words = {"loved": "I loved it", "ok": "It was OK", "struggled": "I struggled with it"}
+        said = ". ".join(filter(None, [words.get(rating, "I've finished"),
+                                        f"Note for next time: {note}" if note else ""]))
+        return await self.process_message(
+            f"I've finished cooking {visit.recipe_name or 'the dish'}. {said}. "
+            f"(The note is already saved to my profile.)", user_id, on_delta=on_delta,
+            display_text=said, allow_nav=False)
 
     # -- camera watch -------------------------------------------------------------
     async def watch(self, user_id: str, frames: List[tuple],
@@ -311,6 +413,9 @@ class CookingAssistant:
         if visit.dietary:
             lines.append(f"Allergies or foods they avoid: {visit.dietary}")
         lines.append(f"Previous alert: {last_alert}" if last_alert else "Previous alert: none.")
+        from streaming_openai import LANGUAGE_INSTRUCTIONS
+        if visit.language in LANGUAGE_INSTRUCTIONS and visit.language != "en":
+            lines.append(f"Write \"message\" in this language: {LANGUAGE_INSTRUCTIONS[visit.language]}")
         content = [{"type": "text", "text": "\n".join(lines)}] + [
             {"type": "image_url", "image_url": {"url": to_data_url(*f), "detail": "low"}}
             for f in frames]
@@ -330,15 +435,19 @@ class CookingAssistant:
         return {"status": status, "message": "", "step": visit.step}
 
     # -- results -------------------------------------------------------------------
-    def _result(self, user_id, reply, observation=None, sources=None, looked=0) -> Dict[str, Any]:
+    def _result(self, user_id, reply, observation=None, sources=None, looked=0,
+                actions=None) -> Dict[str, Any]:
         vision = observation.to_dict() if observation else None
         if vision is None and looked:
             vision = {"summary": None, "frames": looked, "hazards": []}
+        actions = actions or {}
         return {
             "message": reply,
             "cooking": self.cooking_state(user_id),
             "vision": vision,
             "sources": sources or [],
+            "suggestions": actions.get("suggestions") or [],
+            "timers": actions.get("timers") or [],
         }
 
     # -- reporting -----------------------------------------------------------

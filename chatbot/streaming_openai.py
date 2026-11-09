@@ -31,6 +31,7 @@ REPLY_TOKEN_BUDGET = 1600
 # after loading a recipe, before the cook said they were ready.
 MAX_TOOL_ROUNDS = 1
 HISTORY_TURNS = 6
+FIRST_TOOLS = ("choose_recipe", "stop_recipe")
 
 SYSTEM_PROMPT = """You are the cooking coach in a phone app, helping a home cook \
 make a dish step by step. Your replies are shown in a chat and also read aloud, \
@@ -47,15 +48,19 @@ HOW TO REPLY
   ask if they are ready to start.
 - When giving the current step: just that step with its quantities, then its
   "done when" cue or timer. Never paste the whole recipe again.
-- When asked what to cook or for ideas: suggest exactly 2 dishes from [CATALOG]
-  that suit their profile, each with a few words on why. Never list more than 2
-  recipes and never paste the catalog. Mention they can also upload their own
-  recipe with the Upload recipe button.
+- When asked what to cook or for ideas: pick exactly 2 dishes from [CATALOG]
+  that suit their profile and past notes, show them as cards (see ACTIONS), and
+  in your reply give each a few words on why. Never list more than 2 recipes and
+  never paste the catalog. Mention they can also upload their own recipe.
 - Pitch explanations to their experience. If you don't know their experience or
   allergies yet, you may ask once, briefly, in passing; never run a questionnaire.
 - Ask at most one question per reply, and only when it helps.
 
-TOOLS
+ACTIONS
+You change the app by calling functions. They work silently: the cook only sees
+the result (a recipe card, a step, a timer) and never sees function names. Never
+write a function name, "called", or JSON in your reply; talk like a person. If
+an action is needed, call the function itself; describing it does nothing.
 - choose_recipe: as soon as the cook picks a catalog dish, including "the first
   one" or "that one" after your suggestions, or asks to switch dish. If the dish
   is not in the catalog, say so and offer the 2 closest catalog options or
@@ -69,7 +74,16 @@ TOOLS
 - update_cook_profile: whenever the cook reveals their name, experience
   ("not confident at all" -> beginner), allergies or diet ("no allergies" ->
   none), even in passing, call it in that same turn.
-- Never say you changed the recipe or step unless you called the tool.
+- start_timer: when they ask for a timer, or say they are starting a step that
+  has a fixed time in [RECIPE] ("timer for the noodles"). Use a short label.
+- scale_recipe: when they want more or fewer servings ("make it for 4"). When
+  they choose a dish and give a number of people in the same message, pass
+  servings to choose_recipe instead.
+- suggest_recipes: whenever you suggest dishes, with the same 2 you mention.
+- "The first one" / "the second one" refer to the dishes you just suggested,
+  in that order (see [RECIPE]), never to the order of [CATALOG].
+- Never say you changed the recipe, step, timer or servings unless you called
+  the function in this turn.
 
 GROUNDING
 - Quantities, times and temperatures for the recipe come only from [RECIPE] and
@@ -96,7 +110,9 @@ TOOLS = [
         "description": "Load a recipe from the catalog as the dish being cooked "
                        "(also to switch dish). Returns its ingredients and steps.",
         "parameters": {"type": "object", "properties": {
-            "recipe_name": {"type": "string", "description": "Exact name from [CATALOG]."}},
+            "recipe_name": {"type": "string", "description": "Exact name from [CATALOG]."},
+            "servings": {"type": "integer", "minimum": 1, "maximum": 24,
+                         "description": "Only if they asked for a number of people or servings."}},
             "required": ["recipe_name"]}}},
     {"type": "function", "function": {
         "name": "go_to_step",
@@ -118,7 +134,38 @@ TOOLS = [
                             "description": "e.g. beginner, some experience, confident"},
             "dietary": {"type": "string",
                         "description": "Allergies and foods they avoid, or 'none'."}}}}},
+    {"type": "function", "function": {
+        "name": "suggest_recipes",
+        "description": "Show the cook up to 2 catalog dishes as cards they can tap to "
+                       "start. Call this whenever you suggest dishes.",
+        "parameters": {"type": "object", "properties": {
+            "recipes": {"type": "array", "maxItems": 2, "items": {
+                "type": "object", "properties": {
+                    "recipe_name": {"type": "string", "description": "Exact name from [CATALOG]."},
+                    "why": {"type": "string", "description": "A few words on why it suits them."}},
+                "required": ["recipe_name"]}}},
+            "required": ["recipes"]}}},
+    {"type": "function", "function": {
+        "name": "start_timer",
+        "description": "Start a named countdown timer on the cook's phone.",
+        "parameters": {"type": "object", "properties": {
+            "label": {"type": "string", "description": "Short name, e.g. 'Noodles'."},
+            "seconds": {"type": "integer", "minimum": 5, "maximum": 21600}},
+            "required": ["label", "seconds"]}}},
+    {"type": "function", "function": {
+        "name": "scale_recipe",
+        "description": "Rescale the current recipe's quantities to a number of servings.",
+        "parameters": {"type": "object", "properties": {
+            "servings": {"type": "integer", "minimum": 1, "maximum": 24}},
+            "required": ["servings"]}}},
 ]
+
+LANGUAGE_INSTRUCTIONS = {
+    "en": "Reply in English only.",
+    "yue": ("Reply in Cantonese as people in Hong Kong write it (traditional Chinese "
+            "characters, colloquial Cantonese). Keep quantities and recipe names clear."),
+    "zh": "Reply in Mandarin, using simplified Chinese characters.",
+}
 
 
 class StreamingOpenAI:
@@ -136,9 +183,7 @@ class StreamingOpenAI:
     # -- messages -------------------------------------------------------------
     @staticmethod
     def _language_instruction(context: Dict[str, Any]) -> str:
-        if context.get("language") == "zh":
-            return "Reply in Mandarin, using simplified Chinese characters."
-        return "Reply in English only."
+        return LANGUAGE_INSTRUCTIONS.get(context.get("language"), LANGUAGE_INSTRUCTIONS["en"])
 
     def build_messages(self, query: str, context: Dict[str, Any]) -> List[Dict[str, Any]]:
         messages: List[Dict[str, Any]] = [{"role": "system", "content": self.system_prompt}]
@@ -202,15 +247,20 @@ class StreamingOpenAI:
                 {"id": c["id"] or f"call_{i}", "type": "function",
                  "function": {"name": c["name"], "arguments": c["arguments"] or "{}"}}
                 for i, c in enumerate(ordered)]})
-            for i, call in enumerate(ordered):
+            # Recipe changes run first, so scaling or a step in the same round
+            # applies to the recipe just chosen. Results keep the model's order.
+            results = {}
+            for i in sorted(range(len(ordered)), key=lambda i: ordered[i]["name"] not in FIRST_TOOLS):
+                call = ordered[i]
                 try:
                     arguments = json.loads(call["arguments"] or "{}")
                 except json.JSONDecodeError:
                     arguments = {}
-                result = await handler(call["name"], arguments if isinstance(arguments, dict) else {})
-                logger.info("Tool %s(%s) -> %s", call["name"], arguments, str(result)[:120])
+                results[i] = await handler(call["name"], arguments if isinstance(arguments, dict) else {})
+                logger.info("Tool %s(%s) -> %s", call["name"], arguments, str(results[i])[:120])
+            for i, call in enumerate(ordered):
                 messages.append({"role": "tool", "tool_call_id": call["id"] or f"call_{i}",
-                                 "content": json.dumps(result)})
+                                 "content": json.dumps(results[i])})
             if text and not text.endswith(("\n", " ")):
                 yield "\n\n"
 

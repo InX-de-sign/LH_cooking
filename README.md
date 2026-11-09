@@ -60,8 +60,24 @@ Already working, tested locally:
   WebP photo, preview it, then send it with your question. Remove clears the
   attachment; use the paperclip again to replace it. Each photo is sent with one message only.
   Sending a photo alone asks what is visible in it.
-- **Upload recipe**: paste a recipe or choose a photo/screenshot/text file; the
-  coach breaks it into steps and guides you through it like a built-in recipe.
+- **Upload recipe**: paste a recipe or a link, photograph a cookbook page, or
+  choose a screenshot/text file; the coach breaks it into steps and guides you
+  through it like a built-in recipe. Uploads are kept under **My recipes**
+  (star favourites, cook again). Installed as an app on Android, the coach also
+  appears in the share sheet for web pages and screenshots.
+- **Mobile flow in four stages**: Choose (two idea cards, search, upload) →
+  Prep (tick-off ingredient checklist, "Missing?" asks for a substitute,
+  servings stepper that rescales quantities) → Cook (huge step text, Back /
+  Repeat / Next, swipe left/right, tap the step to talk, voice switched on,
+  chat shrunk to the latest reply, camera as a corner thumbnail) → Done ("How
+  did it go?" plus a note the coach remembers next time).
+- **Timers**: several named timers at once, started from the step or by voice
+  ("set a timer for the noodles"), kept across reloads, with a full-screen,
+  repeating, vibrating alarm.
+- **Settings menu (⋯)**: English, Cantonese or Mandarin (speech and replies),
+  speech speed, text size, light/dark/high-contrast theme, hands-free, Coach
+  watches. Camera and microphone get a one-line explanation before the browser
+  asks. Installable to the home screen; a banner shows when the connection drops.
 - **Live camera checks**: with the camera on, "am I doing this right?" sends the
   last few seconds of frames with the current step. **Coach watches** checks
   every ~20 s and speaks up only if something looks wrong, unsafe, or done.

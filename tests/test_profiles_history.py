@@ -44,7 +44,7 @@ class ProfileHistoryTests(unittest.TestCase):
         self.store.save_profile("sam", {"cook_name": "Sam", "skill_level": "beginner", "dietary": "Peanuts"})
         self.store.update_profile("sam", {"skill_level": "some experience"})
         self.assertEqual(self.store.get_profile("sam"),
-                         {"cook_name": "Sam", "skill_level": "some experience", "dietary": "Peanuts"})
+                         {"cook_name": "Sam", "skill_level": "some experience", "dietary": "Peanuts", "notes": ""})
         with self.assertRaises(ValueError):
             self.store.update_profile("sam", {"dietary": "x" * 1001})
         self.store.save_profile("sam", {"cook_name": "", "skill_level": "", "dietary": ""})

@@ -3,410 +3,438 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#f2f4ef">
+<meta name="theme-color" content="#2f7d4f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Stovetop">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="/static/icons/icon-192.png">
 <title>Stovetop Coach</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@500&display=swap">
 <style>
-/* Layout: one-screen phone app. Status + step card up top (readable at arm's
-   length), conversation scrolls in the middle, a thumb-sized dock at the
-   bottom. Wider screens put camera + step beside the conversation. */
+/* A phone propped up an arm's length from the stove: the page follows the
+   cook through four stages (Choose -> Prep -> Cook -> Done) rather than being
+   a chat with panels. In Cook the step is huge, the controls are thumb-sized,
+   and the conversation shrinks to the latest reply. */
 :root {
   color-scheme: light;
-  --bg: #f2f4ef;          /* worktop: cool off-white, faint basil bias */
-  --surface: #ffffff;
-  --ink: #1d221e;
-  --muted: #5d665f;
-  --line: #d8ddd5;
-  --yolk: #f0b429;        /* accent: egg yolk; talk button, progress */
-  --yolk-ink: #2a1f00;
-  --basil: #2f7d4f;       /* semantic: done / ok */
-  --flame: #c8402b;       /* semantic: safety / listening */
-  --cook-bubble: #e4e9e1;
-
+  --bg: #f2f4ef; --surface: #ffffff; --ink: #1d221e; --muted: #5d665f; --line: #d8ddd5;
+  --yolk: #f0b429; --yolk-ink: #2a1f00; --basil: #2f7d4f; --flame: #c8402b; --cook-bubble: #e4e9e1;
   --display: "Bricolage Grotesque", "Arial Narrow", system-ui, sans-serif;
   --body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
-
-  --step-size: clamp(1.35rem, 5.2vw, 1.9rem);
-  --radius: 14px;
+  --radius: 14px; --scale: 1;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-theme="light"]):not([data-theme="contrast"]) {
     color-scheme: dark;
-    --bg: #141815; --surface: #1d221e; --ink: #ecefe9; --muted: #9aa49c;
-    --line: #2f3631; --yolk: #f5c04a; --yolk-ink: #2a1f00; --basil: #5cc285;
-    --flame: #ff7a63; --cook-bubble: #262c27;
+    --bg: #141815; --surface: #1d221e; --ink: #ecefe9; --muted: #9aa49c; --line: #2f3631;
+    --yolk: #f5c04a; --yolk-ink: #2a1f00; --basil: #5cc285; --flame: #ff7a63; --cook-bubble: #262c27;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #141815; --surface: #1d221e; --ink: #ecefe9; --muted: #9aa49c;
-  --line: #2f3631; --yolk: #f5c04a; --yolk-ink: #2a1f00; --basil: #5cc285;
-  --flame: #ff7a63; --cook-bubble: #262c27;
+  --bg: #141815; --surface: #1d221e; --ink: #ecefe9; --muted: #9aa49c; --line: #2f3631;
+  --yolk: #f5c04a; --yolk-ink: #2a1f00; --basil: #5cc285; --flame: #ff7a63; --cook-bubble: #262c27;
 }
-
+/* Kitchen glare and steamed-up glasses: maximum contrast. */
+:root[data-theme="contrast"] {
+  color-scheme: dark;
+  --bg: #000; --surface: #0b0b0b; --ink: #fff; --muted: #f2f2f2; --line: #fff;
+  --yolk: #ffd23f; --yolk-ink: #000; --basil: #6dffa0; --flame: #ff7b6b; --cook-bubble: #1d1d1d;
+}
+html { font-size: calc(100% * var(--scale)); }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
 body {
   background: var(--bg); color: var(--ink);
   font: 400 1.0625rem/1.5 var(--body);
   padding-top: env(safe-area-inset-top, 0px);
-  display: grid; grid-template-rows: auto 1fr auto;
+  display: grid; height: 100dvh; overflow: hidden;
+  grid-template-areas: "header" "offline" "timers" "main" "dock";
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);   /* never wider than the phone */
   -webkit-tap-highlight-color: transparent;
 }
 [hidden] { display: none !important; }
-button, input { font: inherit; color: inherit; }
+button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
 :focus-visible { outline: 3px solid var(--yolk); outline-offset: 2px; }
 
-/* --- header ------------------------------------------------------------ */
-header {
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  padding: 10px 16px; border-bottom: 1px solid var(--line);
-}
-.brand { font: 800 1.15rem/1 var(--display); letter-spacing: -0.01em; }
-.conn {
-  margin-left: auto; display: flex; align-items: center; gap: 6px;
-  font-size: 0.8rem; color: var(--muted);
-}
-.conn::before {
-  content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted);
-}
+/* --- header: brand, connection, one menu --------------------------------- */
+.topbar { grid-area: header; display: flex; align-items: center; gap: 10px; padding: 8px 12px 8px 16px; border-bottom: 1px solid var(--line); }
+.brand { font: 800 1.1rem/1 var(--display); letter-spacing: -0.01em; }
+.conn { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--muted); }
+.conn::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
 .conn[data-state="open"]::before { background: var(--basil); }
 .conn[data-state="closed"]::before { background: var(--flame); }
-.header-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
-.header-button {
-  display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 10px;
-  border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-size: 0.85rem;
+.icon-button {
+  width: 44px; height: 44px; flex: none; border-radius: 50%; border: 1px solid var(--line);
+  background: var(--surface); display: grid; place-items: center; padding: 0;
 }
-.header-button svg { width: 18px; height: 18px; }
-@media (max-width: 600px) {
-  header { gap: 6px; padding: 8px 12px; }
-  .brand { font-size: 1rem; }
-  .conn { margin-left: auto; font-size: 0.72rem; }
-  .header-actions { width: 100%; justify-content: flex-end; }
-  .header-button { padding: 6px 8px; }
+.icon-button svg { width: 22px; height: 22px; }
+
+/* --- banners -------------------------------------------------------------- */
+.offline {
+  grid-area: offline; display: flex; align-items: center; gap: 10px; padding: 8px 16px;
+  background: var(--flame); color: #fff; font-size: 0.9rem; font-weight: 700;
+}
+.offline button { margin-left: auto; min-height: 36px; padding: 4px 14px; border: 1px solid #fff; border-radius: 999px; background: transparent; color: #fff; }
+.timer-strip { grid-area: timers; display: flex; gap: 8px; overflow-x: auto; padding: 8px 16px; border-bottom: 1px solid var(--line); scrollbar-width: none; }
+.timer-chip {
+  flex: none; display: flex; align-items: center; border-radius: 999px;
+  background: var(--yolk); color: var(--yolk-ink); font: 500 0.95rem/1 var(--mono); font-variant-numeric: tabular-nums;
+}
+.timer-chip button { border: 0; background: transparent; color: inherit; min-height: 42px; padding: 0 6px 0 14px; }
+.timer-chip button.x { padding: 0 14px 0 8px; font-size: 1.15rem; }
+.timer-chip.paused { background: var(--cook-bubble); color: var(--ink); }
+.timer-chip.done { background: var(--flame); color: #fff; }
+
+/* --- main: stage panel + conversation -------------------------------------- */
+main { grid-area: main; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 10px 16px 0; overflow: hidden; }
+.stage { position: relative; flex: 0 1 auto; max-height: 58%; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; overscroll-behavior: contain; }
+.stage > * { flex-shrink: 0; }   /* scroll the panel; never squash the camera bar or the card */
+body[data-stage="prep"] .stage, body[data-stage="done"] .stage { max-height: 68%; }
+.chat { flex: 1 1 0; min-height: 96px; display: flex; flex-direction: column; }
+/* Cooking mode: the step owns the screen, the chat shrinks to the last reply. */
+body[data-stage="cook"] .stage { flex: 1 1 auto; max-height: none; }
+body[data-stage="cook"] .chat { flex: 0 1 auto; max-height: 30%; min-height: 0; }
+body[data-stage="cook"][data-chat="open"] .stage { flex: 0 1 auto; max-height: 48%; }
+body[data-stage="cook"][data-chat="open"] .chat { flex: 1 1 0; max-height: none; }
+body[data-stage="cook"][data-chat="collapsed"] .log > .msg:has(~ .msg.coach) { display: none; }
+.chat-toggle { align-self: flex-start; border: 0; background: transparent; color: var(--muted); font-size: 0.85rem; padding: 2px 0; min-height: 32px; text-decoration: underline; }
+body:not([data-stage="cook"]) .chat-toggle { display: none; }
+@media (min-width: 860px) {
+  main { flex-direction: row; }
+  .stage, body[data-stage] .stage, body[data-stage="cook"][data-chat] .stage { flex: 1 1 0; max-height: none; }
+  .chat, body[data-stage] .chat, body[data-stage="cook"][data-chat] .chat { flex: 1 1 0; max-height: none; }
+  body[data-stage="cook"][data-chat="collapsed"] .log > .msg:has(~ .msg.coach) { display: block; }
+  .chat-toggle { display: none; }
 }
 
-/* profile and usage history */
-dialog {
-  width: min(600px, calc(100% - 24px)); max-height: calc(100dvh - 32px);
-  padding: 20px; border: 1px solid var(--line); border-radius: 18px;
-  background: var(--surface); color: var(--ink); overflow-y: auto;
+/* camera: a bar when off, a block when on, a corner thumbnail while cooking */
+.camera {
+  position: relative; border-radius: var(--radius); overflow: hidden;
+  background: var(--cook-bubble); aspect-ratio: 16 / 9; display: grid; place-items: center;
 }
-dialog::backdrop { background: rgb(0 0 0 / 0.4); }
+.camera video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.camera.compact { aspect-ratio: auto; min-height: 52px; place-items: stretch; }
+.cam-empty { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 6px 4px 14px; color: var(--muted); font-size: 0.9rem; }
+.cam-empty p { margin: 0; }
+.cam-empty .btn { flex: none; white-space: nowrap; }
+.cam-off { position: absolute; top: 8px; right: 8px; border: 0; border-radius: 999px; padding: 6px 12px; font-size: 0.8rem; background: rgb(0 0 0 / 0.55); color: #fff; }
+.cam-badge { position: absolute; left: 8px; bottom: 8px; border-radius: 999px; padding: 4px 10px; font-size: 0.75rem; background: rgb(0 0 0 / 0.55); color: #fff; }
+.watch-dot {
+  position: absolute; left: 8px; top: 8px; display: flex; align-items: center; gap: 5px;
+  border-radius: 999px; padding: 3px 9px; font-size: 0.72rem; background: rgb(0 0 0 / 0.55); color: #fff;
+}
+.watch-dot::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #5cc285; animation: blink 2s infinite; }
+body[data-stage="cook"] .camera:not(.compact) {
+  position: absolute; top: 6px; right: 6px; z-index: 2; width: 34%; max-width: 190px; aspect-ratio: 3 / 4;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.28); border: 2px solid var(--surface);
+}
+body[data-stage="cook"] .camera.expanded:not(.compact) { left: 6px; width: auto; max-width: none; aspect-ratio: 4 / 3; }
+body[data-stage="cook"] .camera:not(.expanded) .cam-badge { display: none; }
+body[data-stage="cook"] .camera:not(.expanded) .cam-off { top: auto; bottom: 6px; right: 6px; padding: 4px 8px; font-size: 0.7rem; }
+body[data-stage="cook"].camera-on .step-meta, body[data-stage="cook"].camera-on .progress { margin-right: min(36%, 196px); }
+body[data-stage="cook"] .camera.compact { min-height: 0; background: transparent; }
+body[data-stage="cook"] .cam-empty { justify-content: flex-end; padding: 0; }
+body[data-stage="cook"] .cam-empty p { display: none; }
+/* While cooking the step comes first; ingredients and the step list go last. */
+body[data-stage="cook"] .step-card > .panel, body[data-stage="done"] .step-card > .panel { order: 1; }
+.stage, .chat, .step-card, .stage-section { min-width: 0; }
+
+/* step card */
+.step-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px 16px; display: grid; gap: 12px; }
+.step-meta { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.recipe-name { font: 600 1rem/1.2 var(--display); }
+.step-count { margin-left: auto; font: 500 0.85rem/1 var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.progress { display: flex; gap: 4px; height: 6px; }
+.progress span { flex: 1; border-radius: 3px; background: var(--line); }
+.progress span.done { background: var(--basil); }
+.progress span.now { background: var(--yolk); }
+.stage-section { display: grid; gap: 12px; }
+.lead { margin: 0; font: 600 1.35rem/1.25 var(--display); }
+.muted { margin: 0; color: var(--muted); font-size: 0.95rem; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 8px 16px; min-height: 44px; }
+.btn.primary { background: var(--basil); border-color: var(--basil); color: #fff; font-weight: 700; }
+.btn.big { min-height: 56px; font-size: 1.1rem; width: 100%; }
+.row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* choose */
+.idea-cards { display: grid; gap: 10px; }
+.idea-card { text-align: left; display: grid; gap: 4px; padding: 14px 16px; border-radius: 14px; border: 2px solid var(--line); background: var(--bg); }
+.idea-card strong { font: 600 1.15rem/1.2 var(--display); }
+.idea-card .meta { font-size: 0.85rem; color: var(--muted); }
+.idea-card .cta { color: var(--basil); font-weight: 700; font-size: 0.9rem; }
+.recipe-picks { display: flex; gap: 8px; flex-wrap: wrap; }
+.recipe-search { display: grid; gap: 6px; font-size: 0.9rem; color: var(--muted); }
+.recipe-search input { width: 100%; min-height: 46px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); }
+
+/* prep */
+.servings { display: flex; align-items: center; gap: 10px; }
+.servings span { margin-right: auto; font-weight: 700; }
+.servings button { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); font-size: 1.35rem; line-height: 1; }
+.servings output { min-width: 2ch; text-align: center; font: 600 1.25rem/1 var(--mono); }
+.panel summary { cursor: pointer; font-weight: 700; min-height: 36px; display: flex; align-items: center; gap: 8px; }
+.panel summary .count { margin-left: auto; font: 500 0.8rem/1 var(--mono); color: var(--muted); }
+.checklist { list-style: none; padding: 0; margin: 6px 0 0; }
+.checklist li { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px dashed var(--line); }
+.checklist label { flex: 1; display: flex; gap: 12px; align-items: flex-start; min-height: 44px; padding-top: 8px; }
+.checklist input[type="checkbox"] { width: 24px; height: 24px; flex: none; margin: 0; accent-color: var(--basil); }
+.checklist li.ready label span { color: var(--muted); text-decoration: line-through; }
+.missing { flex: none; min-height: 36px; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); font-size: 0.8rem; }
+.panel ol { padding-left: 26px; margin: 8px 0 0; }
+.panel ol li { margin-bottom: 6px; }
+.panel ol li.done { color: var(--muted); }
+.panel ol li.now { font-weight: 700; }
+.panel ol li.now::marker { color: var(--basil); }
+.tip { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--cook-bubble); font-size: 0.9rem; }
+
+/* cook */
+.step-text {
+  margin: 0; font: 600 clamp(1.55rem, 6.6vw, 2.5rem)/1.22 var(--display); letter-spacing: -0.01em;
+  text-wrap: pretty; cursor: pointer; touch-action: pan-y; user-select: none;
+}
+.done-when { margin: 0; color: var(--muted); font-size: 1rem; }
+.done-when b { color: var(--basil); }
+.timer-btn { justify-self: start; border: 2px solid var(--ink); background: transparent; border-radius: 999px; padding: 8px 16px; min-height: 46px; font: 500 1rem/1 var(--mono); }
+.big-nav { display: grid; grid-template-columns: 1fr 1fr 1.4fr; gap: 10px; }
+.big-nav button { min-height: 64px; border-radius: 16px; border: 2px solid var(--line); background: var(--surface); font: 700 1.05rem/1 var(--body); }
+.big-nav .next { background: var(--basil); border-color: var(--basil); color: #fff; }
+.swipe-hint { margin: 0; text-align: center; font-size: 0.8rem; color: var(--muted); }
+
+/* done */
+.rating { display: flex; gap: 8px; flex-wrap: wrap; }
+.rating button { flex: 1 1 30%; min-height: 52px; border-radius: 14px; border: 2px solid var(--line); background: var(--surface); font-weight: 700; }
+.rating button[aria-pressed="true"] { background: var(--basil); border-color: var(--basil); color: #fff; }
+.note-box { width: 100%; min-height: 84px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); resize: vertical; }
+
+/* conversation */
+.log { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-bottom: 12px; overscroll-behavior: contain; }
+.msg { max-width: 88%; padding: 9px 13px; border-radius: 16px; line-height: 1.45; }
+.msg.coach { align-self: flex-start; background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.msg.cook { align-self: flex-end; background: var(--cook-bubble); border-bottom-right-radius: 4px; white-space: pre-wrap; }
+.msg.note { align-self: center; max-width: 100%; font-size: 0.8rem; color: var(--muted); padding: 2px 8px; text-align: center; }
+.msg .seen { display: block; margin-top: 6px; font-size: 0.8rem; color: var(--muted); }
+.msg .seen.hazard { color: var(--flame); font-weight: 700; }
+.msg .seen-frame { display: block; width: 120px; max-width: 100%; margin-top: 6px; border-radius: 8px; }
+.msg .sent-photo { display: block; max-width: 100%; max-height: 180px; margin-top: 8px; border-radius: 8px; }
+.msg.coach p { margin: 0 0 6px; }
+.msg.coach p:last-child { margin-bottom: 0; }
+.msg.coach ul, .msg.coach ol { margin: 4px 0 8px; padding-left: 22px; }
+.msg.coach li { margin: 3px 0; }
+.msg.coach ol > li::marker { font-weight: 700; color: var(--basil); }
+.msg.alert { border: 2px solid var(--yolk); }
+.msg.alert.hazard { border-color: var(--flame); }
+.msg.alert.done { border-color: var(--basil); }
+.msg .tag { display: block; margin-bottom: 4px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.msg.alert.hazard .tag { color: var(--flame); }
+.msg.alert.done .tag { color: var(--basil); }
+.typing { display: inline-flex; gap: 4px; vertical-align: middle; }
+.typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: blink 1.2s infinite; }
+.typing i:nth-child(2) { animation-delay: 0.2s; } .typing i:nth-child(3) { animation-delay: 0.4s; }
+.typing-label { margin-left: 8px; font-size: 0.85rem; color: var(--muted); }
+@keyframes blink { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
+
+/* --- dock ------------------------------------------------------------------ */
+.dock { grid-area: dock; border-top: 1px solid var(--line); background: var(--bg); padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 8px; }
+.chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.chips button { flex: none; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 8px 14px; min-height: 42px; white-space: nowrap; }
+body[data-stage="cook"] .chips { display: none; }
+.talk-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+.text-form { display: flex; gap: 8px; min-width: 0; }
+.text-form input:not([type="file"]) { flex: 1; min-width: 0; min-height: 48px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+.send, .attach { flex: none; width: 44px; height: 48px; padding: 0; border-radius: 50%; display: grid; place-items: center; }
+.send { border: 0; background: transparent; color: var(--basil); }
+.attach { border: 1px solid var(--line); background: var(--surface); }
+.send svg, .attach svg { width: 22px; height: 22px; }
+.attachment { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.attachment img { width: 52px; height: 52px; object-fit: cover; border-radius: 8px; }
+.attachment-info { flex: 1; min-width: 0; font-size: 0.85rem; }
+.attachment-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-status { display: block; color: var(--muted); }
+.talk { width: 52px; height: 52px; border-radius: 50%; border: 0; background: var(--yolk); color: var(--yolk-ink); display: grid; place-items: center; box-shadow: 0 2px 0 rgb(0 0 0 / 0.15); }
+.talk svg { width: 24px; height: 24px; }
+body[data-stage="cook"] .talk { width: 70px; height: 70px; }
+body[data-stage="cook"] .talk svg { width: 30px; height: 30px; }
+.talk[data-state="listening"] { background: var(--flame); color: #fff; animation: pulse 1.4s infinite; }
+.talk[data-state="speaking"] { background: var(--ink); color: var(--bg); }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgb(200 64 43 / 0.45); } 100% { box-shadow: 0 0 0 18px rgb(200 64 43 / 0); } }
+.hint { margin: 0; min-height: 1.2em; font-size: 0.8rem; color: var(--muted); text-align: center; }
+
+/* --- dialogs ---------------------------------------------------------------- */
+dialog {
+  width: min(600px, calc(100% - 24px)); max-height: calc(100dvh - 32px); padding: 20px;
+  border: 1px solid var(--line); border-radius: 18px; background: var(--surface); color: var(--ink); overflow-y: auto;
+}
+dialog::backdrop { background: rgb(0 0 0 / 0.45); }
 .dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .dialog-heading h2 { margin: 0; font: 600 1.4rem/1.2 var(--display); }
 .dialog-help, .dialog-status { color: var(--muted); font-size: 0.9rem; margin: 8px 0 14px; }
 .dialog-status[data-error="true"] { color: var(--flame); }
-.profile-form { display: grid; gap: 8px; }
-.recipe-form textarea { min-height: 180px; }
+dialog button:disabled { cursor: wait; opacity: 0.6; }
+.form-grid { display: grid; gap: 8px; }
+.form-grid input, .form-grid select, .form-grid textarea {
+  width: 100%; padding: 10px 12px; margin-bottom: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink);
+}
+.form-grid textarea { resize: vertical; min-height: 90px; }
+.recipe-form textarea { min-height: 160px; }
 .recipe-file { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 0.9rem; color: var(--muted); }
 .recipe-file img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; }
-.profile-form input, .profile-form select, .profile-form textarea {
-  width: 100%; padding: 10px 12px; margin-bottom: 8px; border: 1px solid var(--line);
-  border-radius: 10px; background: var(--bg); color: var(--ink); font: inherit;
-}
-.profile-form textarea { resize: vertical; min-height: 95px; }
-.primary { background: var(--basil); border-color: var(--basil); color: var(--surface); }
-.history-list { display: grid; gap: 10px; }
+.menu-actions { display: grid; gap: 8px; margin-bottom: 18px; }
+.menu-actions button { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 8px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); text-align: left; }
+.menu-actions svg { width: 22px; height: 22px; flex: none; }
+.settings h3 { margin: 0 0 10px; font: 600 1.1rem/1.2 var(--display); }
+.setting { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; min-height: 48px; border-top: 1px solid var(--line); }
+.setting select { min-height: 40px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.setting input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--basil); }
+.segmented { display: flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.segmented button { min-width: 44px; min-height: 40px; border: 0; background: var(--bg); }
+.segmented button[aria-pressed="true"] { background: var(--basil); color: #fff; }
+.history-list, .saved-list { display: grid; gap: 10px; }
 .history-entry { display: grid; gap: 4px; width: 100%; text-align: left; padding: 12px; border-radius: 12px; }
 .history-date { font-size: 0.8rem; color: var(--muted); }
 .history-turns { display: grid; gap: 14px; margin: 12px 0; }
 .history-turn { border-bottom: 1px solid var(--line); padding-bottom: 12px; }
 .history-message { margin: 6px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .history-message b { display: block; font-size: 0.8rem; color: var(--muted); }
-dialog button:disabled { cursor: wait; opacity: 0.6; }
+.saved { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.saved-info { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.saved-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saved-info span { font-size: 0.8rem; color: var(--muted); }
+.star { width: 44px; height: 44px; border: 0; background: transparent; font-size: 1.4rem; color: var(--muted); }
+.star[aria-pressed="true"] { color: var(--yolk); }
 
-/* --- main -------------------------------------------------------------- */
-main {
-  min-height: 0; overflow: hidden;
-  display: grid; grid-template-rows: auto 1fr; gap: 12px;
-  padding: 12px 16px 0;
+/* the timer alarm: impossible to miss from across the kitchen */
+.alarm {
+  position: fixed; inset: 0; z-index: 50; display: grid; place-content: center; gap: 18px; padding: 24px;
+  text-align: center; background: var(--flame); color: #fff; animation: flash 1s steps(2) infinite;
 }
-.top { display: grid; gap: 12px; max-height: 55dvh; overflow-y: auto; }
-@media (min-width: 860px) {
-  main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: 1fr; }
-  .top { align-content: start; max-height: none; }
-}
-
-/* camera */
-.camera {
-  position: relative; border-radius: var(--radius); overflow: hidden;
-  background: var(--cook-bubble); aspect-ratio: 16 / 9; max-width: 100%;
-  display: grid; place-items: center;
-}
-.camera video { width: 100%; height: 100%; object-fit: cover; display: block; }
-.camera .cam-empty { text-align: center; padding: 16px; color: var(--muted); font-size: 0.95rem; }
-.camera .cam-empty p { margin: 0 0 10px; }
-.camera.compact { aspect-ratio: auto; height: 46px; place-items: stretch; }
-.camera.compact .cam-empty { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 6px 0 14px; text-align: left; }
-.camera.compact .cam-empty p { margin: 0; }
-.cam-off {
-  position: absolute; top: 8px; right: 8px; border: 0; border-radius: 999px;
-  padding: 6px 12px; font-size: 0.8rem; background: rgb(0 0 0 / 0.55); color: #fff;
-}
-.cam-badge {
-  position: absolute; left: 8px; bottom: 8px; border-radius: 999px; padding: 4px 10px;
-  font-size: 0.75rem; background: rgb(0 0 0 / 0.55); color: #fff;
-}
-.btn {
-  border: 1px solid var(--line); background: var(--surface); border-radius: 999px;
-  padding: 8px 16px; min-height: 40px;
-}
-
-/* step card */
-.step-card {
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 14px 16px 16px; display: grid; gap: 10px;
-}
-.step-meta { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.recipe-name { font: 600 1rem/1.2 var(--display); }
-.step-count {
-  margin-left: auto; font: 500 0.85rem/1 var(--mono); color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-.progress { display: flex; gap: 4px; height: 6px; }
-.progress span { flex: 1; border-radius: 3px; background: var(--line); }
-.progress span.done { background: var(--basil); }
-.progress span.now { background: var(--yolk); }
-.step-text {
-  margin: 0; font: 600 var(--step-size)/1.25 var(--display); letter-spacing: -0.01em;
-  text-wrap: balance;
-}
-.done-when { margin: 0; color: var(--muted); font-size: 0.95rem; }
-.done-when b { color: var(--basil); font-weight: 700; }
-.step-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.timer-btn {
-  border: 2px solid var(--ink); background: transparent; border-radius: 999px;
-  padding: 6px 14px; min-height: 40px; font: 500 0.95rem/1 var(--mono);
-  font-variant-numeric: tabular-nums;
-}
-.timer-btn[data-running="true"] { border-color: var(--yolk); background: var(--yolk); color: var(--yolk-ink); }
-.timer-btn[data-finished="true"] { border-color: var(--flame); background: var(--flame); color: #fff; }
-.recipe-picks { display: flex; gap: 8px; flex-wrap: wrap; max-height: 230px; overflow-y: auto; }
-.recipe-search { display: grid; gap: 6px; }
-.recipe-search input { width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; }
-.ingredients-panel summary { cursor: pointer; font-weight: 600; }
-.ingredients-panel ul { padding-left: 22px; margin: 10px 0 0; max-height: 230px; overflow-y: auto; }
-.ingredients-panel li { margin-bottom: 6px; }
-.ingredients-panel ol { padding-left: 26px; margin: 10px 0 0; max-height: 260px; overflow-y: auto; }
-.ingredients-panel ol li.done { color: var(--muted); }
-.ingredients-panel ol li.now { font-weight: 700; }
-.ingredients-panel ol li.now::marker { color: var(--basil); }
-.recipe-details { margin: 0; color: var(--muted); }
-.empty-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-
-/* conversation */
-.log {
-  min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
-  padding-bottom: 12px; overscroll-behavior: contain;
-}
-.msg { max-width: 88%; padding: 9px 13px; border-radius: 16px; line-height: 1.45; }
-.msg.coach { align-self: flex-start; background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
-.msg.cook { align-self: flex-end; background: var(--cook-bubble); border-bottom-right-radius: 4px; }
-.msg.note { align-self: center; max-width: 100%; font-size: 0.8rem; color: var(--muted); padding: 2px 8px; }
-.msg .seen { display: block; margin-top: 6px; font-size: 0.8rem; color: var(--muted); }
-.msg .seen.hazard { color: var(--flame); font-weight: 700; }
-/* coach replies: short paragraphs, bullets for ingredients, numbered steps */
-.msg.coach p { margin: 0 0 6px; }
-.msg.coach p:last-child { margin-bottom: 0; }
-.msg.coach ul, .msg.coach ol { margin: 4px 0 8px; padding-left: 22px; }
-.msg.coach li { margin: 3px 0; }
-.msg.coach ol > li::marker { font-weight: 700; color: var(--basil); }
-.msg.coach strong { font-weight: 700; }
-/* things the coach noticed on camera without being asked */
-.msg.alert { border: 2px solid var(--yolk); }
-.msg.alert.hazard { border-color: var(--flame); }
-.msg.alert.done { border-color: var(--basil); }
-.msg .tag {
-  display: block; margin-bottom: 4px; font-size: 0.72rem; font-weight: 700;
-  letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted);
-}
-.msg.alert.hazard .tag { color: var(--flame); }
-.msg.alert.done .tag { color: var(--basil); }
-.typing { display: inline-flex; gap: 4px; }
-.typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: blink 1.2s infinite; }
-.typing i:nth-child(2) { animation-delay: 0.2s; } .typing i:nth-child(3) { animation-delay: 0.4s; }
-@keyframes blink { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
-
-/* --- dock -------------------------------------------------------------- */
-.dock {
-  border-top: 1px solid var(--line); background: var(--bg);
-  padding: 10px 16px calc(12px + env(safe-area-inset-bottom, 0px));
-  display: grid; gap: 10px;
-}
-.chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
-.chips button {
-  flex: none; border: 1px solid var(--line); background: var(--surface);
-  border-radius: 999px; padding: 8px 14px; min-height: 40px; white-space: nowrap;
-}
-.talk-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
-.text-form { display: flex; gap: 8px; min-width: 0; }
-.text-form input:not([type="file"]) {
-  flex: 1; min-width: 0; min-height: 48px; padding: 0 14px;
-  border: 1px solid var(--line); border-radius: 999px; background: var(--surface);
-}
-.send {
-  flex: none; width: 44px; height: 48px; border: 0; border-radius: 50%;
-  background: transparent; padding: 0; color: var(--basil);
-  display: grid; place-items: center;
-}
-.send svg { width: 22px; height: 22px; }
-.send:hover { background: var(--cook-bubble); }
-.attach {
-  flex: none; width: 44px; height: 48px; padding: 0;
-  border: 1px solid var(--line); border-radius: 50%; background: var(--surface);
-  display: grid; place-items: center;
-}
-.attach svg { width: 21px; height: 21px; }
-.attach:hover { background: var(--cook-bubble); }
-.attachment {
-  display: flex; align-items: center; gap: 10px; min-width: 0;
-  padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius);
-  background: var(--surface);
-}
-.attachment img { width: 52px; height: 52px; object-fit: cover; border-radius: 8px; }
-.attachment-info { flex: 1; min-width: 0; font-size: 0.85rem; }
-.attachment-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.attachment-status { display: block; color: var(--muted); }
-.attachment .btn { flex: none; padding: 4px 10px; }
-.msg .sent-photo { display: block; max-width: 100%; max-height: 180px; margin-top: 8px; border-radius: 8px; }
-.talk {
-  width: 48px; height: 48px; border-radius: 50%; border: 0;
-  background: var(--yolk); color: var(--yolk-ink);
-  display: grid; place-items: center; box-shadow: 0 2px 0 rgb(0 0 0 / 0.15);
-}
-.talk svg { width: 22px; height: 22px; }
-.talk[data-state="listening"] { background: var(--flame); color: #fff; animation: pulse 1.4s infinite; }
-.talk[data-state="speaking"] { background: var(--ink); color: var(--bg); }
-@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgb(200 64 43 / 0.45); } 100% { box-shadow: 0 0 0 18px rgb(200 64 43 / 0); } }
-.dock-foot { display: flex; align-items: center; gap: 12px; font-size: 0.85rem; color: var(--muted); }
-.dock-foot label { display: inline-flex; align-items: center; gap: 6px; }
-.hint { margin-left: auto; text-align: right; }
-
+.alarm p { margin: 0; font-size: 1.2rem; }
+.alarm .alarm-label { font: 800 clamp(2rem, 11vw, 3.6rem)/1.1 var(--display); }
+.alarm button { justify-self: center; min-height: 76px; min-width: 240px; border: 0; border-radius: 999px; background: #fff; color: #9e2412; font: 700 1.35rem/1 var(--body); }
+@keyframes flash { 50% { background: #8f1f10; } }
 @media (prefers-reduced-motion: reduce) {
-  .talk[data-state="listening"], .typing i { animation: none; }
+  .talk[data-state="listening"], .typing i, .alarm, .watch-dot::before { animation: none; }
 }
 </style>
 </head>
-<body>
-<header>
+<body data-stage="choose" data-chat="collapsed">
+<header class="topbar">
   <span class="brand">Stovetop Coach</span>
   <span class="conn" id="conn" data-state="connecting">Connecting</span>
-  <nav class="header-actions" aria-label="Profile and history">
-    <button class="header-button" id="uploadRecipeButton" type="button" aria-haspopup="dialog" aria-controls="recipeDialog" title="Cook from your own recipe">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6M12 18v-6M9 15l3-3 3 3"></path></svg>
-      Upload recipe
-    </button>
-    <button class="header-button" id="newChatButton" type="button" title="Start a new chat for a different dish">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
-      New chat
-    </button>
-    <button class="header-button" id="historyButton" type="button" aria-haspopup="dialog" aria-controls="historyDialog">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.7 7M3 4v7h7M12 7v5l3 2"></path></svg>
-      History
-    </button>
-    <button class="header-button" id="profileButton" type="button" aria-haspopup="dialog" aria-controls="profileDialog">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21v-2a8 8 0 0 1 16 0v2"></path></svg>
-      Profile
-    </button>
-  </nav>
+  <button class="icon-button" id="menuButton" type="button" aria-haspopup="dialog" aria-controls="menuDialog" aria-label="Menu and settings">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle></svg>
+  </button>
 </header>
 
-<dialog id="profileDialog" aria-labelledby="profileTitle">
-  <div class="dialog-heading"><h2 id="profileTitle">Your cooking profile</h2><button class="btn" id="closeProfile" type="button" aria-label="Close profile">Close</button></div>
-  <p class="dialog-help">Your coach uses these details in future cooking conversations. Your profile and history are linked to this browser.</p>
-  <form class="profile-form" id="profileForm">
-    <label for="profileName">Your name</label>
-    <input id="profileName" autocomplete="given-name" maxlength="80" placeholder="What should we call you?">
-    <label for="profileSkill">Cooking experience</label>
-    <select id="profileSkill"><option value="">Prefer not to say</option value="beginner">Beginner</option><option value="some experience">Some experience</option><option value="confident">Confident</option></select>
-    <label for="profileDietary">Allergies &amp; dietary needs</label>
-    <textarea id="profileDietary" maxlength="1000" placeholder="For example: peanut allergy, vegetarian, avoid dairy. Leave blank if none."></textarea>
-    <button class="btn primary" id="saveProfile" type="submit">Save profile</button>
-  </form>
-  <p class="dialog-status" id="profileStatus" role="status" aria-live="polite"></p>
-</dialog>
-
-<dialog id="historyDialog" aria-labelledby="historyTitle">
-  <div class="dialog-heading"><h2 id="historyTitle">Usage history</h2><button class="btn" id="closeHistory" type="button" aria-label="Close usage history">Close</button></div>
-  <p class="dialog-help">View past questions, replies, and photo descriptions from this browser. Photos themselves are not saved in history.</p>
-  <p class="dialog-status" id="historyStatus" role="status" aria-live="polite"></p>
-  <div id="historyOverview"><div class="history-list" id="historyList"></div><button class="btn" id="moreHistory" type="button" hidden>Load more sessions</button></div>
-  <section id="historyDetail" hidden>
-    <button class="btn" id="backHistory" type="button">Back to sessions</button>
-    <h3 id="historySessionTitle"></h3>
-    <button class="btn" id="olderHistory" type="button" hidden>Load older messages</button>
-    <div class="history-turns" id="historyTurns"></div>
-  </section>
-</dialog>
-
-<dialog id="recipeDialog" aria-labelledby="recipeTitle">
-  <div class="dialog-heading"><h2 id="recipeTitle">Cook from your recipe</h2><button class="btn" id="closeRecipe" type="button" aria-label="Close recipe upload">Close</button></div>
-  <p class="dialog-help">Paste a recipe, or choose a photo, screenshot or text file of one. The coach breaks it into steps, guides you through them and can check your progress on camera.</p>
-  <form class="profile-form recipe-form" id="recipeForm">
-    <label for="recipeText">Recipe text</label>
-    <textarea id="recipeText" maxlength="20000" placeholder="Paste the ingredients and method here"></textarea>
-    <div class="recipe-file">
-      <button class="btn" id="chooseRecipeFile" type="button">Choose photo or file</button>
-      <input id="recipeFile" type="file" accept="image/jpeg,image/png,image/webp,.txt,.md,text/plain,text/markdown" hidden aria-label="Choose a recipe photo or text file">
-      <img id="recipeImagePreview" alt="Recipe photo to upload" hidden>
-      <span id="recipeFileName"></span>
-    </div>
-    <button class="btn primary" id="submitRecipe" type="submit">Use this recipe</button>
-  </form>
-  <p class="dialog-status" id="recipeStatus" role="status" aria-live="polite"></p>
-</dialog>
+<div class="offline" id="offlineBanner" role="status" hidden>
+  <span id="offlineText">Connection lost. Reconnecting...</span>
+  <button id="retryNow" type="button">Retry now</button>
+</div>
+<div class="timer-strip" id="timerStrip" aria-label="Timers" hidden></div>
 
 <main>
-  <section class="top" aria-label="Recipe">
+  <section class="stage" id="stage" aria-label="Recipe">
     <div class="camera compact" id="camera">
       <video id="video" playsinline muted hidden></video>
       <div class="cam-empty" id="camEmpty">
         <p>Point your phone at the pan so the coach can check on it.</p>
         <button class="btn" id="camOn" type="button">Turn on camera</button>
       </div>
+      <span class="watch-dot" id="watchDot" hidden>Watching</span>
       <button class="cam-off" id="camOff" type="button" hidden>Camera off</button>
       <span class="cam-badge" id="camBadge" hidden></span>
     </div>
 
     <article class="step-card" id="stepCard" aria-live="polite">
       <div class="step-meta">
-        <span class="recipe-name" id="recipeName">Getting set up</span>
+        <span class="recipe-name" id="recipeName">What are we cooking?</span>
         <span class="step-count" id="stepCount"></span>
       </div>
       <div class="progress" id="progress" aria-hidden="true"></div>
-      <p class="recipe-details" id="recipeDetails" hidden></p>
-      <details class="ingredients-panel" id="ingredientsPanel" hidden open>
-        <summary>Ingredients</summary>
-        <ul id="ingredientsList"></ul>
+
+      <!-- Choose -->
+      <div class="stage-section" id="choosePanel">
+        <p class="lead">Ask for ideas, name a dish, or bring your own recipe.</p>
+        <div class="idea-cards" id="ideaCards" hidden></div>
+        <div class="row-actions" id="emptyActions">
+          <button class="btn primary" id="ideasButton" type="button">Give me 2 ideas</button>
+          <button class="btn" id="uploadRecipeInline" type="button">Upload my recipe</button>
+          <button class="btn" id="myRecipesInline" type="button">My recipes</button>
+        </div>
+        <label class="recipe-search" id="recipeSearchLabel">Or search the recipe book
+          <input id="recipeSearch" type="search" placeholder="Dish or ingredient, e.g. tofu" autocomplete="off">
+        </label>
+        <p id="recipeSearchStatus" class="muted" role="status" hidden></p>
+        <div class="recipe-picks" id="recipePicks" hidden></div>
+      </div>
+
+      <!-- Prep -->
+      <div class="stage-section" id="prepPanel" hidden>
+        <p class="muted" id="recipeDetails" hidden></p>
+        <div class="servings" id="servingsRow" hidden>
+          <span>Servings</span>
+          <button id="servingsDown" type="button" aria-label="Fewer servings">&minus;</button>
+          <output id="servingsValue" aria-live="polite"></output>
+          <button id="servingsUp" type="button" aria-label="More servings">+</button>
+        </div>
+      </div>
+
+      <details class="panel" id="ingredientsPanel" hidden open>
+        <summary>Ingredients <span class="count" id="ingredientsCount"></span></summary>
+        <ul class="checklist" id="ingredientsList"></ul>
       </details>
-      <details class="ingredients-panel" id="stepsPanel" hidden>
+      <details class="panel" id="stepsPanel" hidden>
         <summary>All steps</summary>
         <ol id="stepsList"></ol>
       </details>
-      <p class="step-text" id="stepText">Ask me for ideas, name a dish, or upload your own recipe.</p>
-      <p class="done-when" id="doneWhen" hidden></p>
-      <div class="step-actions">
-        <button class="btn" id="startCooking" type="button" hidden>Start cooking</button>
+      <div class="stage-section" id="prepFooter" hidden>
+        <p class="tip" id="placementTip">Prop your phone about an arm's length from the stove with the back camera facing the pan, then turn on the camera so the coach can check on you.</p>
+        <button class="btn primary big" id="startCooking" type="button">Start cooking</button>
+      </div>
+
+      <!-- Cook -->
+      <div class="stage-section" id="cookPanel" hidden>
+        <p class="step-text" id="stepText" title="Tap to talk, swipe for next or back"></p>
+        <p class="done-when" id="doneWhen" hidden></p>
         <button class="timer-btn" id="timerBtn" type="button" hidden></button>
+        <div class="big-nav">
+          <button id="navBack" type="button">Back</button>
+          <button id="navRepeat" type="button">Repeat</button>
+          <button class="next" id="navNext" type="button">Next</button>
+        </div>
+        <p class="swipe-hint">Swipe the step or say "next". Tap the step to talk.</p>
       </div>
-      <div class="empty-actions" id="emptyActions" hidden>
-        <button class="btn" id="ideasButton" type="button">Give me 2 ideas</button>
-        <button class="btn" id="uploadRecipeInline" type="button">Upload my recipe</button>
+
+      <!-- Done -->
+      <div class="stage-section" id="donePanel" hidden>
+        <p class="lead">All done. How did it go?</p>
+        <div class="rating" id="ratingRow" role="group" aria-label="How did it go?">
+          <button type="button" data-rating="loved" aria-pressed="false">Loved it</button>
+          <button type="button" data-rating="ok" aria-pressed="false">It was OK</button>
+          <button type="button" data-rating="struggled" aria-pressed="false">Struggled</button>
+        </div>
+        <label for="doneNote" class="muted">Anything to remember next time?</label>
+        <textarea class="note-box" id="doneNote" maxlength="300" placeholder="For example: less salt, cook the garlic for less time"></textarea>
+        <button class="btn primary big" id="sendFeedback" type="button">Save and finish</button>
+        <p class="muted" id="feedbackDone" hidden>Saved. The coach will remember this next time.</p>
+        <div class="row-actions">
+          <button class="btn" id="cookAgain" type="button">Cook it again</button>
+          <button class="btn" id="cookSomethingElse" type="button">Cook something else</button>
+        </div>
       </div>
-      <label class="recipe-search" id="recipeSearchLabel" hidden>Or search the recipe book
-        <input id="recipeSearch" type="search" placeholder="Search dishes or ingredients" autocomplete="off">
-      </label>
-      <p id="recipeSearchStatus" class="recipe-details" role="status" hidden></p>
-      <div class="recipe-picks" id="recipePicks" hidden></div>
     </article>
   </section>
 
-  <section class="log" id="log" aria-label="Conversation" aria-live="polite"></section>
+  <section class="chat" aria-label="Conversation">
+    <button class="chat-toggle" id="chatToggle" type="button" aria-expanded="false">Show conversation</button>
+    <div class="log" id="log" aria-live="polite"></div>
+  </section>
 </main>
 
 <footer class="dock">
@@ -421,105 +449,242 @@ main {
   </div>
   <div class="talk-row">
     <form class="text-form" id="textForm">
-      <button class="attach" id="uploadPhoto" type="button" aria-label="Upload a photo for this message" title="Upload photo">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="m21 11-8.5 8.5a6 6 0 0 1-8.5-8.5L13 2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"></path>
-        </svg>
+      <button class="attach" id="uploadPhoto" type="button" aria-label="Attach a photo to your next message" title="Attach photo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 11-8.5 8.5a6 6 0 0 1-8.5-8.5L13 2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"></path></svg>
       </button>
       <input id="photoInput" type="file" accept="image/jpeg,image/png,image/webp" hidden aria-label="Choose a photo">
       <label for="textInput" hidden>Type a message</label>
       <input id="textInput" autocomplete="off" enterkeyhint="send" placeholder="Type, or tap the mic">
       <button class="send" type="submit" aria-label="Send message" title="Send message">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="m22 2-7 20-4-9-9-4Z"></path>
-          <path d="M22 2 11 13"></path>
-        </svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"></path><path d="M22 2 11 13"></path></svg>
       </button>
     </form>
     <button class="talk" id="talk" type="button" aria-label="Talk to the coach" data-state="idle">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <rect x="9" y="2" width="6" height="12" rx="3" fill="none"></rect>
-        <path d="M5 11a7 7 0 0 0 14 0" fill="none"></path>
-        <path d="M12 18v4" fill="none"></path>
-      </svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v4"></path></svg>
     </button>
   </div>
-  <div class="dock-foot">
-    <label><input type="checkbox" id="handsFree"> Hands-free</label>
-    <label><input type="checkbox" id="voiceOut" checked> Speak replies</label>
-    <label id="watchToggle" hidden title="While the camera is on, the coach checks your progress every few seconds and speaks up if something looks wrong"><input type="checkbox" id="watch" checked> Coach watches</label>
-    <span class="hint" id="hint">Tap the mic and ask.</span>
-  </div>
+  <p class="hint" id="hint">Tap the mic and ask.</p>
 </footer>
+
+<!-- Menu: everything that isn't cooking -->
+<dialog id="menuDialog" aria-labelledby="menuTitle">
+  <div class="dialog-heading"><h2 id="menuTitle">Menu</h2><button class="btn" id="closeMenu" type="button">Close</button></div>
+  <nav class="menu-actions" aria-label="Actions">
+    <button id="newChatButton" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>New chat</button>
+    <button id="uploadRecipeButton" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6M12 18v-6M9 15l3-3 3 3"></path></svg>Upload a recipe</button>
+    <button id="myRecipesButton" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg>My recipes</button>
+    <button id="historyButton" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.7 7M3 4v7h7M12 7v5l3 2"></path></svg>History</button>
+    <button id="profileButton" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21v-2a8 8 0 0 1 16 0v2"></path></svg>Profile and notes</button>
+  </nav>
+  <section class="settings" aria-labelledby="settingsTitle">
+    <h3 id="settingsTitle">Settings</h3>
+    <label class="setting">Language
+      <select id="languageSelect">
+        <option value="en">English</option>
+        <option value="yue">廣東話 Cantonese</option>
+        <option value="zh">普通话 Mandarin</option>
+      </select>
+    </label>
+    <label class="setting">Speech speed
+      <select id="rateSelect">
+        <option value="0.85">Slower</option>
+        <option value="1">Normal</option>
+        <option value="1.15">Faster</option>
+      </select>
+    </label>
+    <div class="setting"><span id="textSizeLabel">Text size</span>
+      <div class="segmented" id="textSize" role="group" aria-labelledby="textSizeLabel">
+        <button type="button" data-scale="0.9" aria-label="Small text">A-</button>
+        <button type="button" data-scale="1" aria-label="Normal text">A</button>
+        <button type="button" data-scale="1.15" aria-label="Large text">A+</button>
+        <button type="button" data-scale="1.3" aria-label="Extra large text">A++</button>
+      </div>
+    </div>
+    <label class="setting">Theme
+      <select id="themeSelect">
+        <option value="auto">Match phone</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+        <option value="contrast">High contrast</option>
+      </select>
+    </label>
+    <label class="setting">Speak replies <input type="checkbox" id="voiceOut" checked></label>
+    <label class="setting">Hands-free (listen after each reply) <input type="checkbox" id="handsFree"></label>
+    <label class="setting">Turn on voice when cooking starts <input type="checkbox" id="autoVoice" checked></label>
+    <label class="setting" id="watchToggle" hidden>Coach watches (camera check every 20 s) <input type="checkbox" id="watch" checked></label>
+  </section>
+</dialog>
+
+<dialog id="profileDialog" aria-labelledby="profileTitle">
+  <div class="dialog-heading"><h2 id="profileTitle">Profile and notes</h2><button class="btn" id="closeProfile" type="button" aria-label="Close profile">Close</button></div>
+  <p class="dialog-help">The coach uses these in every conversation on this phone.</p>
+  <form class="form-grid" id="profileForm">
+    <label for="profileName">Your name</label>
+    <input id="profileName" autocomplete="given-name" maxlength="80" placeholder="What should we call you?">
+    <label for="profileSkill">Cooking experience</label>
+    <select id="profileSkill"><option value="">Prefer not to say</option><option value="beginner">Beginner</option><option value="some experience">Some experience</option><option value="confident">Confident</option></select>
+    <label for="profileDietary">Allergies and dietary needs</label>
+    <textarea id="profileDietary" maxlength="1000" placeholder="For example: peanut allergy, vegetarian. Leave blank if none."></textarea>
+    <label for="profileNotes">Notes for next time</label>
+    <textarea id="profileNotes" maxlength="2000" placeholder="One per line, for example: I like it less salty"></textarea>
+    <button class="btn primary" id="saveProfile" type="submit">Save profile</button>
+  </form>
+  <p class="dialog-status" id="profileStatus" role="status" aria-live="polite"></p>
+</dialog>
+
+<dialog id="historyDialog" aria-labelledby="historyTitle">
+  <div class="dialog-heading"><h2 id="historyTitle">History</h2><button class="btn" id="closeHistory" type="button" aria-label="Close history">Close</button></div>
+  <p class="dialog-help">Past questions, replies and what the camera saw on this phone. Photos are not saved.</p>
+  <p class="dialog-status" id="historyStatus" role="status" aria-live="polite"></p>
+  <div id="historyOverview"><div class="history-list" id="historyList"></div><button class="btn" id="moreHistory" type="button" hidden>Load more sessions</button></div>
+  <section id="historyDetail" hidden>
+    <button class="btn" id="backHistory" type="button">Back to sessions</button>
+    <h3 id="historySessionTitle"></h3>
+    <button class="btn" id="olderHistory" type="button" hidden>Load older messages</button>
+    <div class="history-turns" id="historyTurns"></div>
+  </section>
+</dialog>
+
+<dialog id="recipeDialog" aria-labelledby="recipeTitle">
+  <div class="dialog-heading"><h2 id="recipeTitle">Cook from your recipe</h2><button class="btn" id="closeRecipe" type="button" aria-label="Close recipe upload">Close</button></div>
+  <p class="dialog-help">Paste a recipe or a link to one, photograph a cookbook page, or choose a screenshot or text file. The coach breaks it into steps and guides you through.</p>
+  <form class="form-grid recipe-form" id="recipeForm">
+    <label for="recipeUrl">Recipe link</label>
+    <input id="recipeUrl" type="url" inputmode="url" placeholder="https://..." autocomplete="off">
+    <label for="recipeText">Or paste the recipe</label>
+    <textarea id="recipeText" maxlength="20000" placeholder="Ingredients and method"></textarea>
+    <div class="recipe-file">
+      <button class="btn" id="takeRecipePhoto" type="button">Photograph a page</button>
+      <button class="btn" id="chooseRecipeFile" type="button">Choose file</button>
+      <input id="recipeCamera" type="file" accept="image/*" capture="environment" hidden aria-label="Photograph a recipe">
+      <input id="recipeFile" type="file" accept="image/jpeg,image/png,image/webp,.txt,.md,text/plain,text/markdown" hidden aria-label="Choose a recipe photo or text file">
+      <img id="recipeImagePreview" alt="Recipe photo to upload" hidden>
+      <span id="recipeFileName"></span>
+    </div>
+    <button class="btn primary" id="submitRecipe" type="submit">Use this recipe</button>
+  </form>
+  <p class="dialog-status" id="recipeStatus" role="status" aria-live="polite"></p>
+</dialog>
+
+<dialog id="myRecipesDialog" aria-labelledby="myRecipesTitle">
+  <div class="dialog-heading"><h2 id="myRecipesTitle">My recipes</h2><button class="btn" id="closeMyRecipes" type="button">Close</button></div>
+  <p class="dialog-help">Recipes you uploaded on this phone. Star the ones you cook often.</p>
+  <p class="dialog-status" id="myRecipesStatus" role="status" aria-live="polite"></p>
+  <div class="saved-list" id="myRecipesList"></div>
+</dialog>
+
+<dialog id="primerDialog" aria-labelledby="primerTitle">
+  <div class="dialog-heading"><h2 id="primerTitle"></h2></div>
+  <p id="primerText"></p>
+  <p class="dialog-help">Your phone will ask for permission next. If you choose "Don't allow", you can change it later in the browser's site settings.</p>
+  <div class="row-actions">
+    <button class="btn primary" id="primerContinue" type="button">Continue</button>
+    <button class="btn" id="primerCancel" type="button">Not now</button>
+  </div>
+</dialog>
+
+<div class="alarm" id="alarm" role="alertdialog" aria-labelledby="alarmLabel" hidden>
+  <p class="alarm-label" id="alarmLabel"></p>
+  <p>Time's up</p>
+  <button id="alarmDismiss" type="button">Stop alarm</button>
+</div>
 
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
-  const els = {
-    conn: $("conn"), log: $("log"), talk: $("talk"), hint: $("hint"),
-    textForm: $("textForm"), textInput: $("textInput"), chips: $("chips"),
-    handsFree: $("handsFree"), voiceOut: $("voiceOut"),
-    camera: $("camera"), video: $("video"), camEmpty: $("camEmpty"),
-    camOn: $("camOn"), camOff: $("camOff"), camBadge: $("camBadge"),
-    recipeName: $("recipeName"), stepCount: $("stepCount"), progress: $("progress"),
-    stepText: $("stepText"), doneWhen: $("doneWhen"), timerBtn: $("timerBtn"),
-    recipePicks: $("recipePicks"),
-    recipeDetails: $("recipeDetails"), ingredientsPanel: $("ingredientsPanel"), ingredientsList: $("ingredientsList"),
-    startCooking: $("startCooking"), recipeSearchLabel: $("recipeSearchLabel"), recipeSearch: $("recipeSearch"),
-    recipeSearchStatus: $("recipeSearchStatus"),
-    uploadPhoto: $("uploadPhoto"), photoInput: $("photoInput"), attachment: $("attachment"),
-    photoPreview: $("photoPreview"), photoName: $("photoName"), photoStatus: $("photoStatus"), removePhoto: $("removePhoto"),
-    profileButton: $("profileButton"), profileDialog: $("profileDialog"), closeProfile: $("closeProfile"),
-    profileForm: $("profileForm"), profileName: $("profileName"), profileSkill: $("profileSkill"),
-    profileDietary: $("profileDietary"), saveProfile: $("saveProfile"), profileStatus: $("profileStatus"),
-    historyButton: $("historyButton"), historyDialog: $("historyDialog"), closeHistory: $("closeHistory"),
-    newChatButton: $("newChatButton"),
-    historyStatus: $("historyStatus"), historyOverview: $("historyOverview"), historyList: $("historyList"),
-    historyDetail: $("historyDetail"), historySessionTitle: $("historySessionTitle"), historyTurns: $("historyTurns"),
-    moreHistory: $("moreHistory"), olderHistory: $("olderHistory"), backHistory: $("backHistory"),
-    stepsPanel: $("stepsPanel"), stepsList: $("stepsList"), emptyActions: $("emptyActions"),
-    ideasButton: $("ideasButton"), uploadRecipeInline: $("uploadRecipeInline"),
-    watch: $("watch"), watchToggle: $("watchToggle"),
-    uploadRecipeButton: $("uploadRecipeButton"), recipeDialog: $("recipeDialog"), closeRecipe: $("closeRecipe"),
-    recipeForm: $("recipeForm"), recipeText: $("recipeText"), chooseRecipeFile: $("chooseRecipeFile"),
-    recipeFile: $("recipeFile"), recipeImagePreview: $("recipeImagePreview"), recipeFileName: $("recipeFileName"),
-    submitRecipe: $("submitRecipe"), recipeStatus: $("recipeStatus"),
+  const ids = [
+    "conn", "menuButton", "offlineBanner", "offlineText", "retryNow", "timerStrip", "stage", "log", "chatToggle",
+    "camera", "video", "camEmpty", "camOn", "camOff", "camBadge", "watchDot",
+    "stepCard", "recipeName", "stepCount", "progress",
+    "choosePanel", "ideaCards", "emptyActions", "ideasButton", "uploadRecipeInline", "myRecipesInline",
+    "recipeSearchLabel", "recipeSearch", "recipeSearchStatus", "recipePicks",
+    "prepPanel", "recipeDetails", "servingsRow", "servingsDown", "servingsValue", "servingsUp", "prepFooter", "placementTip", "startCooking",
+    "ingredientsPanel", "ingredientsCount", "ingredientsList", "stepsPanel", "stepsList",
+    "cookPanel", "stepText", "doneWhen", "timerBtn", "navBack", "navRepeat", "navNext",
+    "donePanel", "ratingRow", "doneNote", "sendFeedback", "feedbackDone", "cookAgain", "cookSomethingElse",
+    "chips", "attachment", "photoPreview", "photoName", "photoStatus", "removePhoto",
+    "textForm", "uploadPhoto", "photoInput", "textInput", "talk", "hint",
+    "menuDialog", "closeMenu", "newChatButton", "uploadRecipeButton", "myRecipesButton", "historyButton", "profileButton",
+    "languageSelect", "rateSelect", "textSize", "themeSelect", "voiceOut", "handsFree", "autoVoice", "watch", "watchToggle",
+    "profileDialog", "closeProfile", "profileForm", "profileName", "profileSkill", "profileDietary", "profileNotes", "saveProfile", "profileStatus",
+    "historyDialog", "closeHistory", "historyStatus", "historyOverview", "historyList", "moreHistory",
+    "historyDetail", "backHistory", "historySessionTitle", "olderHistory", "historyTurns",
+    "recipeDialog", "closeRecipe", "recipeForm", "recipeUrl", "recipeText", "takeRecipePhoto", "chooseRecipeFile",
+    "recipeCamera", "recipeFile", "recipeImagePreview", "recipeFileName", "submitRecipe", "recipeStatus",
+    "myRecipesDialog", "closeMyRecipes", "myRecipesStatus", "myRecipesList",
+    "primerDialog", "primerTitle", "primerText", "primerContinue", "primerCancel",
+    "alarm", "alarmLabel", "alarmDismiss",
+  ];
+  const els = Object.fromEntries(ids.map((id) => [id, $(id)]));
+
+  // --- settings (this phone only) -------------------------------------------
+  const LANGS = {
+    en: { speech: "en-US", html: "en", list: "The list is on your screen.", timesUp: (l) => `Time's up: ${l}.` },
+    yue: { speech: "zh-HK", html: "zh-HK", list: "清單喺螢幕上。", timesUp: (l) => `${l}，夠鐘喇。` },
+    zh: { speech: "zh-CN", html: "zh-CN", list: "清单在屏幕上。", timesUp: (l) => `${l}，时间到了。` },
   };
+  const DEFAULTS = { language: "en", rate: 1, scale: 1, theme: "auto", voiceOut: true, handsFree: false, autoVoice: true, watch: true };
+  const CHOICES = { rate: [0.85, 1, 1.15], scale: [0.9, 1, 1.15, 1.3], theme: ["auto", "light", "dark", "contrast"] };
+  function storeGet(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+  function storeSet(key, value) { try { localStorage.setItem(key, value); } catch (e) { /* private mode */ } }
+  function loadSettings() {
+    let saved = {};
+    try { saved = JSON.parse(storeGet("lh_cooking_settings") || "{}") || {}; } catch (e) { saved = {}; }
+    const s = { ...DEFAULTS, ...saved };
+    if (!LANGS[s.language]) s.language = "en";
+    for (const key of ["rate", "scale"]) if (!CHOICES[key].includes(Number(s[key]))) s[key] = DEFAULTS[key]; else s[key] = Number(s[key]);
+    if (!CHOICES.theme.includes(s.theme)) s.theme = "auto";
+    for (const key of ["voiceOut", "handsFree", "autoVoice", "watch"]) s[key] = Boolean(s[key]);
+    return s;
+  }
+  const settings = loadSettings();
+  const saveSettings = () => storeSet("lh_cooking_settings", JSON.stringify(settings));
+  function applySettings() {
+    const root = document.documentElement;
+    if (settings.theme === "auto") delete root.dataset.theme; else root.dataset.theme = settings.theme;
+    root.style.setProperty("--scale", String(settings.scale));
+    root.lang = LANGS[settings.language].html;
+    els.languageSelect.value = settings.language;
+    els.rateSelect.value = String(settings.rate);
+    els.themeSelect.value = settings.theme;
+    els.voiceOut.checked = settings.voiceOut;
+    els.handsFree.checked = settings.handsFree;
+    els.autoVoice.checked = settings.autoVoice;
+    els.watch.checked = settings.watch;
+    for (const b of els.textSize.children || []) b.setAttribute("aria-pressed", String(Number(b.dataset.scale) === settings.scale));
+    pickVoice();
+  }
 
   const state = {
-    ws: null, queue: [], retry: 0,
-    cooking: {}, visionAvailable: false, watchAvailable: false, watchInterval: 20,
-    stream: null, listening: false, recognition: null, typingEl: null,
-    frames: [], frameTimer: null, watchTimer: null, recipeImage: null,
-    timer: { id: null, remaining: 0, key: null }, wakeLock: null, audioUnlocked: false,
+    ws: null, queue: [], retry: 0, retryTimer: null,
+    cooking: {}, stage: "choose", visionAvailable: false, watchAvailable: false, watchInterval: 20,
+    stream: null, listening: false, recognition: null, typingEl: null, pendingLabel: null,
+    frames: [], frameTimer: null, watchTimer: null, recipeImage: null, lastSentFrame: null, lastWatchFrame: null,
+    timers: [], timerTick: null, alarm: null, alarmLoop: null, wakeLock: null, audioUnlocked: false,
     awaitingReply: false, replyBubble: null, replyText: "", speechBuffer: "", speechList: [], streamed: false,
     speechPending: 0, speechEpoch: 0, muteReply: false,
     photo: null, preparingPhoto: false, photoRequest: 0,
     requests: new Map(), requestSequence: 0, profileLoading: false,
     historyLoading: false, historyOffset: null, historySession: null, historyTurnOffset: null,
-    exiting: false,
+    suggestions: [], checked: new Set(), checkedRecipe: null, rating: null, autoVoiceOn: false,
+    chatOpen: false, swipedAt: 0, primerProceed: null, exiting: false,
   };
 
   // Profile identity persists; the chat ID exists only in this page's memory.
   const randomId = () => crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   function clientId() {
     const key = "lh_cooking_client_id";
-    try {
-      let id = localStorage.getItem(key);
-      if (!id) {
-        id = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2)).slice(0, 32);
-        localStorage.setItem(key, id);
-      }
-      return id;
-    } catch (e) { return "anon-" + String(Math.random()).slice(2, 12); }
+    let id = storeGet(key);
+    if (!id) { id = randomId().replace(/-/g, "").slice(0, 32); storeSet(key, id); }
+    return id;
   }
   const CLIENT_ID = clientId();
   let chatId = randomId();
 
-  // --- connection ---------------------------------------------------------
+  // --- connection -----------------------------------------------------------
   function connect() {
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${proto}//${location.host}/ws?client_id=${encodeURIComponent(CLIENT_ID)}&chat_id=${encodeURIComponent(chatId)}`);
+    const ws = new WebSocket(`${proto}//${location.host}/ws?client_id=${encodeURIComponent(CLIENT_ID)}&chat_id=${encodeURIComponent(chatId)}&lang=${settings.language}`);
     state.ws = ws;
     setConn("connecting", "Connecting");
     ws.onopen = () => {
@@ -534,51 +699,57 @@ main {
       if (state.ws !== ws || state.exiting) return;
       rejectSettings("Connection lost. Reconnect and try again.");
       if (state.awaitingReply && state.queue.length === 0) {
-        state.awaitingReply = false;
-        state.replyBubble = null;
-        state.speechBuffer = "";
-        stopSpeaking();
-        hideTyping();
+        state.awaitingReply = false; state.replyBubble = null; state.speechBuffer = "";
+        stopSpeaking(); hideTyping();
         addNote("Connection lost before the reply finished. Please ask again after reconnecting.");
       }
-      setConn("closed", "Reconnecting");
       const wait = Math.min(1000 * 2 ** state.retry++, 15000);
-      setTimeout(() => { if (state.ws === ws && !state.exiting) connect(); }, wait);
+      setConn("closed", "Offline");
+      els.offlineText.textContent = `Connection lost. Reconnecting in ${Math.round(wait / 1000)} s...`;
+      state.retryTimer = setTimeout(() => { if (state.ws === ws && !state.exiting) connect(); }, wait);
     };
   }
-  function setConn(s, text) { els.conn.dataset.state = s; els.conn.textContent = text; }
+  function setConn(s, text) {
+    els.conn.dataset.state = s; els.conn.textContent = text;
+    els.offlineBanner.hidden = s !== "closed";
+  }
+  els.retryNow.addEventListener("click", () => {
+    clearTimeout(state.retryTimer);
+    if (!state.exiting && (!state.ws || state.ws.readyState !== WebSocket.OPEN)) { state.retry = 0; connect(); }
+  });
 
   function rejectSettings(message) {
-    for (const pending of state.requests.values()) {
-      clearTimeout(pending.timeout); pending.reject(new Error(message));
-    }
+    for (const pending of state.requests.values()) { clearTimeout(pending.timeout); pending.reject(new Error(message)); }
     state.requests.clear();
   }
+  const allDialogs = () => [els.menuDialog, els.profileDialog, els.historyDialog, els.recipeDialog, els.myRecipesDialog, els.primerDialog];
   function clearChat() {
     // Detach the socket first: late replies and retry timers belong to the old dish.
     const previous = state.ws; state.ws = null; previous?.close();
+    clearTimeout(state.retryTimer);
     rejectSettings("A new chat was started. Please reopen the panel.");
     pauseForDialog(); cameraOff();
     state.wakeLock?.release().catch(() => {}); state.wakeLock = null;
-    if (state.timer.id) clearInterval(state.timer.id);
-    state.timer = { id: null, remaining: 0, key: null };
     clearPhoto(); hideTyping();
     state.queue = []; state.retry = 0;
     state.awaitingReply = false; state.replyBubble = null; state.replyText = "";
     state.speechBuffer = ""; state.speechList = []; state.streamed = false; state.muteReply = false;
-    els.textInput.value = ""; els.log.replaceChildren();
+    state.suggestions = []; state.rating = null; state.chatOpen = false;
+    if (state.autoVoiceOn) { els.handsFree.checked = settings.handsFree; state.autoVoiceOn = false; }
+    els.textInput.value = ""; els.log.replaceChildren(); els.doneNote.value = "";
     els.hint.textContent = "Tap the mic and ask.";
-    els.profileDialog.close(); els.historyDialog.close(); els.recipeDialog.close();
+    allDialogs().forEach((d) => d.close());
+    renderChat();
+    // Timers keep running: the oven doesn't know you started a new chat.
     renderCooking({ recipe: null, step: null, total_steps: 0 });
   }
   function newChat() {
     clearChat(); state.exiting = false; chatId = randomId();
     connect();
   }
-  els.newChatButton.addEventListener("click", newChat);
   window.addEventListener("pagehide", () => { state.exiting = true; clearChat(); });
   // Back/forward cache can restore the old JavaScript heap without a page load.
-  window.addEventListener("pageshow", event => { if (event.persisted) newChat(); });
+  window.addEventListener("pageshow", (event) => { if (event.persisted) newChat(); });
 
   function handle(data) {
     if (data.type === "settings_result") {
@@ -591,13 +762,11 @@ main {
     }
     if (data.type === "thinking") {
       state.awaitingReply = true;
-      state.replyBubble = null;
-      state.replyText = "";
-      state.speechBuffer = "";
-      state.speechList = [];
-      state.streamed = false;
-      state.muteReply = false;
-      showTyping(); return;
+      state.replyBubble = null; state.replyText = "";
+      state.speechBuffer = ""; state.speechList = [];
+      state.streamed = false; state.muteReply = false;
+      showTyping(state.pendingLabel || "Thinking..."); state.pendingLabel = null;
+      return;
     }
     if (data.type === "delta") {
       hideTyping();
@@ -619,21 +788,21 @@ main {
       state.watchInterval = data.watch_interval || state.watchInterval;
       updateWatch();
     }
+    if (data.suggestions?.length) state.suggestions = data.suggestions;
     if (data.cooking) renderCooking(data.cooking);
+    for (const timer of data.timers || []) addTimer(timer.label, timer.seconds);
     if (data.message) {
       const streamed = data.type === "response" && state.streamed;
       const bubble = streamed ? state.replyBubble : addMsg("coach", data.message);
       if (streamed) renderRich(bubble, data.message);
-      if (data.vision) noteVision(bubble, data.vision);
+      if (data.vision) noteVision(bubble, data.vision, state.lastSentFrame);
       if (data.sources?.length) noteSources(bubble, data.sources);
       if (data.type === "response") state.awaitingReply = false;
       if (streamed) {
         flushSpeech(true);
         if (!state.speechPending) afterSpeaking();
       } else if (!state.muteReply) speakReply(data.message);
-      state.replyBubble = null;
-      state.replyText = "";
-      state.streamed = false;
+      state.replyBubble = null; state.replyText = ""; state.streamed = false;
     } else if (data.type === "response") {
       state.awaitingReply = false;
     }
@@ -650,52 +819,94 @@ main {
     tag.className = "tag";
     tag.textContent = { hazard: "Safety check", done: "Looks done", issue: "Camera check" }[level];
     bubble.prepend(tag);
+    if (state.lastWatchFrame) addFrame(bubble, state.lastWatchFrame, "What the coach saw");
     navigator.vibrate?.(level === "hazard" ? [250, 120, 250] : 120);
     // Never talk over the cook or an answer in progress.
     if (!state.awaitingReply && !state.listening && !state.speechPending) speakReply(data.message);
   }
 
-  // --- profile and past sessions -----------------------------------------
+  // --- requests over the socket (profile, history, saved recipes, servings) ---
   function settingsRequest(type, fields = {}) {
     if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return Promise.reject(new Error("Connect to the coach, then try again."));
     const request_id = `${CLIENT_ID.slice(0, 32)}-${++state.requestSequence}`;
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        state.requests.delete(request_id); reject(new Error("The coach took too long to respond. Try again."));
-      }, 90000);
+      const timeout = setTimeout(() => { state.requests.delete(request_id); reject(new Error("The coach took too long to respond. Try again.")); }, 90000);
       state.requests.set(request_id, { resolve, reject, timeout });
       try { state.ws.send(JSON.stringify({ type, request_id, ...fields })); }
       catch (error) { clearTimeout(timeout); state.requests.delete(request_id); reject(new Error("Could not send the request. Please reconnect.")); }
     });
   }
-  function dialogStatus(element, text, error = false) {
-    element.textContent = text; element.dataset.error = String(error);
-  }
+  function dialogStatus(element, text, error = false) { element.textContent = text; element.dataset.error = String(error); }
   function pauseForDialog() {
     stopSpeaking();
     if (state.recognition) { state.recognition.onend = null; state.recognition.abort(); state.recognition = null; state.listening = false; setTalk("idle"); }
   }
+
+  // --- menu and settings ------------------------------------------------------
+  els.menuButton.addEventListener("click", () => els.menuDialog.showModal());
+  els.closeMenu.addEventListener("click", () => els.menuDialog.close());
+  const fromMenu = (open) => () => { els.menuDialog.close(); open(); };
+  els.newChatButton.addEventListener("click", fromMenu(newChat));
+  els.uploadRecipeButton.addEventListener("click", fromMenu(() => openRecipeDialog()));
+  els.myRecipesButton.addEventListener("click", fromMenu(() => openMyRecipes()));
+  els.historyButton.addEventListener("click", fromMenu(() => openHistory()));
+  els.profileButton.addEventListener("click", fromMenu(() => openProfile()));
+  for (const dialog of allDialogs()) {
+    // Tapping the dimmed backdrop closes a dialog (except the permission primer).
+    if (dialog !== els.primerDialog) dialog.addEventListener("click", (e) => { if (e.target === dialog) dialog.close(); });
+  }
+  els.languageSelect.addEventListener("change", () => {
+    settings.language = LANGS[els.languageSelect.value] ? els.languageSelect.value : "en";
+    saveSettings(); applySettings();
+    if (state.ws?.readyState === WebSocket.OPEN) state.ws.send(JSON.stringify({ type: "set_language", language: settings.language }));
+    addNote({ en: "The coach will reply in English.", yue: "教練之後會用廣東話回覆。", zh: "教练之后会用普通话回复。" }[settings.language]);
+  });
+  els.rateSelect.addEventListener("change", () => {
+    const rate = Number(els.rateSelect.value);
+    settings.rate = CHOICES.rate.includes(rate) ? rate : 1; saveSettings();
+  });
+  els.themeSelect.addEventListener("change", () => {
+    settings.theme = CHOICES.theme.includes(els.themeSelect.value) ? els.themeSelect.value : "auto";
+    saveSettings(); applySettings();
+  });
+  els.textSize.addEventListener("click", (e) => {
+    const scale = Number(e.target?.dataset?.scale);
+    if (!CHOICES.scale.includes(scale)) return;
+    settings.scale = scale; saveSettings(); applySettings();
+  });
+  for (const key of ["voiceOut", "handsFree", "autoVoice", "watch"]) {
+    els[key].addEventListener("change", () => {
+      settings[key] = els[key].checked; saveSettings();
+      if (key === "voiceOut" && !els.voiceOut.checked) stopSpeaking();
+      if (key === "voiceOut" || key === "handsFree") state.autoVoiceOn = false; // the cook decided
+      if (key === "watch") updateWatch();
+    });
+  }
+
+  // --- profile and past sessions ----------------------------------------------
+  const profileFields = () => [els.profileName, els.profileSkill, els.profileDietary, els.profileNotes];
   async function openProfile() {
     pauseForDialog();
     els.profileDialog.showModal();
     state.profileLoading = true;
     els.saveProfile.disabled = true;
-    els.profileName.disabled = els.profileSkill.disabled = els.profileDietary.disabled = true;
+    profileFields().forEach((field) => { field.disabled = true; });
     dialogStatus(els.profileStatus, "Loading profile...");
     try {
       const { profile } = await settingsRequest("profile_get");
       els.profileName.value = profile.cook_name || "";
       els.profileDietary.value = profile.dietary || "";
-      // Keep a custom experience description entered through the chat.
+      els.profileNotes.value = profile.notes || "";
+      // Keep an experience description the cook gave in conversation.
       for (const option of Array.from(els.profileSkill.options)) if (option.dataset.custom) option.remove();
       const skill = profile.skill_level || "";
-      if (!Array.from(els.profileSkill.options).some(option => option.value === skill)) {
+      if (!Array.from(els.profileSkill.options).some((option) => option.value === skill)) {
         const option = document.createElement("option"); option.value = skill; option.textContent = skill; option.dataset.custom = "true";
         els.profileSkill.appendChild(option);
       }
       els.profileSkill.value = skill;
       els.saveProfile.disabled = false;
-      els.profileName.disabled = els.profileSkill.disabled = els.profileDietary.disabled = false;
+      profileFields().forEach((field) => { field.disabled = false; });
       dialogStatus(els.profileStatus, "");
     } catch (error) { dialogStatus(els.profileStatus, error.message, true); }
     finally { state.profileLoading = false; }
@@ -704,11 +915,12 @@ main {
     event.preventDefault();
     if (state.profileLoading || els.saveProfile.disabled) return;
     state.profileLoading = true; els.saveProfile.disabled = true;
-    els.profileName.disabled = els.profileSkill.disabled = els.profileDietary.disabled = true;
+    profileFields().forEach((field) => { field.disabled = true; });
     dialogStatus(els.profileStatus, "Saving profile...");
     try {
       const result = await settingsRequest("profile_save", { profile: {
-        cook_name: els.profileName.value.trim(), skill_level: els.profileSkill.value, dietary: els.profileDietary.value.trim(),
+        cook_name: els.profileName.value.trim(), skill_level: els.profileSkill.value,
+        dietary: els.profileDietary.value.trim(), notes: els.profileNotes.value.trim(),
       }});
       if (result.cooking) renderCooking(result.cooking);
       els.profileDialog.close();
@@ -716,10 +928,16 @@ main {
     } catch (error) { dialogStatus(els.profileStatus, error.message, true); }
     finally {
       state.profileLoading = false; els.saveProfile.disabled = false;
-      els.profileName.disabled = els.profileSkill.disabled = els.profileDietary.disabled = false;
+      profileFields().forEach((field) => { field.disabled = false; });
     }
   }
-  const historyDate = ts => new Date(ts * 1000).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+  const historyDate = (ts) => new Date(ts * 1000).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+  function openHistory() {
+    pauseForDialog(); els.historyDialog.showModal();
+    els.historyOverview.hidden = false; els.historyDetail.hidden = true;
+    els.historyList.replaceChildren(); els.moreHistory.hidden = true;
+    loadHistory();
+  }
   async function loadHistory(offset = 0) {
     if (state.historyLoading) return;
     state.historyLoading = true; els.moreHistory.disabled = true;
@@ -731,13 +949,13 @@ main {
         const button = document.createElement("button"); button.type = "button"; button.className = "btn history-entry";
         const title = document.createElement("strong"); title.textContent = session.recipe_name || session.dish || "Cooking session";
         const detail = document.createElement("span"); detail.className = "history-date";
-        detail.textContent = `${historyDate(session.started_at)} · ${session.turn_count} ${session.turn_count === 1 ? "exchange" : "exchanges"}`;
+        detail.textContent = `${historyDate(session.started_at)} · ${session.turn_count} ${session.turn_count === 1 ? "message" : "messages"}`;
         button.append(title, detail); button.addEventListener("click", () => loadHistoryDetail(session.session_id));
         els.historyList.appendChild(button);
       }
       state.historyOffset = result.next_offset;
       els.moreHistory.hidden = result.next_offset === null;
-      dialogStatus(els.historyStatus, !offset && !result.sessions.length ? "No usage yet. Your cooking sessions will appear here." : "");
+      dialogStatus(els.historyStatus, !offset && !result.sessions.length ? "No history yet. Your cooking sessions will appear here." : "");
     } catch (error) { dialogStatus(els.historyStatus, error.message, true); }
     finally { state.historyLoading = false; els.moreHistory.disabled = false; }
   }
@@ -747,10 +965,10 @@ main {
     dialogStatus(els.historyStatus, "Loading conversation...");
     try {
       const result = await settingsRequest("history_detail", { session_id, offset });
-      const entries = result.turns.map(turn => {
+      const entries = result.turns.map((turn) => {
         const entry = document.createElement("article"); entry.className = "history-turn";
         const date = document.createElement("span"); date.className = "history-date"; date.textContent = historyDate(turn.ts); entry.appendChild(date);
-        for (const [label, text] of [["You", turn.user_text], ["Coach", turn.assistant_text], ["Photo description", turn.vision]]) {
+        for (const [label, text] of [["You", turn.user_text], ["Coach", turn.assistant_text], ["Camera", turn.vision]]) {
           if (!text) continue;
           const message = document.createElement("p"); message.className = "history-message";
           const who = document.createElement("b"); who.textContent = label; message.append(who, text); entry.appendChild(message);
@@ -762,55 +980,49 @@ main {
       els.historySessionTitle.textContent = result.session.recipe_name || result.session.dish || "Cooking session";
       els.historyOverview.hidden = true; els.historyDetail.hidden = false;
       els.olderHistory.hidden = result.next_offset === null;
-      dialogStatus(els.historyStatus, !offset && !result.turns.length ? "No cooking questions recorded in this session yet." : "");
+      dialogStatus(els.historyStatus, !offset && !result.turns.length ? "No messages in this session yet." : "");
     } catch (error) { dialogStatus(els.historyStatus, error.message, true); }
     finally { state.historyLoading = false; els.olderHistory.disabled = false; els.backHistory.disabled = false; }
   }
-  els.profileButton.addEventListener("click", openProfile);
   els.closeProfile.addEventListener("click", () => els.profileDialog.close());
   els.profileForm.addEventListener("submit", saveProfile);
-  els.historyButton.addEventListener("click", () => {
-    pauseForDialog(); els.historyDialog.showModal();
-    els.historyOverview.hidden = false; els.historyDetail.hidden = true;
-    els.historyList.replaceChildren(); els.moreHistory.hidden = true;
-    loadHistory();
-  });
   els.closeHistory.addEventListener("click", () => els.historyDialog.close());
   els.moreHistory.addEventListener("click", () => loadHistory(state.historyOffset));
   els.olderHistory.addEventListener("click", () => loadHistoryDetail(state.historySession, state.historyTurnOffset));
-  els.backHistory.addEventListener("click", () => {
-    els.historyOverview.hidden = false; els.historyDetail.hidden = true; dialogStatus(els.historyStatus, "");
-  });
+  els.backHistory.addEventListener("click", () => { els.historyOverview.hidden = false; els.historyDetail.hidden = true; dialogStatus(els.historyStatus, ""); });
 
-  // --- sending ------------------------------------------------------------
-  function ask(text) {
+  // --- sending ------------------------------------------------------------------
+  // options.noFrames: step buttons and swipes don't need the camera, so they
+  // don't spend mobile data on it.
+  function ask(text, options = {}) {
     text = (text || "").trim();
     if (state.preparingPhoto) { addNote("Please wait for your photo to finish preparing."); return false; }
     if (!text && !state.photo) return false;
     if (state.awaitingReply) { addNote("Please wait for the current reply to finish."); return false; }
     if (state.photo && !state.visionAvailable) {
-      addNote("Photo analysis is unavailable. Set up a vision model in the launcher's Azure settings, then restart the coach.");
+      addNote("Photo analysis is unavailable. Set up a vision model in the launcher's settings, then restart the coach.");
       return false;
     }
     if (!text) text = "What can you see in this photo?";
-    unlockAudio();
-    stopSpeaking();
-    state.muteReply = false;
+    unlockAudio(); stopSpeaking(); state.muteReply = false;
     state.awaitingReply = true;
     const bubble = addMsg("cook", text);
-    const payload = { type: "ask", message: text };
+    const payload = { type: "ask", message: text, language: settings.language };
     const photo = state.photo;
-    if (photo) payload.image = photo.data;
-    else {
-      // The last few seconds of camera, so the coach sees what you're doing.
-      const frames = recentFrames();
-      if (frames.length) payload.images = frames;
-    }
+    state.lastSentFrame = null; state.pendingLabel = null;
     if (photo) {
-      payload.image_source = "upload";
+      payload.image = photo.data; payload.image_source = "upload";
+      state.pendingLabel = "Looking at your photo...";
       const preview = document.createElement("img");
       preview.className = "sent-photo"; preview.src = photo.data; preview.alt = "Photo sent with this message";
       bubble.appendChild(preview);
+    } else if (!options.noFrames) {
+      // The last few seconds of camera, so the coach sees what you're doing.
+      const frames = recentFrames();
+      if (frames.length) {
+        payload.images = frames; state.lastSentFrame = frames[frames.length - 1];
+        state.pendingLabel = "Looking at your pan...";
+      }
     }
     const body = JSON.stringify(payload);
     if (state.ws && state.ws.readyState === WebSocket.OPEN) state.ws.send(body);
@@ -818,13 +1030,12 @@ main {
     if (photo) clearPhoto();
     return true;
   }
-
   els.textForm.addEventListener("submit", (e) => {
     e.preventDefault();
     if (ask(els.textInput.value)) els.textInput.value = "";
   });
 
-  // --- photo for the next prompt -----------------------------------------
+  // --- photo for the next message -----------------------------------------------
   function clearPhoto() {
     state.photoRequest += 1; // Ignore a decode still running after Remove or a replacement.
     state.photo = null; state.preparingPhoto = false;
@@ -833,9 +1044,7 @@ main {
     els.attachment.hidden = true;
   }
   async function preparePhoto(file) {
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      throw new Error("Choose a JPEG, PNG or WebP photo.");
-    }
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) throw new Error("Choose a JPEG, PNG or WebP photo.");
     if (file.size > 20_000_000) throw new Error("Choose a photo smaller than 20 MB.");
     const url = URL.createObjectURL(file);
     try {
@@ -889,10 +1098,10 @@ main {
   });
   els.removePhoto.addEventListener("click", clearPhoto);
 
-  // --- upload your own recipe -----------------------------------------------
+  // --- your own recipe: paste, link, photo, file, or shared from another app ---
   function resetRecipeForm() {
     state.recipeImage = null;
-    els.recipeText.value = ""; els.recipeFile.value = "";
+    els.recipeText.value = ""; els.recipeUrl.value = ""; els.recipeFile.value = ""; els.recipeCamera.value = "";
     els.recipeImagePreview.removeAttribute("src"); els.recipeImagePreview.hidden = true;
     els.recipeFileName.textContent = "";
     els.submitRecipe.disabled = false;
@@ -906,7 +1115,7 @@ main {
     if (!file) return;
     els.recipeFileName.textContent = file.name;
     try {
-      if (file.type.startsWith("image/")) {
+      if ((file.type || "").startsWith("image/")) {
         dialogStatus(els.recipeStatus, "Preparing photo...");
         state.recipeImage = await preparePhoto(file);
         els.recipeImagePreview.src = state.recipeImage; els.recipeImagePreview.hidden = false;
@@ -922,47 +1131,109 @@ main {
   }
   function submitRecipe(event) {
     event.preventDefault();
-    const text = els.recipeText.value.trim(), image = state.recipeImage;
-    if (!text && !image) return dialogStatus(els.recipeStatus, "Paste a recipe, or choose a photo or text file of one.", true);
+    const text = els.recipeText.value.trim(), url = els.recipeUrl.value.trim(), image = state.recipeImage;
+    if (!text && !image && !url) return dialogStatus(els.recipeStatus, "Paste a recipe or a link, or choose a photo or text file.", true);
+    if (url && !/^https?:\/\/\S+$/i.test(url)) return dialogStatus(els.recipeStatus, "Links start with https://", true);
     if (image && !state.visionAvailable) return dialogStatus(els.recipeStatus, "Reading photos needs a vision model. Paste the recipe text instead.", true);
     if (state.awaitingReply) return dialogStatus(els.recipeStatus, "Wait for the current reply to finish, then try again.", true);
     if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return dialogStatus(els.recipeStatus, "Not connected. Try again when the coach is connected.", true);
     unlockAudio(); stopSpeaking(); state.muteReply = false;
-    state.awaitingReply = true;
-    const bubble = addMsg("cook", text ? `Here's my recipe:\n${text.slice(0, 160)}${text.length > 160 ? "..." : ""}` : "Here's my recipe.");
+    state.awaitingReply = true; state.pendingLabel = "Reading your recipe...";
+    const summary = text ? `${text.slice(0, 160)}${text.length > 160 ? "..." : ""}` : url || "";
+    const bubble = addMsg("cook", summary ? `Here's my recipe:\n${summary}` : "Here's my recipe.");
     if (image) {
       const preview = document.createElement("img");
       preview.className = "sent-photo"; preview.src = image; preview.alt = "Recipe photo you uploaded";
       bubble.appendChild(preview);
     }
-    state.ws.send(JSON.stringify({ type: "recipe_upload", text, ...(image ? { image } : {}) }));
+    state.ws.send(JSON.stringify({ type: "recipe_upload", text, ...(url ? { url } : {}), ...(image ? { image } : {}) }));
     resetRecipeForm();
     els.recipeDialog.close();
   }
-  els.uploadRecipeButton.addEventListener("click", openRecipeDialog);
   els.closeRecipe.addEventListener("click", () => els.recipeDialog.close());
   els.chooseRecipeFile.addEventListener("click", () => els.recipeFile.click());
-  els.recipeFile.addEventListener("change", () => {
-    const file = els.recipeFile.files?.[0];
-    els.recipeFile.value = "";
-    chooseRecipeFile(file);
-  });
+  els.takeRecipePhoto.addEventListener("click", () => els.recipeCamera.click());
+  for (const input of [els.recipeFile, els.recipeCamera]) {
+    input.addEventListener("change", () => { const file = input.files?.[0]; input.value = ""; chooseRecipeFile(file); });
+  }
   els.recipeForm.addEventListener("submit", submitRecipe);
-  els.chips.addEventListener("click", (e) => {
-    const button = e.target.closest("button");
-    if (button?.dataset.action === "upload") openRecipeDialog();
-    else if (button?.dataset.say) ask(button.dataset.say);
-  });
-  els.ideasButton.addEventListener("click", () => ask("Give me 2 ideas for what to cook"));
   els.uploadRecipeInline.addEventListener("click", () => openRecipeDialog());
-  els.recipePicks.addEventListener("click", (e) => {
-    const name = e.target.closest("button")?.dataset.recipe;
-    if (name) ask(`Let's make ${name}`);
-  });
-  els.startCooking.addEventListener("click", () => ask("Start cooking"));
-  els.recipeSearch.addEventListener("input", () => renderRecipePicks());
 
-  // --- conversation log ---------------------------------------------------
+  // A page or screenshot shared from another app arrives as /?share=<token>.
+  async function receiveShare() {
+    if (typeof URLSearchParams !== "function" || !location.search) return;
+    const token = new URLSearchParams(location.search).get("share");
+    if (!token) return;
+    try { history.replaceState(null, "", "/"); } catch (e) { /* not important */ }
+    if (token === "too-large") { addNote("That share was too large. Try a smaller screenshot."); return; }
+    try {
+      const response = await fetch(`/api/shared/${encodeURIComponent(token)}`);
+      const shared = await response.json();
+      if (!response.ok) throw new Error(shared.error || "That share has expired.");
+      openRecipeDialog();
+      els.recipeText.value = [shared.title, shared.text].filter(Boolean).join("\n").slice(0, 20000);
+      if (shared.url) els.recipeUrl.value = shared.url;
+      if (shared.image) {
+        const blob = await (await fetch(shared.image)).blob();
+        await chooseRecipeFile(new File([blob], "shared-image", { type: blob.type }));
+      }
+      dialogStatus(els.recipeStatus, "Shared recipe ready. Check it, then tap Use this recipe.");
+    } catch (error) { addNote(error.message || "Could not open the shared recipe."); }
+  }
+
+  // --- my recipes -----------------------------------------------------------------
+  async function openMyRecipes() {
+    pauseForDialog();
+    if (!els.myRecipesDialog.open) els.myRecipesDialog.showModal();
+    els.myRecipesList.replaceChildren();
+    dialogStatus(els.myRecipesStatus, "Loading your recipes...");
+    try {
+      const { recipes } = await settingsRequest("recipes_list");
+      renderMyRecipes(recipes || []);
+      dialogStatus(els.myRecipesStatus, recipes?.length ? "" : "Nothing saved yet. Upload a recipe and it will appear here.");
+    } catch (error) { dialogStatus(els.myRecipesStatus, error.message, true); }
+  }
+  function renderMyRecipes(recipes) {
+    els.myRecipesList.replaceChildren(...recipes.map((recipe) => {
+      const row = document.createElement("div"); row.className = "saved";
+      const star = document.createElement("button"); star.type = "button"; star.className = "star";
+      const showStar = () => {
+        star.textContent = recipe.favorite ? "★" : "☆";
+        star.setAttribute("aria-pressed", String(Boolean(recipe.favorite)));
+        star.setAttribute("aria-label", `${recipe.favorite ? "Unstar" : "Star"} ${recipe.name}`);
+      };
+      showStar();
+      star.addEventListener("click", async () => {
+        try {
+          const result = await settingsRequest("recipe_favorite", { recipe_id: recipe.id, favorite: !recipe.favorite });
+          recipe.favorite = result.favorite; showStar();
+        } catch (error) { dialogStatus(els.myRecipesStatus, error.message, true); }
+      });
+      const info = document.createElement("div"); info.className = "saved-info";
+      const name = document.createElement("strong"); name.textContent = recipe.name;
+      const meta = document.createElement("span");
+      meta.textContent = [`${recipe.steps} steps`, recipe.serves ? `serves ${recipe.serves}` : "", recipe.time_minutes ? `${recipe.time_minutes} min` : ""].filter(Boolean).join(" · ");
+      info.append(name, meta);
+      const cook = document.createElement("button"); cook.type = "button"; cook.className = "btn primary"; cook.textContent = "Cook";
+      cook.addEventListener("click", () => cookSaved(recipe));
+      row.append(star, info, cook);
+      return row;
+    }));
+  }
+  function cookSaved(recipe) {
+    if (state.awaitingReply) { dialogStatus(els.myRecipesStatus, "Wait for the current reply to finish.", true); return false; }
+    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) { dialogStatus(els.myRecipesStatus, "Not connected. Try again when the coach is connected.", true); return false; }
+    unlockAudio(); stopSpeaking(); state.muteReply = false;
+    state.awaitingReply = true; state.pendingLabel = "Opening your recipe...";
+    addMsg("cook", `Cook again: ${recipe.name}`);
+    state.ws.send(JSON.stringify({ type: "recipe_open", recipe_id: recipe.id }));
+    els.myRecipesDialog.close();
+    return true;
+  }
+  els.closeMyRecipes.addEventListener("click", () => els.myRecipesDialog.close());
+  els.myRecipesInline.addEventListener("click", () => openMyRecipes());
+
+  // --- conversation log ----------------------------------------------------------
   function addMsg(who, text) {
     const div = document.createElement("div");
     div.className = `msg ${who}`;
@@ -972,6 +1243,7 @@ main {
     els.log.scrollTop = els.log.scrollHeight;
     return div;
   }
+  const addNote = (text) => addMsg("note", text);
 
   // The coach writes short paragraphs, "- " bullets and "1. " numbered steps,
   // with the odd **bold** word. Built from DOM nodes, never innerHTML.
@@ -994,8 +1266,8 @@ main {
         list.appendChild(li);
         continue;
       }
-      if (!line) { list = null; continue; }
       list = null;
+      if (!line) continue;
       const p = document.createElement("p");
       inlineText(p, line.replace(/^#{1,6}\s+/, ""));
       blocks.push(p);
@@ -1009,7 +1281,6 @@ main {
       else el.append(part);
     });
   }
-  function addNote(text) { return addMsg("note", text); }
   function noteSources(bubble, sources) {
     const links = document.createElement("div");
     links.className = "seen";
@@ -1019,41 +1290,62 @@ main {
       try { url = new URL(source.url); } catch { continue; }
       if (!["https:", "http:"].includes(url.protocol) || url.username || url.password) continue;
       const link = document.createElement("a");
-      link.href = url.href;
-      link.textContent = source.title || url.hostname;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
+      link.href = url.href; link.textContent = source.title || url.hostname;
+      link.target = "_blank"; link.rel = "noopener noreferrer";
       links.append(link, " ");
     }
     bubble.appendChild(links);
   }
-  function noteVision(bubble, vision) {
+  // Show what the coach based its answer on, so the cook can trust (or doubt) it.
+  function addFrame(bubble, src, alt) {
+    const img = document.createElement("img");
+    img.className = "seen-frame"; img.src = src; img.alt = alt;
+    bubble.appendChild(img);
+  }
+  function noteVision(bubble, vision, frame) {
     const seen = document.createElement("span");
     const hazards = vision.hazards || [];
     seen.className = "seen" + (hazards.length ? " hazard" : "");
     seen.textContent = hazards.length ? `Camera: ${hazards.join("; ")}`
       : vision.summary ? `Camera saw: ${vision.summary}` : "Checked your camera";
     bubble.appendChild(seen);
+    if (vision.frames && frame) addFrame(bubble, frame, "The camera frame the coach looked at");
   }
-  function showTyping() {
+  function showTyping(label) {
     if (state.typingEl) return;
-    state.typingEl = addMsg("coach", "");
-    state.typingEl.innerHTML = '<span class="typing" aria-label="Coach is thinking"><i></i><i></i><i></i></span>';
+    const div = document.createElement("div");
+    div.className = "msg coach";
+    div.innerHTML = '<span class="typing" aria-hidden="true"><i></i><i></i><i></i></span>';
+    const text = document.createElement("span");
+    text.className = "typing-label"; text.textContent = label;
+    div.append(text);
+    els.log.appendChild(div); els.log.scrollTop = els.log.scrollHeight;
+    state.typingEl = div;
   }
   function hideTyping() { state.typingEl?.remove(); state.typingEl = null; }
+  function renderChat() {
+    document.body.dataset.chat = state.chatOpen ? "open" : "collapsed";
+    els.chatToggle.textContent = state.chatOpen ? "Hide conversation" : "Show conversation";
+    els.chatToggle.setAttribute("aria-expanded", String(state.chatOpen));
+  }
+  els.chatToggle.addEventListener("click", () => { state.chatOpen = !state.chatOpen; renderChat(); });
 
-  // --- recipe state ---------------------------------------------------------
-  // Quick replies that fit where the cook is: choosing, about to start, cooking.
-  function renderChips(c) {
-    const cooking = c.recipe && c.step !== null && c.step !== undefined && c.step < (c.total_steps || 0);
-    const chips = !c.recipe
-      ? [["Give me 2 ideas", "Give me 2 ideas for what to cook"], ["Upload my recipe", null, "upload"]]
-      : cooking
-        ? [["Next step", "Next"], ["Am I doing this right?", "Am I doing this right?"],
-           ["Repeat", "Repeat that step"], ["Back", "Go back a step"]]
-        : c.step === null || c.step === undefined
-          ? [["Start cooking", "Start cooking"], ["Something else", "I want to cook something else"]]
-          : [["Something else", "I want to cook something else"]];
+  // --- stages: Choose -> Prep -> Cook -> Done -----------------------------------------
+  const stageOf = (c) => !c.recipe ? "choose"
+    : (c.step === null || c.step === undefined) ? "prep"
+    : c.step < (c.total_steps || 0) ? "cook" : "done";
+
+  // Quick replies that fit where the cook is.
+  function renderChips(c, stage) {
+    const chips = stage === "choose"
+      ? [["Give me 2 ideas", "Give me 2 ideas for what to cook"], ["Upload my recipe", null, "upload"], ["My recipes", null, "saved"]]
+      : stage === "prep"
+        ? [["Start cooking", "Start cooking"], ...(c.base_serves ? [["Make it for 4", "Make it for 4 people"]] : []),
+           ["Something else", "I want to cook something else"]]
+        : stage === "cook"
+          ? [["Am I doing this right?", "Am I doing this right?"], ["Does this look done?", "Does this look done?"],
+             ["Something's wrong", "Something went wrong, what should I do?"]]
+          : [["Cook something else", "I want to cook something else"]];
     els.chips.replaceChildren(...chips.map(([label, say, action]) => {
       const b = document.createElement("button");
       b.type = "button"; b.textContent = label;
@@ -1063,6 +1355,34 @@ main {
     }));
     els.chips.hidden = chips.length === 0;
   }
+  els.chips.addEventListener("click", (e) => {
+    const button = e.target.closest?.("button");
+    if (button?.dataset.action === "upload") openRecipeDialog();
+    else if (button?.dataset.action === "saved") openMyRecipes();
+    else if (button?.dataset.say) ask(button.dataset.say);
+  });
+
+  function renderIdeas() {
+    const cards = state.suggestions || [];
+    els.ideaCards.hidden = cards.length === 0;
+    els.ideaCards.replaceChildren(...cards.map((idea) => {
+      const card = document.createElement("button");
+      card.type = "button"; card.className = "idea-card"; card.dataset.recipe = idea.name;
+      const name = document.createElement("strong"); name.textContent = idea.name;
+      const parts = [name];
+      const facts = [idea.time_minutes ? `${idea.time_minutes} min` : "", idea.difficulty || ""].filter(Boolean).join(" · ");
+      if (facts) { const meta = document.createElement("span"); meta.className = "meta"; meta.textContent = facts; parts.push(meta); }
+      if (idea.why) { const why = document.createElement("span"); why.textContent = idea.why; parts.push(why); }
+      const cta = document.createElement("span"); cta.className = "cta"; cta.textContent = "Cook this";
+      card.append(...parts, cta);
+      return card;
+    }));
+  }
+  els.ideaCards.addEventListener("click", (e) => {
+    const name = e.target.closest?.("button")?.dataset.recipe;
+    if (name) ask(`Let's make ${name}`, { noFrames: true });
+  });
+  els.ideasButton.addEventListener("click", () => ask("Give me 2 ideas for what to cook", { noFrames: true }));
 
   let recipesLoaded = null;
   let recipeOptions = [];
@@ -1072,7 +1392,6 @@ main {
     }
     return recipesLoaded;
   }
-
   // The recipe book stays out of the way until the cook searches it.
   const MAX_PICKS = 6;
   function renderRecipePicks() {
@@ -1098,47 +1417,61 @@ main {
       : matches.length > MAX_PICKS ? `Top ${MAX_PICKS} of ${matches.length}. Add a word to narrow it down.` : "";
     els.recipeSearchStatus.hidden = !els.recipeSearchStatus.textContent;
   }
+  els.recipeSearch.addEventListener("input", () => renderRecipePicks());
+  els.recipePicks.addEventListener("click", (e) => {
+    const name = e.target.closest?.("button")?.dataset.recipe;
+    if (name) ask(`Let's make ${name}`, { noFrames: true });
+  });
 
   async function renderCooking(c) {
     const previous = state.cooking;
-    state.cooking = c;
+    const previousStage = state.stage;
+    const stage = stageOf(c);
+    state.cooking = c; state.stage = stage;
+    document.body.dataset.stage = stage;
     const total = c.total_steps || 0;
     els.progress.replaceChildren(...Array.from({ length: total }, (_, i) => {
       const seg = document.createElement("span");
-      if (c.step !== null && c.step !== undefined) {
-        if (i < c.step) seg.className = "done";
-        else if (i === c.step) seg.className = "now";
-      }
+      if (stage === "done" || (c.step !== null && c.step !== undefined && i < c.step)) seg.className = "done";
+      else if (i === c.step) seg.className = "now";
       return seg;
     }));
-    els.doneWhen.hidden = true;
-    els.recipePicks.hidden = true;
-    els.recipeSearchLabel.hidden = true;
-    els.recipeSearchStatus.hidden = true;
-    els.emptyActions.hidden = true;
-    els.ingredientsPanel.hidden = true;
-    els.ingredientsList.replaceChildren();
-    els.stepsPanel.hidden = true;
-    els.stepsList.replaceChildren();
-    els.recipeDetails.hidden = true;
-    els.startCooking.hidden = true;
-    setTimerFor(c);
-    renderChips(c);
+    els.progress.hidden = total === 0;
+    els.choosePanel.hidden = stage !== "choose";
+    els.prepPanel.hidden = stage !== "prep";
+    els.prepFooter.hidden = stage !== "prep";
+    els.cookPanel.hidden = stage !== "cook";
+    els.donePanel.hidden = stage !== "done";
+    renderChips(c, stage);
+    renderStepTimer(c);
+    if (stage === "cook" && previousStage !== "cook") enterCooking();
+    if (stage !== "cook" && previousStage === "cook") leaveCooking();
+    if (stage === "done" && previousStage !== "done") {
+      state.rating = null; markRating();
+      els.sendFeedback.hidden = false; els.feedbackDone.hidden = true;
+    }
 
     if (!c.recipe) {
       els.recipeName.textContent = "What are we cooking?";
       els.stepCount.textContent = "";
-      els.stepText.textContent = "Ask me for ideas, name a dish, or upload your own recipe.";
-      els.emptyActions.hidden = false;
+      els.ingredientsPanel.hidden = true; els.ingredientsList.replaceChildren();
+      els.stepsPanel.hidden = true; els.stepsList.replaceChildren();
+      renderIdeas();
       const recipes = await loadRecipes();
       if (state.cooking !== c) return; // A new chat may have opened while recipes loaded.
       recipeOptions = recipes;
-      els.recipeSearchLabel.hidden = false;
       renderRecipePicks();
       return;
     }
-
+    state.suggestions = [];
+    const recipeChanged = previous.recipe !== c.recipe;
     els.recipeName.textContent = c.custom ? `${c.recipe} (your recipe)` : c.recipe;
+    els.recipeDetails.textContent = [c.serves ? `Serves ${c.serves}` : "", c.time_minutes ? `About ${c.time_minutes} min` : ""].filter(Boolean).join(" · ");
+    els.recipeDetails.hidden = !els.recipeDetails.textContent;
+    els.servingsRow.hidden = !c.base_serves;
+    els.servingsValue.textContent = String(c.serves || c.base_serves || "");
+    renderChecklist(c);
+    if (recipeChanged || stage !== previousStage) els.ingredientsPanel.open = stage === "prep";
     const steps = c.steps || [];
     els.stepsList.replaceChildren(...steps.map((text, i) => {
       const li = document.createElement("li");
@@ -1147,76 +1480,260 @@ main {
       return li;
     }));
     els.stepsPanel.hidden = steps.length === 0;
-    const preparing = c.step === null || c.step === undefined;
-    els.recipeDetails.textContent = [c.serves ? `Serves ${c.serves}` : "", c.time_minutes ? `About ${c.time_minutes} min` : ""].filter(Boolean).join(" · ");
-    els.recipeDetails.hidden = !els.recipeDetails.textContent;
-    const ingredients = c.ingredients || [];
-    els.ingredientsList.replaceChildren(...ingredients.map((text) => {
-      const li = document.createElement("li"); li.textContent = text; return li;
-    }));
-    els.ingredientsPanel.hidden = ingredients.length === 0;
-    if (previous.recipe !== c.recipe || (previous.step == null) !== preparing) els.ingredientsPanel.open = preparing;
-    els.startCooking.hidden = !preparing;
-    if (c.step === null || c.step === undefined) {
-      els.stepCount.textContent = `${total} steps`;
-      els.stepText.textContent = "Get your ingredients out, then say “start”.";
-    } else if (c.step >= total) {
-      els.stepCount.textContent = `${total}/${total}`;
-      els.stepText.textContent = "All steps done. Enjoy it!";
-      els.progress.querySelectorAll("span").forEach((s) => (s.className = "done"));
-    } else {
-      els.stepCount.textContent = `Step ${c.step + 1}/${total}`;
+    if (recipeChanged) els.stepsPanel.open = false;
+
+    els.doneWhen.hidden = true;
+    if (stage === "prep") els.stepCount.textContent = `${total} steps`;
+    else if (stage === "done") els.stepCount.textContent = "Finished";
+    else {
+      els.stepCount.textContent = `Step ${c.step + 1} of ${total}`;
       els.stepText.textContent = c.step_text || "";
       if (c.done_when) {
-        els.doneWhen.innerHTML = "";
         const b = document.createElement("b"); b.textContent = "Done when ";
-        els.doneWhen.append(b, c.done_when);
+        els.doneWhen.replaceChildren(b, c.done_when);
         els.doneWhen.hidden = false;
       }
     }
   }
 
-  // --- step timer ---------------------------------------------------------
-  const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-  function setTimerFor(c) {
-    const key = c.timer_seconds ? `${c.recipe}#${c.step}` : null;
-    if (state.timer.id && state.timer.key === key) return;   // keep a running timer for this step
-    if (state.timer.id && state.timer.key !== key) { /* running timer for another step keeps going */ return showTimer(); }
-    state.timer.key = key;
-    state.timer.remaining = c.timer_seconds || 0;
-    showTimer();
+  // Ingredients as a checklist: tick off what's on the counter, ask about the rest.
+  function renderChecklist(c) {
+    if (state.checkedRecipe !== c.recipe) { state.checked = new Set(); state.checkedRecipe = c.recipe; }
+    const items = c.ingredients || [];
+    els.ingredientsList.replaceChildren(...items.map((text, i) => {
+      const li = document.createElement("li");
+      li.dataset.ingredient = text;
+      li.className = state.checked.has(i) ? "ready" : "";
+      const label = document.createElement("label");
+      const box = document.createElement("input");
+      box.type = "checkbox"; box.checked = state.checked.has(i); box.dataset.index = String(i);
+      const name = document.createElement("span"); name.textContent = text;
+      label.append(box, name);
+      const missing = document.createElement("button");
+      missing.type = "button"; missing.className = "missing"; missing.textContent = "Missing?";
+      missing.dataset.missing = text; missing.setAttribute("aria-label", `I don't have ${text}`);
+      li.append(label, missing);
+      return li;
+    }));
+    els.ingredientsPanel.hidden = items.length === 0;
+    updateChecklistCount();
   }
-  function showTimer() {
-    const t = state.timer, btn = els.timerBtn;
-    btn.hidden = !t.key;
-    btn.dataset.running = String(Boolean(t.id));
-    btn.dataset.finished = "false";
-    btn.textContent = t.id ? `${fmt(t.remaining)} · stop` : `Start ${fmt(t.remaining)} timer`;
+  function updateChecklistCount() {
+    const total = (state.cooking.ingredients || []).length;
+    els.ingredientsCount.textContent = total ? `${Math.min(state.checked.size, total)} of ${total} ready` : "";
   }
-  els.timerBtn.addEventListener("click", () => {
-    unlockAudio();
-    const t = state.timer;
-    if (els.timerBtn.dataset.finished === "true") { setTimerFor(state.cooking); return; }
-    if (t.id) { clearInterval(t.id); t.id = null; setTimerFor(state.cooking); return; }
-    t.id = setInterval(() => {
-      t.remaining -= 1;
-      if (t.remaining <= 0) {
-        clearInterval(t.id); t.id = null;
-        els.timerBtn.dataset.running = "false";
-        els.timerBtn.dataset.finished = "true";
-        els.timerBtn.textContent = "Time's up · tap to reset";
-        chime();
-        navigator.vibrate?.([300, 150, 300]);
-        speak("Time's up.");
-        return;
-      }
-      els.timerBtn.textContent = `${fmt(t.remaining)} · stop`;
-    }, 1000);
-    showTimer();
+  els.ingredientsList.addEventListener("change", (e) => {
+    const index = Number(e.target?.dataset?.index);
+    if (!Number.isInteger(index)) return;
+    if (e.target.checked) state.checked.add(index); else state.checked.delete(index);
+    const li = e.target.closest?.("li");
+    if (li) li.className = e.target.checked ? "ready" : "";
+    updateChecklistCount();
+  });
+  els.ingredientsList.addEventListener("click", (e) => {
+    const missing = e.target?.dataset?.missing;
+    if (missing) ask(`I don't have ${missing}. What can I use instead?`, { noFrames: true });
   });
 
-  // --- camera -------------------------------------------------------------
-  async function cameraOn() {
+  async function changeServings(delta) {
+    const c = state.cooking;
+    const current = c.serves || c.base_serves;
+    if (!c.base_serves || !current) return;
+    const target = Math.min(24, Math.max(1, current + delta));
+    if (target === current) return;
+    try { renderCooking((await settingsRequest("set_servings", { servings: target })).cooking); }
+    catch (error) { addNote(error.message); }
+  }
+  els.servingsDown.addEventListener("click", () => changeServings(-1));
+  els.servingsUp.addEventListener("click", () => changeServings(1));
+  els.startCooking.addEventListener("click", () => ask("Start cooking", { noFrames: true }));
+
+  // Cooking mode: voice on, screen awake, chat out of the way.
+  function enterCooking() {
+    state.chatOpen = false; renderChat(); keepAwake();
+    if (settings.autoVoice && !state.autoVoiceOn) {
+      state.autoVoiceOn = true;
+      els.voiceOut.checked = true;
+      const mic = Boolean(Recognition) && primerAccepted("mic");
+      if (mic) els.handsFree.checked = true;
+      addNote(mic ? "Cooking mode: I'll read each step aloud and listen when I finish. Change this in the menu."
+                  : "Cooking mode: I'll read each step aloud. Tap the mic or the step to talk.");
+    }
+  }
+  function leaveCooking() {
+    if (!state.autoVoiceOn) return;
+    els.handsFree.checked = settings.handsFree; els.voiceOut.checked = settings.voiceOut;
+    state.autoVoiceOn = false;
+  }
+  els.navBack.addEventListener("click", () => ask("Go back a step", { noFrames: true }));
+  els.navRepeat.addEventListener("click", () => ask("Repeat that step", { noFrames: true }));
+  els.navNext.addEventListener("click", () => ask("Next", { noFrames: true }));
+  // Swipe the step like a page: left for next, right for back. Tap to talk.
+  let touchStart = null;
+  els.cookPanel.addEventListener("touchstart", (e) => {
+    const t = e.touches?.[0]; touchStart = t ? { x: t.clientX, y: t.clientY } : null;
+  }, { passive: true });
+  els.cookPanel.addEventListener("touchend", (e) => {
+    const t = e.changedTouches?.[0];
+    if (touchStart && t) handleSwipe(t.clientX - touchStart.x, t.clientY - touchStart.y);
+    touchStart = null;
+  });
+  function handleSwipe(dx, dy) {
+    if (state.stage !== "cook" || Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return false;
+    state.swipedAt = Date.now();
+    return ask(dx < 0 ? "Next" : "Go back a step", { noFrames: true });
+  }
+  els.stepText.addEventListener("click", () => { if (Date.now() - state.swipedAt > 600) toggleListen(); });
+
+  // "How did it go?"
+  function markRating() {
+    for (const b of els.ratingRow.children || []) b.setAttribute("aria-pressed", String(b.dataset.rating === state.rating));
+  }
+  els.ratingRow.addEventListener("click", (e) => {
+    const rating = e.target.closest?.("button")?.dataset.rating;
+    if (rating) { state.rating = rating; markRating(); }
+  });
+  function sendFeedback() {
+    if (state.awaitingReply) { addNote("Please wait for the current reply to finish."); return false; }
+    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) { addNote("Not connected. Try again when the coach is connected."); return false; }
+    const note = els.doneNote.value.trim().slice(0, 300);
+    unlockAudio(); stopSpeaking(); state.muteReply = false;
+    state.awaitingReply = true;
+    const words = { loved: "Loved it", ok: "It was OK", struggled: "Struggled" };
+    addMsg("cook", [words[state.rating] || "Finished", note ? `Note: ${note}` : ""].filter(Boolean).join(". "));
+    state.ws.send(JSON.stringify({ type: "cook_feedback", rating: state.rating, note }));
+    els.doneNote.value = ""; els.sendFeedback.hidden = true; els.feedbackDone.hidden = false;
+    return true;
+  }
+  els.sendFeedback.addEventListener("click", sendFeedback);
+  els.cookAgain.addEventListener("click", () => ask("start", { noFrames: true }));
+  els.cookSomethingElse.addEventListener("click", () => ask("I want to cook something else", { noFrames: true }));
+
+  // --- timers: several at once, named, surviving a reload ------------------------------
+  const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  const timeLeft = (t) => t.pausedLeft !== null && t.pausedLeft !== undefined ? t.pausedLeft
+    : Math.max(0, Math.round((t.endAt - Date.now()) / 1000));
+  const saveTimers = () => storeSet("lh_cooking_timers", JSON.stringify(state.timers));
+  function loadTimers() {
+    let saved = [];
+    try { saved = JSON.parse(storeGet("lh_cooking_timers") || "[]"); } catch (e) { saved = []; }
+    state.timers = (Array.isArray(saved) ? saved : []).filter((t) => t && t.id && t.label && Number.isFinite(t.endAt)).slice(0, 8);
+    // Anything that ran out while the app was closed is shown as finished, not rung.
+    for (const t of state.timers) if (t.pausedLeft == null && Date.now() >= t.endAt) t.done = true;
+    if (state.timers.some((t) => !t.done && t.pausedLeft == null)) ensureTick();
+    renderTimers();
+  }
+  function addTimer(label, seconds) {
+    seconds = Math.round(Number(seconds));
+    if (!Number.isFinite(seconds) || seconds < 1) return null;
+    unlockAudio();
+    const timer = { id: `t${Date.now()}${Math.random().toString(36).slice(2, 6)}`, label: String(label || "Timer").slice(0, 40),
+                    total: seconds, endAt: Date.now() + seconds * 1000, pausedLeft: null, done: false };
+    state.timers.push(timer);
+    if (state.timers.length > 8) state.timers.shift();
+    saveTimers(); ensureTick(); renderTimers();
+    return timer;
+  }
+  function removeTimer(id) {
+    state.timers = state.timers.filter((t) => t.id !== id);
+    saveTimers(); renderTimers();
+  }
+  function toggleTimer(id) {
+    const t = state.timers.find((x) => x.id === id);
+    if (!t || t.done) return removeTimer(id);
+    if (t.pausedLeft == null) t.pausedLeft = timeLeft(t);
+    else { t.endAt = Date.now() + t.pausedLeft * 1000; t.pausedLeft = null; ensureTick(); }
+    saveTimers(); renderTimers();
+  }
+  function ensureTick() { if (!state.timerTick) state.timerTick = setInterval(tickTimers, 1000); }
+  function tickTimers() {
+    for (const t of state.timers) {
+      if (!t.done && t.pausedLeft == null && Date.now() >= t.endAt) { t.done = true; saveTimers(); ringAlarm(t); }
+    }
+    if (!state.timers.some((t) => !t.done && t.pausedLeft == null)) { clearInterval(state.timerTick); state.timerTick = null; }
+    renderTimers();
+  }
+  function renderTimers() {
+    els.timerStrip.hidden = state.timers.length === 0;
+    els.timerStrip.replaceChildren(...state.timers.map((t) => {
+      const chip = document.createElement("div");
+      chip.className = "timer-chip" + (t.done ? " done" : t.pausedLeft != null ? " paused" : "");
+      const main = document.createElement("button");
+      main.type = "button"; main.dataset.timer = t.id; main.dataset.action = "toggle";
+      main.textContent = `${t.label} ${t.done ? "done" : fmt(timeLeft(t))}`;
+      main.setAttribute("aria-label", t.done ? `${t.label} finished, tap to clear` : `${t.label}, ${fmt(timeLeft(t))} left, tap to ${t.pausedLeft != null ? "resume" : "pause"}`);
+      const x = document.createElement("button");
+      x.type = "button"; x.className = "x"; x.dataset.timer = t.id; x.dataset.action = "remove";
+      x.textContent = "×"; x.setAttribute("aria-label", `Cancel ${t.label} timer`);
+      chip.append(main, x);
+      return chip;
+    }));
+    renderStepTimer(state.cooking);
+  }
+  els.timerStrip.addEventListener("click", (e) => {
+    const id = e.target?.dataset?.timer;
+    if (!id) return;
+    if (e.target.dataset.action === "remove") removeTimer(id); else toggleTimer(id);
+  });
+  function renderStepTimer(c) {
+    const seconds = c?.timer_seconds;
+    els.timerBtn.hidden = !(seconds && state.stage === "cook");
+    if (els.timerBtn.hidden) return;
+    const label = `Step ${c.step + 1}`;
+    const running = state.timers.find((t) => t.label === label && !t.done);
+    els.timerBtn.dataset.label = label; els.timerBtn.dataset.seconds = String(seconds);
+    els.timerBtn.disabled = Boolean(running);
+    els.timerBtn.textContent = running ? `${label} timer: ${fmt(timeLeft(running))} left` : `Start ${fmt(seconds)} timer`;
+  }
+  els.timerBtn.addEventListener("click", () => {
+    const seconds = Number(els.timerBtn.dataset.seconds);
+    if (seconds) addTimer(els.timerBtn.dataset.label, seconds);
+  });
+  // Loud, repeating and full-screen: it has to reach someone across the kitchen.
+  function ringAlarm(timer) {
+    state.alarm = timer;
+    els.alarmLabel.textContent = timer.label; els.alarm.hidden = false;
+    clearInterval(state.alarmLoop);
+    let rings = 0;
+    chime(); navigator.vibrate?.([400, 200, 400, 200, 400]);
+    state.alarmLoop = setInterval(() => {
+      if (++rings > 40) return stopAlarm();
+      chime(); navigator.vibrate?.([400, 200, 400]);
+    }, 1600);
+    if (els.voiceOut.checked) speak(LANGS[settings.language].timesUp(timer.label), false, true);
+  }
+  function stopAlarm() {
+    clearInterval(state.alarmLoop); state.alarmLoop = null;
+    els.alarm.hidden = true; navigator.vibrate?.(0);
+    if (state.alarm) removeTimer(state.alarm.id);
+    state.alarm = null;
+  }
+  els.alarmDismiss.addEventListener("click", stopAlarm);
+
+  // --- permission primer: explain before the browser asks ---------------------------
+  const PRIMERS = {
+    camera: { title: "Let the coach see your pan",
+              text: "The coach looks at a few camera frames when you ask “am I doing this right?”, and every 20 seconds if Coach watches is on. Frames are used for that answer and never saved." },
+    mic: { title: "Talk instead of typing",
+           text: "With the microphone on you can ask questions with messy hands. Your browser turns speech into text; only the text is sent to the coach." },
+  };
+  const primerAccepted = (kind) => storeGet(`lh_primer_${kind}`) === "yes";
+  function withPrimer(kind, proceed) {
+    if (primerAccepted(kind)) return proceed();
+    els.primerTitle.textContent = PRIMERS[kind].title;
+    els.primerText.textContent = PRIMERS[kind].text;
+    state.primerProceed = () => { storeSet(`lh_primer_${kind}`, "yes"); proceed(); };
+    els.primerDialog.showModal();
+  }
+  els.primerContinue.addEventListener("click", () => {
+    els.primerDialog.close();
+    const proceed = state.primerProceed; state.primerProceed = null;
+    proceed?.();
+  });
+  els.primerCancel.addEventListener("click", () => { els.primerDialog.close(); state.primerProceed = null; });
+
+  // --- camera -------------------------------------------------------------------------
+  async function startCamera() {
     if (!navigator.mediaDevices?.getUserMedia) {
       addNote("This browser can't open the camera. Camera access needs HTTPS on a phone.");
       return;
@@ -1229,6 +1746,7 @@ main {
       await els.video.play();
       els.video.hidden = false; els.camEmpty.hidden = true; els.camOff.hidden = false;
       els.camera.classList.remove("compact");
+      document.body.classList.add("camera-on");
       els.camBadge.hidden = false;
       els.camBadge.textContent = state.visionAvailable ? "Coach can see this" : "Preview only: no vision model set";
       keepAwake();
@@ -1238,7 +1756,7 @@ main {
       if (state.visionAvailable) state.frameTimer = setInterval(sampleFrame, FRAME_EVERY_MS);
       updateWatch();
     } catch (err) {
-      addNote(`Camera unavailable: ${err.name === "NotAllowedError" ? "permission was denied" : err.message}.`);
+      addNote(`Camera unavailable: ${err.name === "NotAllowedError" ? "permission was denied. Allow it in the browser's site settings" : err.message}.`);
     }
   }
   function cameraOff() {
@@ -1247,10 +1765,15 @@ main {
     clearInterval(state.frameTimer); state.frameTimer = null; state.frames = [];
     updateWatch();
     els.video.hidden = true; els.camEmpty.hidden = false; els.camOff.hidden = true; els.camBadge.hidden = true;
-    els.camera.classList.add("compact");
+    els.camera.classList.add("compact"); els.camera.classList.remove("expanded");
+    document.body.classList.remove("camera-on");
   }
-  els.camOn.addEventListener("click", cameraOn);
+  els.camOn.addEventListener("click", () => withPrimer("camera", startCamera));
   els.camOff.addEventListener("click", cameraOff);
+  els.video.addEventListener("click", () => {
+    if (els.camera.classList.contains("expanded")) els.camera.classList.remove("expanded");
+    else els.camera.classList.add("expanded");
+  });
 
   // A downscaled JPEG of the current frame, only when a VLM is configured.
   const FRAME_EVERY_MS = 1200, FRAME_WIDTH = 640, KEEP_FRAMES = 3;
@@ -1275,13 +1798,13 @@ main {
     return now ? [...state.frames.slice(-(KEEP_FRAMES - 1)), now] : [];
   }
 
-  // --- coach watches ---------------------------------------------------------
-  // While a step is in progress and the camera is on, send the latest frames
-  // every few seconds. The server stays silent unless something looks wrong,
-  // unsafe, or the step looks finished.
+  // Coach watches: while a step is in progress and the camera is on, send the
+  // latest frames every few seconds. The server stays silent unless something
+  // looks wrong, unsafe, or finished.
   function updateWatch() {
-    const on = Boolean(state.stream && state.watchAvailable);
-    els.watchToggle.hidden = !on;
+    els.watchToggle.hidden = !state.watchAvailable;
+    const on = Boolean(state.stream && state.watchAvailable && els.watch.checked);
+    els.watchDot.hidden = !on;
     clearInterval(state.watchTimer); state.watchTimer = null;
     if (on) state.watchTimer = setInterval(sendWatch, Math.max(10, state.watchInterval) * 1000);
   }
@@ -1291,38 +1814,46 @@ main {
     if (state.awaitingReply || state.listening || state.speechPending || document.visibilityState !== "visible") return;
     if (c.step === null || c.step === undefined || c.step >= (c.total_steps || 0)) return;
     const images = recentFrames();
-    if (images.length) state.ws.send(JSON.stringify({ type: "watch", images }));
+    if (!images.length) return;
+    state.lastWatchFrame = images[images.length - 1];
+    state.ws.send(JSON.stringify({ type: "watch", images }));
   }
 
   // Keep the screen on while cooking; flour-covered hands can't unlock a phone.
   async function keepAwake() {
-    try { state.wakeLock = await navigator.wakeLock?.request("screen"); } catch (e) { /* not supported */ }
+    try { if (!state.wakeLock) state.wakeLock = await navigator.wakeLock?.request("screen"); } catch (e) { /* not supported */ }
   }
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && state.stream) keepAwake();
+    if (document.visibilityState === "visible" && (state.stream || state.stage === "cook")) { state.wakeLock = null; keepAwake(); }
   });
 
-  // --- voice in -----------------------------------------------------------
+  // --- voice in -------------------------------------------------------------------------
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  function toggleListen() {
+    if (state.listening) state.recognition?.stop();
+    else if (window.speechSynthesis?.speaking) stopSpeaking();
+    else if (state.awaitingReply) return;
+    else if (!Recognition) addNote("Voice input isn't available in this browser. Type instead, or use Chrome or Safari.");
+    else withPrimer("mic", listen);
+  }
   function listen() {
     if (!Recognition) {
       addNote("Voice input isn't available in this browser. Type instead, or use Chrome or Safari.");
       return;
     }
-    unlockAudio();
-    stopSpeaking();
+    unlockAudio(); stopSpeaking();
     const rec = new Recognition();
-    rec.lang = "en-US"; rec.interimResults = true; rec.continuous = false;
+    rec.lang = LANGS[settings.language].speech; rec.interimResults = true; rec.continuous = false;
     state.recognition = rec;
     let finalText = "";
-    rec.onstart = () => { state.listening = true; setTalk("listening"); els.hint.textContent = "Listening…"; };
+    rec.onstart = () => { state.listening = true; setTalk("listening"); els.hint.textContent = "Listening..."; };
     rec.onresult = (e) => {
       let interim = "";
       for (const r of Array.from(e.results)) (r.isFinal ? (finalText = r[0].transcript) : (interim += r[0].transcript));
-      els.hint.textContent = interim || finalText || "Listening…";
+      els.hint.textContent = interim || finalText || "Listening...";
     };
     rec.onerror = (e) => {
-      if (e.error === "not-allowed") addNote("Microphone permission was denied.");
+      if (e.error === "not-allowed") addNote("Microphone permission was denied. Allow it in the browser's site settings.");
       else if (e.error !== "no-speech" && e.error !== "aborted") addNote(`Voice input error: ${e.error}.`);
     };
     rec.onend = () => {
@@ -1332,22 +1863,21 @@ main {
     };
     rec.start();
   }
-  els.talk.addEventListener("click", () => {
-    if (state.listening) state.recognition?.stop();
-    else if (window.speechSynthesis?.speaking) stopSpeaking();
-    else if (state.awaitingReply) return;
-    else listen();
-  });
+  els.talk.addEventListener("click", toggleListen);
   function setTalk(s) { els.talk.dataset.state = s; }
 
-  // --- voice out ----------------------------------------------------------
+  // --- voice out -------------------------------------------------------------------------
   let voice = null;
   function pickVoice() {
+    if (!("speechSynthesis" in window)) return;
+    const want = LANGS[settings.language].speech;
     const voices = speechSynthesis.getVoices();
-    voice = voices.find((v) => v.lang === "en-US" && /natural|samantha|google/i.test(v.name))
-         || voices.find((v) => v.lang.startsWith("en")) || null;
+    voice = voices.find((v) => v.lang === want && /natural|neural|google|samantha|sin-ji/i.test(v.name))
+         || voices.find((v) => v.lang === want)
+         || (settings.language === "yue" ? voices.find((v) => /yue|zh[-_]HK/i.test(v.lang)) : null)
+         || voices.find((v) => v.lang.startsWith(want.split("-")[0])) || null;
   }
-  if ("speechSynthesis" in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+  if ("speechSynthesis" in window) speechSynthesis.onvoiceschanged = pickVoice;
 
   // iOS only plays speech that started inside a tap; the first tap unlocks it.
   function unlockAudio() {
@@ -1365,7 +1895,7 @@ main {
   // "1." is not a sentence.
   function completeSentences(line) {
     const chunks = [];
-    const boundary = /[.!?]["')\u201d\u2019]*\s+|[\u3002\uff01\uff1f]/g;
+    const boundary = /[.!?]["')”’]*\s+|[。！？]/g;
     let start = 0, match;
     while ((match = boundary.exec(line))) {
       const end = match.index + match[0].length;
@@ -1380,7 +1910,7 @@ main {
   function speakBullets() {
     const bullets = state.speechList;
     state.speechList = [];
-    if (bullets.length >= 3) speak("The list is on your screen.", true);
+    if (bullets.length >= 3) speak(LANGS[settings.language].list, true);
     else bullets.forEach((line) => speak(speakable(line.replace(BULLET, "$1")), true));
   }
   function speakLine(line) {
@@ -1415,8 +1945,8 @@ main {
     flushSpeech(true);
     if (!state.speechPending) afterSpeaking();
   }
-  function speak(text, append = false) {
-    if (!els.voiceOut.checked || !("speechSynthesis" in window) || !text || state.muteReply) return afterSpeaking();
+  function speak(text, append = false, force = false) {
+    if (!els.voiceOut.checked || !("speechSynthesis" in window) || !text || (state.muteReply && !force)) return afterSpeaking();
     if (!append) {
       speechSynthesis.cancel();
       state.speechEpoch += 1;
@@ -1426,7 +1956,8 @@ main {
     state.speechPending += 1;
     const u = new SpeechSynthesisUtterance(text);
     if (voice) u.voice = voice;
-    u.rate = 1.0;
+    u.lang = LANGS[settings.language].speech;
+    u.rate = settings.rate;
     u.onstart = () => setTalk("speaking");
     let finished = false;
     u.onend = u.onerror = () => {
@@ -1444,15 +1975,14 @@ main {
     if ("speechSynthesis" in window) speechSynthesis.cancel();
     setTalk(state.listening ? "listening" : "idle");
   }
-  els.voiceOut.addEventListener("change", () => {
-    if (!els.voiceOut.checked) stopSpeaking();
-  });
   function afterSpeaking() {
     // Hands-free: once the coach finishes talking, listen for the next question.
-    const dialogOpen = () => els.profileDialog.open || els.historyDialog.open || els.recipeDialog.open;
-    if (!state.exiting && els.handsFree.checked && !state.listening && !state.awaitingReply && !state.speechPending && !dialogOpen() && document.visibilityState === "visible") {
+    const dialogOpen = () => allDialogs().some((d) => d.open) || !els.alarm.hidden;
+    const ready = () => !state.exiting && els.handsFree.checked && Recognition && primerAccepted("mic") && !state.listening
+      && !state.awaitingReply && !state.speechPending && !dialogOpen() && document.visibilityState === "visible";
+    if (ready()) {
       const expectedChat = chatId;
-      setTimeout(() => { if (!state.exiting && expectedChat === chatId && els.handsFree.checked && !state.listening && !state.awaitingReply && !state.speechPending && !dialogOpen() && !window.speechSynthesis?.speaking) listen(); }, 350);
+      setTimeout(() => { if (expectedChat === chatId && ready() && !window.speechSynthesis?.speaking) listen(); }, 350);
     }
   }
 
@@ -1463,13 +1993,19 @@ main {
         const o = ctx.createOscillator(), g = ctx.createGain();
         o.frequency.value = 880; o.connect(g); g.connect(ctx.destination);
         g.gain.setValueAtTime(0.0001, ctx.currentTime + at);
-        g.gain.exponentialRampToValueAtTime(0.4, ctx.currentTime + at + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.6, ctx.currentTime + at + 0.02);
         g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + 0.3);
         o.start(ctx.currentTime + at); o.stop(ctx.currentTime + at + 0.32);
       });
     } catch (e) { /* no audio */ }
   }
 
+  applySettings();
+  loadTimers();
+  renderCooking({ recipe: null, step: null, total_steps: 0 });
+  renderChat();
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+  receiveShare();
   connect();
 })();
 </script>

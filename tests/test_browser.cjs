@@ -7,18 +7,34 @@ const vm = require('node:vm');
 const html = fs.readFileSync(path.join(__dirname, '../chatbot/static/index.html'), 'utf8');
 const source = html.match(/<script>([\s\S]*?)<\/script>/)[1].replace(/\r\n/g, '\n');
 let uuidSequence = 0;
+const FRAME = 'data:image/jpeg;base64,YWJj';
+// Elements the markup starts hidden, so the mock DOM starts the same way.
+const HIDDEN_IDS = new Set([...html.matchAll(/<[a-z]+[^>]*\sid="([^"]+)"[^>]*>/g)]
+  .filter((m) => /\shidden(\s|>|=)/.test(m[0])).map((m) => m[1]));
+const EXPORTS = ['state', 'els', 'settings', 'handle', 'stopSpeaking', 'ask', 'attachPhoto', 'clearPhoto', 'openProfile',
+  'saveProfile', 'loadHistory', 'loadHistoryDetail', 'connect', 'newChat', 'renderCooking', 'renderRich', 'sendWatch',
+  'recentFrames', 'openRecipeDialog', 'submitRecipe', 'addTimer', 'tickTimers', 'stopAlarm', 'handleSwipe',
+  'sendFeedback', 'openMyRecipes', 'changeServings', 'withPrimer', 'toggleListen'];
 
 function harness(options = {}) {
   const elements = new Map();
   const images = [], revoked = [], draws = [];
-  const sockets = [], windowEvents = {}, clearedIntervals = [];
+  const sockets = [], windowEvents = {}, clearedIntervals = [], recognitions = [];
+  const storage = new Map(Object.entries({ lh_cooking_client_id: 'test', ...(options.storage || {}) }));
   function element(tag) {
+    const classes = new Set();
     const result = {
-      textContent: '', innerHTML: '', dataset: {}, checked: false, children: [],
-      value: '', hidden: false, listeners: {},
+      textContent: '', innerHTML: '', dataset: {}, checked: false, children: [], attrs: {},
+      value: '', hidden: false, listeners: {}, open: false, disabled: false,
       options: [], tagName: (tag || '').toUpperCase(),
+      style: { setProperty(name, value) { this[name] = value; } },
       showModal() { this.open = true; }, close() { this.open = false; },
-      classList: { add() {}, remove() {} },
+      classList: {
+        add: (c) => classes.add(c), remove: (c) => classes.delete(c), contains: (c) => classes.has(c),
+        toggle: (c, on) => ((on ?? !classes.has(c)) ? classes.add(c) : classes.delete(c)),
+      },
+      setAttribute(name, value) { this.attrs[name] = String(value); },
+      getAttribute(name) { return this.attrs[name]; },
       addEventListener(name, fn) { this.listeners[name] = fn; },
       removeAttribute(name) { delete this[name]; }, click() { this.clicked = true; },
       appendChild(child) { this.children.push(child); child.parent = this; if (child.tagName === 'OPTION') this.options.push(child); },
@@ -34,26 +50,39 @@ function harness(options = {}) {
     };
     if (tag === 'canvas') {
       result.getContext = () => ({ fillRect() {}, drawImage(...args) { draws.push(args); } });
-      result.toDataURL = () => options.canvasData || 'data:image/jpeg;base64,YWJj';
+      result.toDataURL = () => options.canvasData || FRAME;
     }
     return result;
   }
   const timers = [];
   const speech = {
-    queue: [], said: [], getVoices() { return []; },
+    queue: [], said: [], utterances: [], getVoices() { return []; },
     cancel() { this.queue = []; },
-    speak(utterance) { this.queue.push(utterance); this.said.push(utterance.text); },
+    speak(utterance) { this.queue.push(utterance); this.said.push(utterance.text); this.utterances.push(utterance); },
   };
+  class Recognition {
+    constructor() { recognitions.push(this); }
+    start() { this.started = true; this.onstart?.(); }
+    stop() { this.onend?.(); }
+    abort() { this.aborted = true; }
+  }
+  let intervalId = 100;
   const context = {
     document: {
       visibilityState: 'visible', addEventListener() {}, createElement: element,
-      getElementById(id) { if (!elements.has(id)) elements.set(id, element()); return elements.get(id); },
+      body: element('body'), documentElement: element('html'),
+      getElementById(id) {
+        if (!elements.has(id)) { const el = element(); el.hidden = HIDDEN_IDS.has(id); elements.set(id, el); }
+        return elements.get(id);
+      },
     },
     speechSynthesis: speech,
     SpeechSynthesisUtterance: function(text) { this.text = text; },
-    localStorage: { getItem() { return 'test'; } },
+    webkitSpeechRecognition: options.noMic ? undefined : Recognition,
+    localStorage: { getItem: (k) => (storage.has(k) ? storage.get(k) : null), setItem: (k, v) => storage.set(k, String(v)) },
     crypto: { randomUUID() { return `test-${++uuidSequence}`; } }, navigator: {},
-    location: { protocol: 'http:', host: 'localhost:8000' },
+    location: { protocol: 'http:', host: 'localhost:8000', search: options.search || '' },
+    history: { replaceState() {} }, URLSearchParams,
     fetch: async () => ({ json: async () => ({ recipes: options.recipes || [] }) }),
     addEventListener(name, fn) { windowEvents[name] = fn; },
     URL: class extends URL {
@@ -70,66 +99,159 @@ function harness(options = {}) {
       send(body) { this.sent.push(JSON.parse(body)); }
       close() { this.closed = true; this.onclose?.(); }
     },
-    setTimeout(fn) { timers.push(fn); }, clearTimeout() {}, setInterval() {}, clearInterval(id) { clearedIntervals.push(id); },
+    setTimeout(fn) { timers.push(fn); }, clearTimeout() {},
+    setInterval() { return ++intervalId; }, clearInterval(id) { clearedIntervals.push(id); },
   };
   context.window = context;
-  // Expose existing functions and skip opening a real socket in this harness.
+  // Expose internals and skip opening a real socket in this harness.
   const instrumented = source.replace(/\n  connect\(\);\n\}\)\(\);/,
-    '\n  window.test = { state, els, handle, stopSpeaking, ask, attachPhoto, clearPhoto, openProfile, saveProfile, loadHistory, loadHistoryDetail, connect, newChat, renderCooking, renderRich, sendWatch, recentFrames, openRecipeDialog, submitRecipe };\n})();');
+    `\n  window.test = { ${EXPORTS.join(', ')} };\n})();`);
   assert.notEqual(instrumented, source);
   vm.runInNewContext(instrumented, context);
-  context.test.els.voiceOut.checked = true;
-  return { ...context.test, speech, timers, images, revoked, draws, sockets, windowEvents, clearedIntervals };
+  return { ...context.test, speech, timers, images, revoked, draws, sockets, windowEvents, clearedIntervals,
+           recognitions, storage, body: context.document.body, root: context.document.documentElement };
 }
+// A connected socket that records what the page sends.
+function online(h) {
+  const sent = [];
+  h.state.ws = { readyState: 1, send(body) { sent.push(JSON.parse(body)); } };
+  return sent;
+}
+const click = (el, target = {}) => el.listeners.click({ target, preventDefault() {} });
+const button = (dataset) => ({ closest: () => ({ dataset }), dataset });
+// Arrays made inside the page's vm context have another realm's prototype.
+const plain = (value) => JSON.parse(JSON.stringify(value));
 
 async function main() {
 {
+  // Prep: ingredients as a checklist, servings, and a clear Start.
   const h = harness();
-  const preview = { recipe: 'Chicken Curry', step: null, total_steps: 4, serves: 2, time_minutes: 35,
+  const sent = online(h);
+  const preview = { recipe: 'Chicken Curry', step: null, total_steps: 4, serves: 2, base_serves: 2, time_minutes: 35,
     steps: ['Heat oil.', 'Brown chicken.', 'Add sauce.', 'Simmer.'],
     ingredients: ['300 grams chicken', '200 millilitres coconut milk', '<b>literal ingredient</b>'] };
   await h.renderCooking(preview);
-  assert.equal(h.els.ingredientsPanel.hidden, false);
+  assert.equal(h.body.dataset.stage, 'prep');
+  assert.equal(h.els.prepPanel.hidden, false);
+  assert.equal(h.els.cookPanel.hidden, true);
   assert.equal(h.els.ingredientsPanel.open, true);
-  assert.deepEqual(h.els.ingredientsList.children.map(li => li.textContent), preview.ingredients);
+  assert.deepEqual(h.els.ingredientsList.children.map(li => li.dataset.ingredient), preview.ingredients);
   assert.equal(h.els.ingredientsList.children[2].innerHTML, '', 'ingredients use safe text rendering');
+  assert.equal(h.els.ingredientsCount.textContent, '0 of 3 ready');
+  h.els.ingredientsList.listeners.change({ target: { dataset: { index: '1' }, checked: true } });
+  assert.equal(h.els.ingredientsCount.textContent, '1 of 3 ready');
+  click(h.els.ingredientsList, { dataset: { missing: '200 millilitres coconut milk' } });
+  assert.equal(sent.at(-1).message, "I don't have 200 millilitres coconut milk. What can I use instead?");
+  h.handle({ type: 'response', message: 'Use cream.' });
   assert.equal(h.els.recipeDetails.textContent, 'Serves 2 · About 35 min');
-  assert.equal(h.els.startCooking.hidden, false);
-  assert.deepEqual(h.els.chips.children.map(b => b.textContent), ['Start cooking', 'Something else']);
+  assert.equal(h.els.servingsRow.hidden, false);
+  assert.equal(h.els.servingsValue.textContent, '2');
+  assert.deepEqual(h.els.chips.children.map(b => b.textContent), ['Start cooking', 'Make it for 4', 'Something else']);
   assert.deepEqual(h.els.stepsList.children.map(li => li.textContent), preview.steps, 'every step is listed');
-  h.els.startCooking.listeners.click();
-  assert.equal(JSON.parse(h.state.queue[0]).message, 'Start cooking');
-  await h.renderCooking({ ...preview, step: 1, step_text: 'Brown chicken.' });
-  assert.equal(h.els.startCooking.hidden, true);
-  assert.equal(h.els.ingredientsPanel.hidden, false, 'ingredients stay available during cooking');
-  assert.equal(h.els.ingredientsPanel.open, false, 'ingredients collapse when the tutorial starts');
-  assert.equal(h.els.stepText.textContent, 'Brown chicken.');
-  assert.deepEqual(h.els.stepsList.children.map(li => li.className), ['done', 'now', '', ''], 'current step is marked');
-  assert.ok(h.els.chips.children.some(b => b.dataset.say === 'Am I doing this right?'), 'camera check is one tap away');
-  await h.renderCooking({ recipe: 'Banana Bread', custom: true, step: null, total_steps: 4, ingredients: ['3 bananas'] });
-  assert.equal(h.els.ingredientsPanel.open, true, 'switching recipes opens the new ingredient list');
-  assert.equal(h.els.ingredientsList.children.length, 1);
-  assert.equal(h.els.recipeName.textContent, 'Banana Bread (your recipe)', 'uploaded recipes are labelled');
-  await h.renderCooking({ recipe: null, step: null, total_steps: 0 });
-  assert.equal(h.els.ingredientsPanel.hidden, true, 'a fresh chat clears the previous recipe preview');
-  assert.equal(h.els.ingredientsList.children.length, 0);
-  assert.equal(h.els.stepsPanel.hidden, true);
-  assert.equal(h.els.startCooking.hidden, true);
-  assert.equal(h.els.emptyActions.hidden, false, 'no recipe: offer ideas and upload');
-  assert.ok(h.els.chips.children.some(b => b.dataset.action === 'upload'));
+  const scaling = h.changeServings(1);
+  assert.deepEqual([sent.at(-1).type, sent.at(-1).servings], ['set_servings', 3]);
+  h.handle({ type: 'settings_result', request_id: sent.at(-1).request_id,
+    cooking: { ...preview, serves: 3, ingredients: ['450 grams chicken', '300 millilitres coconut milk', '<b>literal ingredient</b>'] } });
+  await scaling;
+  assert.equal(h.els.servingsValue.textContent, '3');
+  assert.equal(h.els.ingredientsCount.textContent, '1 of 3 ready', 'ticks survive rescaling');
+  h.state.stream = {}; h.state.visionAvailable = true; h.els.video.videoWidth = 640; h.els.video.videoHeight = 480;
+  click(h.els.startCooking);
+  assert.equal(sent.at(-1).message, 'Start cooking');
+  assert.equal(sent.at(-1).images, undefined, 'step commands do not spend data on camera frames');
 }
 
 {
+  // Cook: cooking mode switches voice on, swipes and big buttons drive steps.
+  const h = harness({ storage: { lh_primer_mic: 'yes' } });
+  const sent = online(h);
+  h.state.audioUnlocked = true;
+  const cooking = { recipe: 'Chicken Curry', step: 1, total_steps: 4, serves: 2, base_serves: 2, timer_seconds: 90,
+    steps: ['Heat oil.', 'Brown chicken.', 'Add sauce.', 'Simmer.'], step_text: 'Brown chicken.', done_when: 'golden all over',
+    ingredients: ['300 grams chicken'] };
+  await h.renderCooking({ ...cooking, step: null });
+  assert.equal(h.els.handsFree.checked, false);
+  await h.renderCooking(cooking);
+  assert.equal(h.body.dataset.stage, 'cook');
+  assert.equal(h.body.dataset.chat, 'collapsed', 'the chat shrinks to the latest reply');
+  assert.equal(h.els.cookPanel.hidden, false);
+  assert.equal(h.els.stepText.textContent, 'Brown chicken.');
+  assert.equal(h.els.stepCount.textContent, 'Step 2 of 4');
+  assert.equal(h.els.ingredientsPanel.open, false, 'ingredients collapse when cooking starts');
+  assert.deepEqual(h.els.stepsList.children.map(li => li.className), ['done', 'now', '', '']);
+  assert.equal(h.els.voiceOut.checked, true);
+  assert.equal(h.els.handsFree.checked, true, 'hands-free turns on in cooking mode once the mic was allowed');
+  assert.match(h.els.log.children.at(-1).textContent, /Cooking mode/);
+  assert.ok(h.els.chips.children.some(b => b.dataset.say === 'Am I doing this right?'), 'camera check is one tap away');
+  assert.equal(h.els.timerBtn.hidden, false);
+  assert.equal(h.els.timerBtn.textContent, 'Start 1:30 timer');
+  click(h.els.navNext);
+  assert.equal(sent.at(-1).message, 'Next');
+  h.handle({ type: 'response', message: 'Step 3.' });
+  assert.equal(h.handleSwipe(20, 0), false, 'a small drag is not a swipe');
+  assert.equal(h.handleSwipe(-120, 200), false, 'scrolling is not a swipe');
+  assert.equal(h.handleSwipe(-120, 10), true);
+  assert.equal(sent.at(-1).message, 'Next', 'swipe left = next');
+  h.handle({ type: 'response', message: 'Step 3.' });
+  h.handleSwipe(140, 5);
+  assert.equal(sent.at(-1).message, 'Go back a step', 'swipe right = back');
+  h.handle({ type: 'response', message: 'Step 2.' });
+  h.state.swipedAt = 0;
+  h.els.stepText.listeners.click();
+  assert.equal(h.recognitions.at(-1).started, true, 'tapping the step starts listening');
+  assert.equal(h.recognitions.at(-1).lang, 'en-US');
+  h.recognitions.at(-1).stop();
+  // Done: ask how it went, keep a note for next time, put voice settings back.
+  await h.renderCooking({ ...cooking, step: 4 });
+  assert.equal(h.body.dataset.stage, 'done');
+  assert.equal(h.els.donePanel.hidden, false);
+  assert.equal(h.els.handsFree.checked, false, 'leaving cooking mode restores the saved setting');
+  click(h.els.ratingRow, button({ rating: 'loved' }));
+  h.els.doneNote.value = '  less salt  ';
+  assert.equal(h.sendFeedback(), true);
+  assert.deepEqual(sent.at(-1), { type: 'cook_feedback', rating: 'loved', note: 'less salt' });
+  assert.equal(h.els.feedbackDone.hidden, false);
+}
+
+{
+  // Cooking mode without mic permission yet: speak, but don't start listening on its own.
+  const h = harness();
+  await h.renderCooking({ recipe: 'Eggs', step: 0, total_steps: 2, steps: ['Beat.', 'Cook.'], step_text: 'Beat.' });
+  assert.equal(h.els.handsFree.checked, false);
+  assert.match(h.els.log.children.at(-1).textContent, /Tap the mic/);
+  h.toggleListen();
+  assert.equal(h.els.primerDialog.open, true, 'explain the microphone before the browser asks');
+  assert.equal(h.recognitions.length, 0);
+  click(h.els.primerContinue);
+  assert.equal(h.recognitions.length, 1);
+  assert.equal(h.storage.get('lh_primer_mic'), 'yes');
+}
+
+{
+  // Choose: idea cards come from the coach's suggest_recipes tool.
   const recipes = Array.from({ length: 9 }, (_, i) => ({ name: `Noodle Dish ${i}`, aliases: [], ingredients: ['noodles'] }));
   const h = harness({ recipes: [
     { name: 'Chicken Curry', aliases: ['curry chicken'], ingredients: ['coconut milk'], time_minutes: 35 },
     { name: 'Spaghetti Bolognese', aliases: ['spag bol'], ingredients: ['minced beef'], time_minutes: 45 },
     ...recipes,
   ] });
+  const sent = online(h);
   await h.renderCooking({ recipe: null, step: null, total_steps: 0 });
-  assert.equal(h.els.recipeSearchLabel.hidden, false);
+  assert.equal(h.body.dataset.stage, 'choose');
+  assert.equal(h.els.choosePanel.hidden, false);
+  assert.equal(h.els.ideaCards.hidden, true);
+  assert.ok(h.els.chips.children.some(b => b.dataset.action === 'upload'));
+  assert.ok(h.els.chips.children.some(b => b.dataset.action === 'saved'));
+  h.handle({ type: 'response', message: 'Two ideas.', cooking: { recipe: null, step: null, total_steps: 0 }, suggestions: [
+    { name: 'Egg Fried Rice', why: 'quick', time_minutes: 20, difficulty: 'easy' }, { name: 'Mapo Tofu', why: '' }] });
+  await Promise.resolve();
+  assert.equal(h.els.ideaCards.hidden, false);
+  assert.deepEqual(h.els.ideaCards.children.map(c => c.dataset.recipe), ['Egg Fried Rice', 'Mapo Tofu']);
+  assert.equal(h.els.ideaCards.children[0].children[1].textContent, '20 min · easy');
+  click(h.els.ideaCards, button({ recipe: 'Mapo Tofu' }));
+  assert.equal(sent.at(-1).message, "Let's make Mapo Tofu");
+  // The recipe book stays hidden until searched, and shows at most six.
   assert.equal(h.els.recipePicks.children.length, 0, 'the recipe book is not dumped on screen');
-  assert.equal(h.els.recipePicks.hidden, true);
   for (const term of ['curry', 'curry chicken', 'coconut']) {
     h.els.recipeSearch.value = term; h.els.recipeSearch.listeners.input();
     assert.equal(h.els.recipePicks.children.length, 1, `search matches ${term}`);
@@ -173,57 +295,7 @@ async function main() {
 }
 
 {
-  // Questions carry the last few seconds of camera; watch mode sends frames only when useful.
-  const h = harness();
-  const sent = [];
-  h.state.ws = { readyState: 1, send(body) { sent.push(JSON.parse(body)); } };
-  h.state.stream = {}; h.state.visionAvailable = true;
-  h.els.video.videoWidth = 1280; h.els.video.videoHeight = 720;
-  h.state.frames = ['data:image/jpeg;base64,b2xk', 'data:image/jpeg;base64,bWlk'];
-  h.state.audioUnlocked = true;
-  h.ask('Am I doing this right?');
-  assert.deepEqual(sent[0].images, ['data:image/jpeg;base64,b2xk', 'data:image/jpeg;base64,bWlk', 'data:image/jpeg;base64,YWJj'], 'two buffered frames plus one now, oldest first');
-  assert.equal(sent[0].image, undefined);
-  h.handle({ type: 'response', message: 'Looks good.' });
-  h.state.speechPending = 0;
-  h.els.watch.checked = true;
-  h.state.cooking = { recipe: 'Eggs', step: 0, total_steps: 3 };
-  h.sendWatch();
-  assert.equal(sent.at(-1).type, 'watch');
-  assert.equal(sent.at(-1).images.length, 3);
-  const count = sent.length;
-  h.state.awaitingReply = true; h.sendWatch();
-  h.state.awaitingReply = false; h.state.cooking = { recipe: 'Eggs', step: null, total_steps: 3 }; h.sendWatch();
-  h.state.cooking = { recipe: 'Eggs', step: 0, total_steps: 3 }; h.els.watch.checked = false; h.sendWatch();
-  assert.equal(sent.length, count, 'no checks while busy, before starting, or when switched off');
-  h.handle({ type: 'alert', level: 'hazard', message: 'Turn the heat down now.' });
-  const alert = h.els.log.children.at(-1);
-  assert.equal(alert.className, 'msg coach alert hazard');
-  assert.equal(alert.children[0].textContent, 'Safety check');
-  assert.ok(h.speech.said.includes('Turn the heat down now.'), 'alerts are spoken when the cook is not busy');
-}
-
-{
-  // Uploading a recipe sends it once, then clears the form.
-  const h = harness();
-  const sent = [];
-  h.state.ws = { readyState: 1, send(body) { sent.push(JSON.parse(body)); } };
-  h.openRecipeDialog();
-  assert.equal(h.els.recipeDialog.open, true);
-  h.submitRecipe({ preventDefault() {} });
-  assert.equal(sent.length, 0);
-  assert.equal(h.els.recipeStatus.dataset.error, 'true', 'empty upload is refused with a message');
-  h.els.recipeText.value = "Grandma's noodles\nBoil noodles 3 minutes.";
-  h.submitRecipe({ preventDefault() {} });
-  assert.deepEqual(sent[0], { type: 'recipe_upload', text: "Grandma's noodles\nBoil noodles 3 minutes." });
-  assert.equal(h.els.recipeDialog.open, false);
-  assert.equal(h.els.recipeText.value, '');
-  assert.equal(h.state.awaitingReply, true);
-  assert.equal(h.els.log.children.at(-1).className, 'msg cook');
-}
-
-{
-  const h = harness();
+  const h = harness({ storage: { lh_primer_mic: 'yes' } });
   h.els.handsFree.checked = true;
   h.handle({ type: 'thinking' });
   h.handle({ type: 'delta', text: 'Use 2.' });
@@ -282,6 +354,180 @@ async function main() {
   assert.equal(links[0].textContent, '<script>recipe</script>', 'source titles are rendered as text');
   assert.equal(links[0].rel, 'noopener noreferrer');
   assert.deepEqual(h.speech.said, ['Cook tofu.'], 'source URLs are not spoken');
+}
+
+{
+  // Questions carry the last few seconds of camera; the answer shows what was seen.
+  const h = harness();
+  const sent = online(h);
+  h.state.stream = {}; h.state.visionAvailable = true;
+  h.els.video.videoWidth = 1280; h.els.video.videoHeight = 720;
+  h.state.frames = ['data:image/jpeg;base64,b2xk', 'data:image/jpeg;base64,bWlk'];
+  h.state.audioUnlocked = true;
+  h.ask('Am I doing this right?');
+  assert.deepEqual(sent[0].images, ['data:image/jpeg;base64,b2xk', 'data:image/jpeg;base64,bWlk', FRAME], 'two buffered frames plus one now, oldest first');
+  assert.equal(sent[0].image, undefined);
+  assert.equal(sent[0].language, 'en');
+  h.handle({ type: 'thinking' });
+  assert.equal(h.els.log.children.at(-1).children[0].textContent, 'Looking at your pan...', 'say what the coach is doing');
+  h.handle({ type: 'response', message: 'Looks good.', vision: { summary: null, frames: 3, hazards: [] } });
+  const reply = h.els.log.children.at(-1);
+  assert.equal(reply.children.at(-2).textContent, 'Checked your camera');
+  assert.equal(reply.children.at(-1).src, FRAME, 'the frame the coach judged is shown with its answer');
+  h.state.speechPending = 0;
+  h.els.watch.checked = true;
+  h.state.cooking = { recipe: 'Eggs', step: 0, total_steps: 3 };
+  h.sendWatch();
+  assert.equal(sent.at(-1).type, 'watch');
+  assert.equal(sent.at(-1).images.length, 3);
+  const count = sent.length;
+  h.state.awaitingReply = true; h.sendWatch();
+  h.state.awaitingReply = false; h.state.cooking = { recipe: 'Eggs', step: null, total_steps: 3 }; h.sendWatch();
+  h.state.cooking = { recipe: 'Eggs', step: 0, total_steps: 3 }; h.els.watch.checked = false; h.sendWatch();
+  assert.equal(sent.length, count, 'no checks while busy, before starting, or when switched off');
+  h.handle({ type: 'alert', level: 'hazard', message: 'Turn the heat down now.' });
+  const alert = h.els.log.children.at(-1);
+  assert.equal(alert.className, 'msg coach alert hazard');
+  assert.equal(alert.children[0].textContent, 'Safety check');
+  assert.equal(alert.children.at(-1).src, FRAME, 'alerts show the frame that triggered them');
+  assert.ok(h.speech.said.includes('Turn the heat down now.'), 'alerts are spoken when the cook is not busy');
+}
+
+{
+  // Timers: named, several at once, loud when done, survive a reload.
+  const h = harness();
+  h.handle({ type: 'response', message: 'Timer set.', timers: [{ label: 'Noodles', seconds: 180 }, { label: 'Eggs', seconds: 420 }] });
+  assert.equal(h.els.timerStrip.hidden, false);
+  assert.deepEqual(h.els.timerStrip.children.map(c => c.children[0].textContent), ['Noodles 3:00', 'Eggs 7:00']);
+  const saved = JSON.parse(h.storage.get('lh_cooking_timers'));
+  assert.deepEqual(saved.map(t => t.label), ['Noodles', 'Eggs']);
+  const eggs = h.state.timers[1];
+  click(h.els.timerStrip, { dataset: { timer: eggs.id, action: 'toggle' } });
+  assert.ok(eggs.pausedLeft > 400, 'tapping a timer pauses it');
+  assert.equal(h.els.timerStrip.children[1].className, 'timer-chip paused');
+  h.state.timers[0].endAt = Date.now() - 1;
+  h.tickTimers();
+  assert.equal(h.els.alarm.hidden, false, 'a finished timer takes over the screen');
+  assert.equal(h.els.alarmLabel.textContent, 'Noodles');
+  assert.ok(h.speech.said.includes("Time's up: Noodles."));
+  click(h.els.alarmDismiss);
+  assert.equal(h.els.alarm.hidden, true);
+  assert.deepEqual(plain(h.state.timers.map(t => t.label)), ['Eggs'], 'stopping the alarm clears that timer');
+  click(h.els.timerStrip, { dataset: { timer: eggs.id, action: 'remove' } });
+  assert.equal(h.els.timerStrip.hidden, true);
+  const reloaded = harness({ storage: { lh_cooking_timers: JSON.stringify([
+    { id: 'a', label: 'Rice', endAt: Date.now() - 5000, total: 600 }, { id: 'b', label: 'Stock', endAt: Date.now() + 60000, total: 900 }]) } });
+  assert.deepEqual(plain(reloaded.state.timers.map(t => [t.label, Boolean(t.done)])), [['Rice', true], ['Stock', false]]);
+  assert.equal(reloaded.els.alarm.hidden, true, 'a timer that ran out while closed is shown, not rung');
+  assert.equal(reloaded.els.timerStrip.children[0].className, 'timer-chip done');
+}
+
+{
+  // Upload: text, link or photo; the dialog says what's wrong before sending.
+  const h = harness();
+  const sent = online(h);
+  h.openRecipeDialog();
+  assert.equal(h.els.recipeDialog.open, true);
+  h.submitRecipe({ preventDefault() {} });
+  assert.equal(sent.length, 0);
+  assert.equal(h.els.recipeStatus.dataset.error, 'true', 'empty upload is refused with a message');
+  h.els.recipeUrl.value = 'not a link';
+  h.submitRecipe({ preventDefault() {} });
+  assert.match(h.els.recipeStatus.textContent, /https/);
+  h.els.recipeUrl.value = 'https://recipes.example/noodles';
+  h.submitRecipe({ preventDefault() {} });
+  assert.deepEqual(sent[0], { type: 'recipe_upload', text: '', url: 'https://recipes.example/noodles' });
+  assert.equal(h.els.recipeDialog.open, false);
+  assert.equal(h.els.recipeUrl.value, '');
+  h.handle({ type: 'thinking' });
+  assert.equal(h.els.log.children.at(-1).children[0].textContent, 'Reading your recipe...');
+  h.handle({ type: 'response', message: 'Got it.' });
+  h.openRecipeDialog();
+  h.els.recipeText.value = "Grandma's noodles\nBoil noodles 3 minutes.";
+  h.submitRecipe({ preventDefault() {} });
+  assert.deepEqual(sent[1], { type: 'recipe_upload', text: "Grandma's noodles\nBoil noodles 3 minutes." });
+  assert.equal(h.state.awaitingReply, true);
+}
+
+{
+  // My recipes: list, star, cook again.
+  const h = harness();
+  const sent = online(h);
+  const opening = h.openMyRecipes();
+  assert.equal(h.els.myRecipesDialog.open, true);
+  h.handle({ type: 'settings_result', request_id: sent.at(-1).request_id, recipes: [
+    { id: 7, name: '<b>Nan</b> noodles', favorite: false, steps: 5, serves: 2, time_minutes: 15 }] });
+  await opening;
+  const row = h.els.myRecipesList.children[0];
+  const [star, info, cook] = row.children;
+  assert.equal(info.children[0].textContent, '<b>Nan</b> noodles', 'names are text, not HTML');
+  assert.equal(info.children[1].textContent, '5 steps · serves 2 · 15 min');
+  assert.equal(star.getAttribute('aria-pressed'), 'false');
+  const starring = star.listeners.click();
+  assert.deepEqual([sent.at(-1).type, sent.at(-1).recipe_id, sent.at(-1).favorite], ['recipe_favorite', 7, true]);
+  h.handle({ type: 'settings_result', request_id: sent.at(-1).request_id, recipe_id: 7, favorite: true });
+  await starring;
+  assert.equal(star.getAttribute('aria-pressed'), 'true');
+  cook.listeners.click();
+  assert.deepEqual(sent.at(-1), { type: 'recipe_open', recipe_id: 7 });
+  assert.equal(h.els.myRecipesDialog.open, false);
+  assert.equal(h.els.log.children.at(-1).textContent, 'Cook again: <b>Nan</b> noodles');
+}
+
+{
+  // Settings: language, speech speed, text size and theme stick, and reach the coach.
+  const h = harness();
+  const sent = online(h);
+  h.els.languageSelect.value = 'yue'; h.els.languageSelect.listeners.change();
+  assert.deepEqual(sent.at(-1), { type: 'set_language', language: 'yue' });
+  assert.equal(h.root.lang, 'zh-HK');
+  h.els.rateSelect.value = '1.15'; h.els.rateSelect.listeners.change();
+  click(h.els.textSize, { dataset: { scale: '1.3' } });
+  assert.equal(h.root.style['--scale'], '1.3');
+  h.els.themeSelect.value = 'contrast'; h.els.themeSelect.listeners.change();
+  assert.equal(h.root.dataset.theme, 'contrast');
+  h.els.themeSelect.value = 'auto'; h.els.themeSelect.listeners.change();
+  assert.equal(h.root.dataset.theme, undefined);
+  const stored = JSON.parse(h.storage.get('lh_cooking_settings'));
+  assert.deepEqual([stored.language, stored.rate, stored.scale], ['yue', 1.15, 1.3]);
+  h.state.audioUnlocked = true;
+  h.handle({ type: 'response', message: '- 一\n- 二\n- 三' });
+  const said = h.speech.utterances.at(-1);
+  assert.deepEqual([said.text, said.lang, said.rate], ['清單喺螢幕上。', 'zh-HK', 1.15]);
+  const reloaded = harness({ storage: { lh_cooking_settings: h.storage.get('lh_cooking_settings') } });
+  reloaded.connect();
+  assert.equal(new URL(reloaded.sockets[0].url).searchParams.get('lang'), 'yue', 'the greeting uses the saved language');
+  const broken = harness({ storage: { lh_cooking_settings: '{"language":"xx","rate":9,"scale":"huge","theme":"neon"}' } });
+  assert.deepEqual([broken.settings.language, broken.settings.rate, broken.settings.scale, broken.settings.theme], ['en', 1, 1, 'auto']);
+}
+
+{
+  // The camera is explained before the browser's permission prompt.
+  const h = harness();
+  click(h.els.camOn);
+  assert.equal(h.els.primerDialog.open, true);
+  assert.match(h.els.primerText.textContent, /never saved/);
+  click(h.els.primerCancel);
+  assert.equal(h.storage.get('lh_primer_camera'), undefined, 'Not now asks again next time');
+  click(h.els.camOn);
+  click(h.els.primerContinue);
+  assert.equal(h.storage.get('lh_primer_camera'), 'yes');
+  assert.match(h.els.log.children.at(-1).textContent, /can't open the camera/, 'then the camera is requested');
+}
+
+{
+  // A dropped connection is obvious, and can be retried at once.
+  const h = harness(); h.connect();
+  const socket = h.sockets[0];
+  socket.readyState = 1; socket.onopen();
+  assert.equal(h.els.offlineBanner.hidden, true);
+  socket.readyState = 3; socket.onclose();
+  assert.equal(h.els.offlineBanner.hidden, false);
+  assert.match(h.els.offlineText.textContent, /Reconnecting in 1 s/);
+  click(h.els.retryNow);
+  assert.equal(h.sockets.length, 2, 'Retry now reconnects immediately');
+  h.sockets[1].readyState = 1; h.sockets[1].onopen();
+  assert.equal(h.els.offlineBanner.hidden, true);
 }
 
 {
@@ -350,22 +596,22 @@ async function main() {
 
 {
   const h = harness();
-  const requests = [];
-  h.state.ws = { readyState: 1, send(body) { requests.push(JSON.parse(body)); } };
+  const requests = online(h);
   const opening = h.openProfile();
   assert.equal(h.els.profileDialog.open, true);
   assert.equal(h.els.saveProfile.disabled, true, 'cannot save before the profile loads');
   h.handle({ type: 'settings_result', request_id: requests.at(-1).request_id,
-    profile: { cook_name: 'Sam', skill_level: 'I can boil an egg', dietary: 'Peanut allergy' } });
+    profile: { cook_name: 'Sam', skill_level: 'I can boil an egg', dietary: 'Peanut allergy', notes: 'Pasta: less salt' } });
   await opening;
   assert.equal(h.els.profileName.value, 'Sam');
-  assert.equal(h.els.profileSkill.value, 'I can boil an egg', 'legacy custom experience is retained');
+  assert.equal(h.els.profileSkill.value, 'I can boil an egg', 'custom experience is retained');
   assert.equal(h.els.profileDietary.value, 'Peanut allergy');
+  assert.equal(h.els.profileNotes.value, 'Pasta: less salt');
   h.els.profileName.value = 'Alex';
   const saving = h.saveProfile({ preventDefault() {} });
   assert.equal(requests.at(-1).profile.cook_name, 'Alex');
-  h.handle({ type: 'settings_result', request_id: requests.at(-1).request_id,
-    profile: { cook_name: 'Alex' } });
+  assert.equal(requests.at(-1).profile.notes, 'Pasta: less salt', 'notes are saved with the profile');
+  h.handle({ type: 'settings_result', request_id: requests.at(-1).request_id, profile: { cook_name: 'Alex' } });
   await saving;
   assert.equal(h.els.profileDialog.open, false);
   assert.equal(h.state.requests.size, 0);
@@ -374,8 +620,7 @@ async function main() {
 
 {
   const h = harness();
-  const requests = [];
-  h.state.ws = { readyState: 1, send(body) { requests.push(JSON.parse(body)); } };
+  const requests = online(h);
   h.els.textInput.value = 'My unfinished question';
   const loading = h.loadHistory();
   h.handle({ type: 'settings_result', request_id: requests.at(-1).request_id, next_offset: 20,
@@ -419,7 +664,7 @@ async function main() {
   h.state.visionAvailable = true;
   await h.attachPhoto({ name: 'old.jpg', type: 'image/jpeg', size: 5000 });
   h.els.textInput.value = 'Old dish draft';
-  h.state.timer = { id: 123, key: 'pasta#2', remaining: 60 };
+  h.addTimer('Oven', 600);
   h.state.queue.push('old queued message');
   h.state.awaitingReply = true;
   h.handle({ type: 'delta', text: 'Old dish reply' });
@@ -433,8 +678,8 @@ async function main() {
   assert.equal(h.state.photo, null);
   assert.equal(h.state.queue.length, 0);
   assert.equal(h.state.awaitingReply, false);
-  assert.equal(h.state.timer.id, null);
-  assert.ok(h.clearedIntervals.includes(123));
+  assert.deepEqual(plain(h.state.timers.map(t => t.label)), ['Oven'], 'kitchen timers keep running across a new chat');
+  assert.equal(h.body.dataset.stage, 'choose');
   assert.equal(h.timers.length, 0, 'closing the old socket does not schedule a reconnect');
   first.onmessage({ data: JSON.stringify({ type: 'response', message: 'Late old reply' }) });
   assert.equal(h.els.log.children.length, 0, 'old replies cannot enter the new dish chat');
@@ -457,7 +702,9 @@ async function main() {
   assert.notEqual(h.sockets.at(-1).url, current.url, 'restoring a closed page from browser cache starts fresh');
 }
 
-console.log('PASS: 19 browser behavior scenarios, including step lists, recipe search, formatted replies, list speech, camera frames, watch mode, recipe upload, fresh chats, reconnects, profiles, history, attachments, and speech.');
+console.log('PASS: 25 browser behavior scenarios: stages, checklist, servings, cooking mode, swipes, voice defaults, idea cards, '
+  + 'formatted replies, list speech, camera frames, watch alerts, timers and alarm, recipe upload, my recipes, settings, '
+  + 'permission primers, offline banner, attachments, profile notes, history, new chats and reconnects.');
 }
 
-main();
+main().catch((error) => { console.error(error); process.exit(1); });

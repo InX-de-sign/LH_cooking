@@ -90,6 +90,39 @@ recipe via `visits.recipe_custom_id`. From then on the step card, step
 commands, timers, camera questions and watch mode work exactly as for a
 catalog recipe.
 
+### Mobile workflow
+
+The page follows the cook through four stages, set on `<body data-stage>` from
+the cooking state: **choose** (no recipe) → **prep** (recipe, step `null`) →
+**cook** (step in range) → **done** (step past the end). Each stage shows its
+own panel; Cook makes the step text large, shows Back / Repeat / Next and a
+swipe area (left = next, right = back; tap = talk), floats the camera as a
+thumbnail, and collapses the chat to the last coach message (CSS `:has()`).
+Entering Cook turns on spoken replies, and hands-free if the microphone was
+already allowed; leaving restores the saved settings. Step commands from
+buttons and swipes never attach camera frames.
+
+More model tools feed the phone directly: `suggest_recipes` (idea cards; the
+two names are stored on the visit so "the first one" is unambiguous),
+`start_timer` (named timers), `scale_recipe` (and `servings` on
+`choose_recipe`). Scaling is deterministic (`scaling.py`): ingredient lines
+scale their leading quantity; step text scales only amounts followed by a
+measuring unit, never times or temperatures. Feedback at Done is stored in
+`feedback`, and the note is appended to `profiles.notes`, which appears in
+`[COOK]` on every later turn.
+
+Language (`en`, `yue`, `zh`) is chosen in the menu, sent on connect (`lang`)
+and with each message, stored on the profile, and used for the reply
+instruction, the greeting, watch alerts, browser speech recognition and the
+speaking voice.
+
+Links are fetched by `recipe_import.fetch_recipe_page`: http(s) on standard
+ports only, every resolved address must be public (checked again on each
+redirect), 2 MB cap; schema.org Recipe JSON-LD is used when present. The app
+manifest declares a share target; `/share-target` holds the shared text, link
+or image for ten minutes under a random token and the page opens it in the
+Upload dialog. `sw.js` caches only the page shell and icons.
+
 ### Coach watches
 
 While the camera is on and a step is in progress, the phone sends the latest
