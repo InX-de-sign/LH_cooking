@@ -1,5 +1,7 @@
 # Cooking coach service
-FROM python:3.10.11-slim
+# Pinned to Debian 12 (bookworm): the old 3.10.11-slim tag was bullseye, whose
+# security repo no longer serves the package versions it references (apt 404).
+FROM python:3.10.18-slim-bookworm
 
 WORKDIR /app
 
