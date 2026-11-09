@@ -47,8 +47,9 @@ Already working, tested locally:
   **Start cooking**. Ingredients remain available in a collapsible list during cooking.
   Changing dishes opens the new ingredient preview first. You can also switch
   recipes mid-cook (for example “change the dish to stir-fry shrimp”); the left
-  panel updates and shows the new ingredient preview. The recipe picker can
-  search dish names, common aliases and ingredients. These are curated familiar
+  panel updates and shows the new ingredient preview. Ask for ideas and the
+  coach suggests two dishes that fit your profile; the recipe book search shows
+  up to six matches for dish names, aliases and ingredients. These are curated familiar
   dishes, not a measured ranking of search popularity; new recipes are house
   drafts and have not been kitchen-tested.
 - Built-in API web search integration for recipes and ingredients, with source
@@ -57,8 +58,13 @@ Already working, tested locally:
 - Step timers, hands-free mode, camera preview
 - Paperclip button to the left of the browser chat input: choose a JPEG, PNG or
   WebP photo, preview it, then send it with your question. Remove clears the
-  attachment; use the paperclip again to replace it. Each photo is sent with one message only. Finish the
-  setup questions first. Sending a photo alone asks what is visible in it.
+  attachment; use the paperclip again to replace it. Each photo is sent with one message only.
+  Sending a photo alone asks what is visible in it.
+- **Upload recipe**: paste a recipe or choose a photo/screenshot/text file; the
+  coach breaks it into steps and guides you through it like a built-in recipe.
+- **Live camera checks**: with the camera on, "am I doing this right?" sends the
+  last few seconds of frames with the current step. **Coach watches** checks
+  every ~20 s and speaks up only if something looks wrong, unsafe, or done.
 - Runs with **no keys at all**: replies are then the recipe notes read back
   word for word
 
@@ -120,8 +126,7 @@ Leave `VLM_PROVIDER=none` to run without vision.
 ### Built-in online search
 
 Open **Recipe search** in the Python launcher, enter a recipe or ingredient
-question, then click **Search online**. In the browser coach, finish onboarding
-and ask, for example, **"Search online for a tofu recipe"** or **"Look up cumin
+question, then click **Search online**. In the browser coach, ask, for example, **"Search online for a tofu recipe"** or **"Look up cumin
 substitutes online"**. Unsupported cooking questions can also trigger search
 when local notes are missing. Step commands keep using the saved recipes.
 

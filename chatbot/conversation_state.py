@@ -30,14 +30,18 @@ asking the model to summarise. A voice coach cannot spend a second and a half
 of API latency on bookkeeping.
 
 Name, experience and dietary needs are remembered for the browser's user ID.
-Today's dish and step remain specific to each visit.
+Today's dish and step remain specific to each visit. There is no scripted
+setup questionnaire: the model learns profile details from the conversation
+(update_cook_profile tool) or the Profile dialog.
+
+The active recipe is either a catalog recipe (recipe_id, from knowledge.db) or
+a recipe the cook uploaded (recipe_custom_id, stored here in custom_recipes).
 """
 
 import json
 from contextvars import ContextVar
 import logging
 import os
-import re
 import sqlite3
 import threading
 import time
@@ -55,26 +59,7 @@ SESSION_IDLE_SECONDS = int(os.getenv("SESSION_IDLE_SECONDS", str(3 * 60 * 60)))
 # gap on the same subject should still start a new one.
 EPISODE_IDLE_SECONDS = int(os.getenv("EPISODE_IDLE_SECONDS", str(20 * 60)))
 
-ONBOARDING_STEPS = ("name", "skill", "dietary", "dish", "complete")
-ONBOARDING_QUESTIONS = {
-    "name": "Hi, I'm your cooking coach! What's your name?",
-    "skill": "How comfortable are you in the kitchen: beginner, some experience, or confident?",
-    "dietary": "Any allergies or foods you avoid? Just say none if not.",
-    "dish": "What are you cooking today?",
-}
-SKIP_ANSWERS = frozenset({"skip", "no", "none", "nope", "nothing", "no thanks",
-                          "prefer not to say", "n/a"})
-
-# Normalised skill levels. An answer that matches none of these is kept as the
-# cook said it -- the model can read "I can boil an egg" perfectly well.
-SKILL_LEVELS = (
-    ("beginner", ("beginner", "new", "never", "first time", "not much", "not very",
-                  "learning", "novice", "bad", "terrible", "basic")),
-    ("confident", ("confident", "experienced", "very", "pro", "advanced", "chef",
-                   "a lot", "expert", "good cook")),
-    ("some experience", ("some", "okay", "ok", "bit", "intermediate", "sometimes",
-                         "average", "decent", "fine", "alright")),
-)
+PROFILE_LIMITS = (("cook_name", 80), ("skill_level", 120), ("dietary", 1000))
 
 SCHEMA = """
 PRAGMA journal_mode=WAL;
@@ -149,6 +134,18 @@ CREATE TABLE IF NOT EXISTS delivered_facts (
     delivered_at REAL NOT NULL,
     PRIMARY KEY (session_id, fact_id)
 );
+
+-- Recipes a cook uploaded (pasted text, a photo of a page, a text file),
+-- parsed by the model into the same shape as a catalog recipe.
+CREATE TABLE IF NOT EXISTS custom_recipes (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     TEXT NOT NULL,
+    session_id  TEXT,
+    name        TEXT NOT NULL,
+    data        TEXT NOT NULL,    -- JSON: serves, time_minutes, ingredients, steps
+    created_at  REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_custom_recipes_user ON custom_recipes(user_id, created_at DESC);
 """
 
 
@@ -159,13 +156,14 @@ class Visit:
         "session_id", "user_id", "started_at", "last_active", "language", "turn_count",
         "cook_name", "skill_level", "dietary", "dish", "recipe_id", "recipe_name", "step",
         "onboarding_step", "onboarding_started_at", "onboarding_completed_at",
+        "recipe_custom_id",
     )
 
     def __init__(self, session_id, user_id, started_at, last_active, language, turn_count,
                  cook_name=None, skill_level=None, dietary=None, dish=None,
                  recipe_id=None, recipe_name=None, step=None,
-                 onboarding_step="name", onboarding_started_at=None,
-                 onboarding_completed_at=None):
+                 onboarding_step="complete", onboarding_started_at=None,
+                 onboarding_completed_at=None, recipe_custom_id=None):
         self.session_id = session_id
         self.user_id = user_id
         self.started_at = started_at
@@ -182,19 +180,20 @@ class Visit:
         self.onboarding_step = onboarding_step
         self.onboarding_started_at = onboarding_started_at
         self.onboarding_completed_at = onboarding_completed_at
+        self.recipe_custom_id = recipe_custom_id
 
     @property
     def minutes_so_far(self) -> int:
         return int((time.time() - self.started_at) / 60)
 
     @property
-    def onboarding_complete(self) -> bool:
-        return self.onboarding_step == "complete"
+    def has_recipe(self) -> bool:
+        return self.recipe_id is not None or self.recipe_custom_id is not None
 
     def __repr__(self):
+        kind = "custom" if self.recipe_custom_id is not None else "catalog"
         return (f"Visit({self.session_id} user={self.user_id} turns={self.turn_count} "
-                f"recipe={self.recipe_name!r} step={self.step} "
-                f"onboarding={self.onboarding_step})")
+                f"recipe={self.recipe_name!r} ({kind}) step={self.step})")
 
 
 class Episode:
@@ -264,6 +263,7 @@ class ConversationStore:
                 "step": "INTEGER", "chat_id": "TEXT",
                 "onboarding_step": "TEXT NOT NULL DEFAULT 'name'",
                 "onboarding_started_at": "REAL", "onboarding_completed_at": "REAL",
+                "recipe_custom_id": "INTEGER",
             }),
             ("turns", {"vision": "TEXT"}),
         ):
@@ -288,7 +288,7 @@ class ConversationStore:
             row["language"], row["turn_count"], row["cook_name"], row["skill_level"],
             row["dietary"], row["dish"], row["recipe_id"], row["recipe_name"], row["step"],
             row["onboarding_step"], row["onboarding_started_at"],
-            row["onboarding_completed_at"],
+            row["onboarding_completed_at"], row["recipe_custom_id"],
         )
 
     def bind_chat(self, chat_id):
@@ -319,7 +319,7 @@ class ConversationStore:
                 "INSERT INTO visits (session_id, user_id, started_at, last_active, language,"
                 " turn_count, onboarding_step, cook_name, skill_level, dietary, chat_id)"
                 " VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)",
-                (session_id, user_id, now, now, language or "en", "dish" if profile else "name",
+                (session_id, user_id, now, now, language or "en", "complete",
                  profile["cook_name"] if profile else None, profile["skill_level"] if profile else None,
                  profile["dietary"] if profile else None, chat_id),
             )
@@ -344,16 +344,46 @@ class ConversationStore:
             self._conn.commit()
 
     # -- the recipe being cooked -------------------------------------------
-    def set_recipe(self, visit: Visit, recipe_id: Optional[int], recipe_name: Optional[str]):
-        """Start (or clear, with None) the recipe for this session, at no step."""
-        self._update_visit(visit.session_id, recipe_id=recipe_id,
+    def set_recipe(self, visit: Visit, recipe_id: Optional[int], recipe_name: Optional[str],
+                   custom_id: Optional[int] = None):
+        """Start (or clear, with None) the recipe for this session, at no step.
+
+        Pass ``recipe_id`` for a catalog recipe or ``custom_id`` for an
+        uploaded one; never both.
+        """
+        if recipe_id is not None and custom_id is not None:
+            raise ValueError("A visit cooks either a catalog or an uploaded recipe, not both.")
+        self._update_visit(visit.session_id, recipe_id=recipe_id, recipe_custom_id=custom_id,
                            recipe_name=recipe_name, step=None)
-        visit.recipe_id, visit.recipe_name, visit.step = recipe_id, recipe_name, None
+        visit.recipe_id, visit.recipe_custom_id = recipe_id, custom_id
+        visit.recipe_name, visit.step = recipe_name, None
         logger.info("Visit %s now cooking %r", visit.session_id, recipe_name)
 
     def set_step(self, visit: Visit, step: Optional[int]):
         self._update_visit(visit.session_id, step=step)
         visit.step = step
+
+    # -- uploaded recipes ---------------------------------------------------
+    def save_custom_recipe(self, visit: Visit, recipe: Dict[str, Any]) -> int:
+        """Store a parsed upload and return its id. ``recipe`` has a ``name``."""
+        data = {key: value for key, value in recipe.items() if key != "name"}
+        with self._lock:
+            cur = self._conn.execute(
+                "INSERT INTO custom_recipes (user_id, session_id, name, data, created_at)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (visit.user_id, visit.session_id, recipe["name"], json.dumps(data), time.time()))
+            self._conn.commit()
+            return cur.lastrowid
+
+    def custom_recipe(self, custom_id: int, user_id: str) -> Optional[Dict[str, Any]]:
+        """An uploaded recipe, only for the browser that uploaded it."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT id, name, data FROM custom_recipes WHERE id = ? AND user_id = ?",
+                (custom_id, user_id)).fetchone()
+        if row is None:
+            return None
+        return {"id": row["id"], "name": row["name"], **json.loads(row["data"])}
 
     # -- visit profile -----------------------------------------------------
     def get_profile(self, user_id: str) -> Dict[str, Any]:
@@ -361,24 +391,40 @@ class ConversationStore:
         return {"cook_name": visit.cook_name or "", "skill_level": visit.skill_level or "",
                 "dietary": visit.dietary or ""}
 
-    def save_profile(self, user_id: str, values: dict) -> Dict[str, Any]:
+    @staticmethod
+    def _clean_profile(values: dict, partial: bool) -> Dict[str, Optional[str]]:
         if not isinstance(values, dict):
             raise ValueError("Provide a profile with name, experience and dietary needs.")
         clean = {}
-        for field, limit in (("cook_name", 80), ("skill_level", 120), ("dietary", 1000)):
+        for field, limit in PROFILE_LIMITS:
+            if partial and values.get(field) is None:
+                continue
             value = values.get(field, "")
             if not isinstance(value, str) or len(value) > limit:
                 raise ValueError(f"{field.replace('_', ' ').capitalize()} must be text of at most {limit} characters.")
             clean[field] = " ".join(value.split()) or None
+        return clean
+
+    def save_profile(self, user_id: str, values: dict) -> Dict[str, Any]:
+        """Replace the whole profile (the Profile dialog)."""
+        return self._store_profile(user_id, self._clean_profile(values, partial=False))
+
+    def update_profile(self, user_id: str, values: dict) -> Dict[str, Any]:
+        """Change only the fields given (the model's update_cook_profile tool)."""
+        current = self.get_profile(user_id)
+        merged = {key: current[key] or None for key, _ in PROFILE_LIMITS}
+        merged.update(self._clean_profile(values, partial=True))
+        return self._store_profile(user_id, merged)
+
+    def _store_profile(self, user_id: str, clean: Dict[str, Optional[str]]) -> Dict[str, Any]:
         visit = self.current_visit(user_id)
         now = time.time()
         with self._lock:
             self._write_profile(user_id, clean, now)
             self._conn.execute(
-                "UPDATE visits SET cook_name = ?, skill_level = ?, dietary = ?, last_active = ?, "
-                "onboarding_step = ?, onboarding_started_at = COALESCE(onboarding_started_at, ?) WHERE session_id = ?",
-                (clean["cook_name"], clean["skill_level"], clean["dietary"], now,
-                 "complete" if visit.onboarding_complete else "dish", now, visit.session_id))
+                "UPDATE visits SET cook_name = ?, skill_level = ?, dietary = ?, last_active = ?"
+                " WHERE session_id = ?",
+                (clean["cook_name"], clean["skill_level"], clean["dietary"], now, visit.session_id))
             self._conn.commit()
         return {key: value or "" for key, value in clean.items()}
 
@@ -389,102 +435,6 @@ class ConversationStore:
             "ON CONFLICT(user_id) DO UPDATE SET cook_name = excluded.cook_name, skill_level = excluded.skill_level, "
             "dietary = excluded.dietary, updated_at = excluded.updated_at",
             (user_id, values["cook_name"], values["skill_level"], values["dietary"], now))
-
-    @staticmethod
-    def _clean_answer(value: str, maximum_length: int) -> str:
-        return " ".join(str(value or "").split())[:maximum_length]
-
-    @classmethod
-    def _is_skip_answer(cls, value: str) -> bool:
-        return re.sub(r"[^\w\s/]", "", cls._clean_answer(value, 80).lower()) in SKIP_ANSWERS
-
-    @staticmethod
-    def _skill_from_answer(value: str) -> str:
-        lowered = value.lower()
-        for level, markers in SKILL_LEVELS:
-            if any(re.search(rf"\b{re.escape(m)}\b", lowered) for m in markers):
-                return level
-        return value
-
-    def start_visit(self, user_id: str) -> Optional[str]:
-        """Create or resume a visit and return its next onboarding question."""
-        visit = self.current_visit(user_id)
-        if visit.onboarding_complete:
-            return None
-
-        now = time.time()
-        with self._lock:
-            self._conn.execute(
-                "UPDATE visits SET onboarding_started_at = COALESCE(onboarding_started_at, ?),"
-                " last_active = ? WHERE session_id = ?",
-                (now, now, visit.session_id),
-            )
-            self._conn.commit()
-        return ONBOARDING_QUESTIONS[visit.onboarding_step]
-
-    def onboarding_state(self, user_id: str) -> Dict[str, Any]:
-        """Return non-sensitive state that clients use to guide the onboarding UI."""
-        visit = self.current_visit(user_id)
-        return {
-            "complete": visit.onboarding_complete,
-            "step": visit.onboarding_step,
-            "question": None if visit.onboarding_complete
-            else ONBOARDING_QUESTIONS[visit.onboarding_step],
-        }
-
-    def submit_onboarding_answer(self, user_id: str, answer: str) -> Dict[str, Any]:
-        """Store one answer and return the next question without invoking the model.
-
-        Returns ``complete`` (onboarding finished, before or by this answer),
-        ``message`` (what to say next, or None when the answer is a normal
-        question for the coach) and ``just_completed`` (this answer finished
-        it, so the caller can resolve the dish and greet).
-        """
-        visit = self.current_visit(user_id)
-        if visit.onboarding_complete:
-            return {"complete": True, "message": None, "just_completed": False}
-        if visit.onboarding_started_at is None:
-            return {"complete": False, "message": self.start_visit(user_id),
-                    "just_completed": False}
-
-        clean = self._clean_answer(answer, 250)
-        step = visit.onboarding_step
-        if not clean:
-            return {"complete": False, "message": ONBOARDING_QUESTIONS[step],
-                    "just_completed": False}
-
-        updates: Dict[str, Any] = {}
-        if step == "name":
-            updates["cook_name"] = None if self._is_skip_answer(clean) else clean
-            next_step = "skill"
-        elif step == "skill":
-            updates["skill_level"] = None if self._is_skip_answer(clean) \
-                else self._skill_from_answer(clean)
-            next_step = "dietary"
-        elif step == "dietary":
-            updates["dietary"] = None if self._is_skip_answer(clean) else clean
-            next_step = "dish"
-        else:  # dish
-            updates["dish"] = None if self._is_skip_answer(clean) else clean
-            next_step = "complete"
-
-        now = time.time()
-        updates["onboarding_step"] = next_step
-        updates["last_active"] = now
-        if next_step == "complete":
-            updates["onboarding_completed_at"] = now
-        self._update_visit(visit.session_id, **updates)
-        if next_step in ("dish", "complete"):
-            refreshed = self.current_visit(user_id)
-            with self._lock:
-                self._write_profile(user_id, {"cook_name": refreshed.cook_name,
-                    "skill_level": refreshed.skill_level, "dietary": refreshed.dietary}, now)
-                self._conn.commit()
-
-        if next_step != "complete":
-            return {"complete": False, "message": ONBOARDING_QUESTIONS[next_step],
-                    "just_completed": False}
-        return {"complete": True, "message": None, "just_completed": True}
 
     # -- history ----------------------------------------------------------
     def history(self, user_id: str, offset: int = 0, limit: int = 20) -> Dict[str, Any]:

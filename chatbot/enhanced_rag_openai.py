@@ -13,7 +13,6 @@ notes. That is enough to test the phone app, navigation and retrieval before
 anyone picks a model.
 """
 
-import asyncio
 import logging
 import os
 import re
@@ -88,46 +87,29 @@ class EnhancedRAGWithOpenAI:
             return self._offline_fallback(query, context)
         parts = []
         try:
-            if on_delta is not None:
-                async for delta in self.streaming_openai.stream_response(query, context):
-                    parts.append(delta)
+            async for delta in self.streaming_openai.stream_response(query, context):
+                parts.append(delta)
+                if on_delta is not None:
                     await on_delta(delta)
-                reply = "".join(parts).strip()
-                return reply or self._offline_fallback(query, context, failed=True)
-
-            from streaming_openai import DEFAULT_PERSONA
-            prompts = self.streaming_openai.system_prompts
-            system_prompt = prompts.get(context.get('query_type', DEFAULT_PERSONA),
-                                        prompts[DEFAULT_PERSONA])
-            user_prompt = self.streaming_openai._build_short_prompt(query, context)
-
-            response = await self._call_openai_api(system_prompt, user_prompt)
-            return response or self._offline_fallback(query, context, failed=True)
+            reply = "".join(parts).strip()
+            return reply or self._offline_fallback(query, context, failed=True)
         except Exception as e:
             logger.error(f"Query processing error: {e}")
-            if parts:
+            if parts and on_delta is not None:
                 # Do not replace words the cook has already heard with a new answer.
                 suffix = " My connection was interrupted. Please ask me to repeat that."
                 await on_delta(suffix)
                 return "".join(parts).strip() + suffix
             return self._offline_fallback(query, context, failed=True)
 
-    async def _call_openai_api(self, system_prompt: str, user_prompt: str) -> Optional[str]:
-        try:
-            response = await asyncio.to_thread(
-                self.openai_client.chat.completions.create,
-                model=self.config.deployment_name,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                **self.config.completion_kwargs()
-            )
-            if response.choices and response.choices[0].message.content:
-                return response.choices[0].message.content.strip()
+    async def complete(self, messages, budget: int = 800, json_mode: bool = False) -> Optional[str]:
+        """One non-streamed call (greetings, camera checks). None on failure."""
+        if not self.available:
             return None
+        try:
+            return await self.streaming_openai.complete(messages, budget, json_mode) or None
         except Exception as e:
-            logger.error(f"Chat model call failed: {e}")
+            logger.error(f"Chat model call failed: {type(e).__name__}: {e}")
             return None
 
     # -- notes only -----------------------------------------------------------
@@ -144,13 +126,13 @@ class EnhancedRAGWithOpenAI:
             rendered = context.get('prompt_context') or ""
             if step:
                 return step[0].upper() + step[1:]
-            if "All " in rendered and "steps are finished" in rendered:
+            if "steps are finished" in rendered:
                 return "That was the last step. Enjoy your meal!"
             if "No recipe chosen yet" in rendered:
                 return "Which dish are you making? Tell me and we'll go step by step."
 
         if context.get('social'):
-            return "Happy to help. Say next when you're ready for the next step."
+            return "Happy to help. Tell me what you'd like to cook, or say next for the next step."
 
         # "Is this done?" mid-recipe: the current step's own cue beats any
         # doneness fact retrieval found elsewhere in the recipe.

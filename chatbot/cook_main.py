@@ -1,39 +1,80 @@
-# cook_main.py - Orchestrator for the voice cooking coach
+# cook_main.py - Orchestrator for the cooking coach
 """
-Ties the pieces together for one turn of conversation:
+Ties the pieces together. The chat model writes every reply; this module
+gathers its context, gives it tools, and keeps the session state.
 
-    knowledge_base      what the coach knows: recipes, steps, glossary facts
-    conversation_state  visit -> episode -> turn, the recipe/step pointer,
-                        and the delivered-fact ledger
-    vision              what the phone camera sees, via a pluggable VLM
+    knowledge_base      catalog recipes, steps and glossary facts
+    conversation_state  visit -> episode -> turn, recipe/step pointer, profile,
+                        uploaded recipes
     context_builder     resolves the turn and renders the layered prompt
-    streaming_openai    the personas and the model call
+    streaming_openai    system prompt, tool loop, streaming
+    vision              camera frames: inline to the chat model, or a separate VLM
+    recipe_import       uploaded recipe -> structured steps
 
 One turn:
 
-    onboarding answer?  -> store it, ask the next question (no model call)
-    needs the camera?   -> VLM observation from the attached frame
-    build context       -> recipe step, subject, facts, observation
-    pick a persona      -> step | safety | help
-    model call          -> reply
+    short step command? -> move the pointer (instant, no tool round)
+    camera on?          -> attach the latest frames (or a VLM observation)
+    build context       -> profile, recipe + all steps, catalog, facts
+    model call          -> streamed reply; tools may choose a recipe, move the
+                           step, stop, or update the profile
     record              -> turn, episode facets, delivered facts
+
+Other entry points: greet() for a new chat, import_recipe() for an upload,
+watch() for the periodic camera check while a step is in progress.
 """
 
 import asyncio
+import difflib
+import json
 import logging
-from typing import Any, Dict, Optional
+import os
+import re
+from typing import Any, Dict, List, Optional
 
 from context_builder import ContextBuilder, cooking_state, detect_navigation
 from conversation_state import ConversationStore
 from knowledge_base import KnowledgeBase, classify_facet
-from vision import VisionProvider, VisionRequest, load_vision_provider, wants_vision
+from recipe_import import RecipeImportError, parse_recipe
+from vision import VisionProvider, VisionRequest, load_vision_provider, to_data_url, wants_vision
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+HISTORY_TURNS = 6
+WATCH_INTERVAL_SECONDS = int(os.getenv("WATCH_INTERVAL_SECONDS", "20"))
+
+GREETING_FALLBACK = ("Hi! I'm your cooking coach. Tell me what you'd like to cook, "
+                     "ask me for ideas, or upload your own recipe.")
+
+WATCH_PROMPT = """You are watching a home cook through their phone camera while \
+they follow a recipe. You get the step they are on and the latest camera frames \
+(oldest first). Decide whether to speak up.
+
+Return JSON only:
+{"status": "ok" | "unclear" | "issue" | "hazard" | "step_done",
+ "message": "<what to say to the cook, or empty>",
+ "seen": "<one short sentence describing what is visible>"}
+
+- "hazard": something unsafe is visible (smoke, flames, boiling over, a knife near
+  the counter edge, raw meat touching ready-to-eat food, fingers near a blade).
+  message: one short, calm, urgent instruction.
+- "issue": the cook is clearly doing the current step wrong, or the food is going
+  wrong (burning, wrong ingredient, heat clearly too high, pieces far too big).
+  message: one or two short sentences: what is wrong and what to do.
+- "step_done": the frames clearly show the step's "done when" result.
+  message: one short sentence saying it looks done and they can say next.
+- "ok": normal progress. "unclear": food not visible, dark or blurry frames.
+  message empty for both.
+Only speak up when you are confident; when in doubt use "ok" or "unclear".
+Do not repeat the previous alert unless the problem is clearly still there.
+A picture cannot show temperature or taste; never claim it does."""
+
+WATCH_STATUSES = ("ok", "unclear", "issue", "hazard", "step_done")
+
 
 class CookingAssistant:
-    """Local recipe knowledge + an optional chat model + an optional VLM."""
+    """Local recipe knowledge + the chat model + camera frames."""
 
     def __init__(self, vision: VisionProvider = None):
         logger.info("Initializing cooking coach...")
@@ -50,141 +91,253 @@ class CookingAssistant:
                     self.knowledge.fact_count(), len(self.knowledge.recipes()))
 
     # -- session ------------------------------------------------------------
-    def start_visit(self, user_id: str) -> str:
-        """The first thing to say when the phone connects."""
-        question = self.store.start_visit(user_id)
-        if question:
-            return question
-        visit = self.store.current_visit(user_id)
-        name = f", {visit.cook_name}" if visit.cook_name else ""
-        if visit.recipe_id is None:
-            return f"Welcome back{name}! What are we cooking?"
-        total = len(self.knowledge.steps(visit.recipe_id))
-        if visit.step is None:
-            return f"Welcome back{name}! {self._recipe_preview(visit.recipe_id, visit.recipe_name)}"
-        if visit.step >= total:
-            return f"Welcome back{name}! You finished {visit.recipe_name}."
-        return (f"Welcome back{name}! You're on step {visit.step + 1} of {total} "
-                f"of {visit.recipe_name}. Say repeat to hear it again.")
-
-    def onboarding_state(self, user_id: str) -> Dict[str, Any]:
-        return self.store.onboarding_state(user_id)
-
     def cooking_state(self, user_id: str) -> Dict[str, Any]:
         visit = self.store.current_visit(user_id)
-        steps = self.knowledge.steps(visit.recipe_id) if visit.recipe_id else []
-        state = cooking_state(visit.recipe_name, visit.step, steps)
-        recipe = self.knowledge.recipe_details(visit.recipe_id) if visit.recipe_id else {}
-        state.update(ingredients=recipe.get("ingredients", []), serves=recipe.get("serves"),
-                     time_minutes=recipe.get("time_minutes"))
-        return state
+        return cooking_state(self.context.active_recipe(visit), visit.step)
 
-    def _recipe_preview(self, recipe_id: int, recipe_name: str) -> str:
-        ingredients = self.knowledge.ingredients_text(recipe_id) or ""
-        return (f"Let's make {recipe_name}.\n\n{ingredients}\n\n"
-                "Gather these ingredients, then say start or tap Start cooking for step 1.")
+    @property
+    def watch_available(self) -> bool:
+        return bool(self.vision.available and self.vision.inline and self.model.available)
 
-    def _finish_onboarding(self, user_id: str) -> str:
-        """Resolve 'what are you cooking today?' to a recipe, and greet."""
+    async def greet(self, user_id: str) -> Optional[str]:
+        """The opening message of a new chat, or None if this chat has started."""
         visit = self.store.current_visit(user_id)
-        name = f", {visit.cook_name}" if visit.cook_name else ""
-        recipes = self.knowledge.recipes()
-        available = ", ".join(r["name"] for r in recipes)
-        recipe = self.knowledge.resolve_recipe(visit.dish) if visit.dish else None
+        if visit.turn_count:
+            return None
+        recipe = self.context.active_recipe(visit)
+        reply = None
+        if self.model.available:
+            prompt = "\n".join([
+                "[COOK]", *self.context.cook_lines(visit), "",
+                "[RECIPE]", *self.context.recipe_lines(visit, recipe), "",
+                "The cook has just opened the app. Greet them warmly in one or two short "
+                "sentences (by name if you know it). Invite them to tell you what they'd "
+                "like to cook, ask you for ideas, or upload their own recipe. If a recipe "
+                "is in progress, say where they are instead. Do not list recipes."])
+            reply = await self.model.complete([
+                {"role": "system", "content": self.model.streaming_openai.system_prompt},
+                {"role": "user", "content": prompt}], budget=600)
+        reply = reply or GREETING_FALLBACK
+        await asyncio.to_thread(self.store.record_turn, visit, None, None, reply,
+                                source="greeting" if self.model.available else "fallback")
+        return reply
 
-        if recipe is not None:
-            self.store.set_recipe(visit, recipe.id, recipe.name)
-            return f"Great{name}! {self._recipe_preview(recipe.id, recipe.name)}"
-        if visit.dish:
-            return (f"Thanks{name}! I don't have a recipe for {visit.dish} yet, but I can "
-                    f"still answer cooking questions. Recipes I can walk you through: "
-                    f"{available}.")
-        return (f"Thanks{name}! Recipes I can walk you through: {available}. "
-                f"Which one would you like?")
+    # -- tools the model can call ---------------------------------------------
+    def run_tool(self, user_id: str, name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+        visit = self.store.current_visit(user_id)
+        if name == "choose_recipe":
+            wanted = str(args.get("recipe_name") or "")
+            subject = self.knowledge.resolve_recipe(wanted)
+            if subject is None:
+                names = [r["name"] for r in self.knowledge.recipes()]
+                close = difflib.get_close_matches(wanted, names, n=2, cutoff=0.3)
+                return {"ok": False, "error": f"{wanted!r} is not in the catalog.",
+                        "closest_catalog_recipes": close}
+            self.store.set_recipe(visit, subject.id, subject.name)
+            recipe = self.context.active_recipe(visit)
+            return {"ok": True, "recipe": recipe.name, "serves": recipe.serves,
+                    "time_minutes": recipe.time_minutes, "ingredients": recipe.ingredients,
+                    "steps": [s["text"] for s in recipe.steps],
+                    "status": "Loaded, not started. Show the ingredients as bullets and a "
+                              "short numbered overview of the steps, then ask if they're ready. "
+                              "When they say they're ready, call go_to_step(1)."}
+        if name == "go_to_step":
+            recipe = self.context.active_recipe(visit)
+            if recipe is None:
+                return {"ok": False, "error": "No recipe is active. Choose one first."}
+            try:
+                number = int(args.get("step"))
+            except (TypeError, ValueError):
+                return {"ok": False, "error": "step must be a whole number."}
+            total = len(recipe.steps)
+            if number <= 0:
+                self.store.set_step(visit, None)
+                return {"ok": True, "step": 0, "status": "Back at the ingredient overview."}
+            if number > total:
+                self.store.set_step(visit, total)
+                return {"ok": True, "step": total, "status": "All steps are finished."}
+            self.store.set_step(visit, number - 1)
+            step = recipe.steps[number - 1]
+            return {"ok": True, "step": number, "of": total, "text": step["text"],
+                    "done_when": step.get("done_when"), "timer_seconds": step.get("timer_seconds")}
+        if name == "stop_recipe":
+            self.store.set_recipe(visit, None, None)
+            return {"ok": True, "status": "No recipe is active now."}
+        if name == "update_cook_profile":
+            values = {"cook_name": args.get("name"), "skill_level": args.get("skill_level"),
+                      "dietary": args.get("dietary")}
+            values = {k: str(v)[:limit] for (k, v), limit in
+                      zip(values.items(), (80, 120, 1000)) if v not in (None, "")}
+            if not values:
+                return {"ok": False, "error": "Nothing to update."}
+            return {"ok": True, "profile": self.store.update_profile(user_id, values)}
+        return {"ok": False, "error": f"Unknown tool {name}."}
 
     # -- one turn -----------------------------------------------------------
     async def process_message(self, message: str, user_id: str = "default_user",
-                              image: Optional[tuple] = None, on_delta=None,
-                              image_source: str = "camera") -> Dict[str, Any]:
-        """Answer one utterance. `image` is (bytes, mime) from the phone, or None.
+                              frames: Optional[List[tuple]] = None,
+                              upload: Optional[tuple] = None, on_delta=None,
+                              display_text: str = None, allow_nav: bool = True) -> Dict[str, Any]:
+        """Answer one message.
 
-        Returns the reply plus the state the phone needs to update its screen.
+        ``frames`` are the latest camera frames as (bytes, mime), oldest first;
+        ``upload`` is a photo the cook attached on purpose. Returns the reply
+        plus the state the phone needs to update its screen.
         """
         try:
-            onboarding = await asyncio.to_thread(
-                self.store.submit_onboarding_answer, user_id, message)
-            if onboarding["just_completed"]:
-                reply = await asyncio.to_thread(self._finish_onboarding, user_id)
-                return self._result(user_id, reply)
-            if onboarding["message"] is not None:
-                return self._result(user_id, onboarding["message"])
+            visit = self.store.current_visit(user_id)
+            frames = frames or []
+            nav_command = allow_nav and visit.has_recipe and detect_navigation(message)
 
-            uploaded_photo = image_source == "upload" and image is not None
-            observation = await self._look(user_id, message, image, force=uploaded_photo)
-            if uploaded_photo and observation is None:
-                return self._result(user_id, "I couldn't analyze the uploaded photo. Check your vision model settings and try again.")
+            if upload is not None and not self.vision.available:
+                return self._result(user_id, "Photo analysis is unavailable: no vision model "
+                                             "is set up. Ask your question without the photo.")
 
-            previous_recipe_id = self.store.current_visit(user_id).recipe_id
-            turn = await asyncio.to_thread(self.context.build, user_id, message, observation)
+            # Notes-only mode has no tools; still let a named dish start.
+            if not self.model.available and not visit.has_recipe:
+                named = self.knowledge.resolve_recipe(message)
+                if named is not None:
+                    self.store.set_recipe(visit, named.id, named.name)
+
+            images, observation = [], None
+            if self.vision.available and (upload is not None or (frames and not nav_command)):
+                if self.vision.inline:
+                    if upload is not None:
+                        images = [(to_data_url(*upload), "auto")]
+                    else:
+                        images = [(to_data_url(*frame), "low") for frame in frames]
+                else:
+                    observation = await self._look(user_id, message, upload or frames[-1],
+                                                   force=upload is not None)
+                    if upload is not None and observation is None:
+                        return self._result(user_id, "I couldn't analyze the uploaded photo. "
+                                                     "Check your vision model settings and try again.")
+
+            turn = await asyncio.to_thread(self.context.build, user_id, message, observation,
+                                           len(images), allow_nav)
             logger.info("Resolved %r", turn)
 
-            if turn.recipe and turn.recipe.id != previous_recipe_id and not uploaded_photo:
-                reply = self._recipe_preview(turn.recipe.id, turn.recipe.name)
-                await asyncio.to_thread(self.context.record, turn, reply, source="recipe-notes")
-                return self._result(user_id, reply, observation=observation)
+            history = await asyncio.to_thread(self.store.recent_turns,
+                                              turn.visit.session_id, HISTORY_TURNS)
+
+            async def tool_handler(name, args):
+                return await asyncio.to_thread(self.run_tool, user_id, name, args)
 
             context = {
                 "prompt_context": turn.text,
                 "language": turn.language,
-                "query_type": self._persona(turn),
+                "query_type": "step" if turn.nav else "help",
                 "social": turn.social,
                 "facet": turn.facet,
+                "history": history,
+                "images": images,
+                "tools": None if turn.nav else _tools(),
+                "tool_handler": tool_handler,
                 "missing_notes": not turn.facts and not turn.observation,
             }
             reply = await self.model.process_query_with_openai(
                 query=message, context=context, user_id=user_id, on_delta=on_delta)
 
-            await asyncio.to_thread(self.context.record, turn, reply, source="model")
-            return self._result(user_id, reply, cooking=turn.cooking_state(),
-                                observation=observation, sources=context.get("sources"))
+            vision_note = "Looked at the uploaded photo." if upload is not None and images else None
+            await asyncio.to_thread(self.context.record, turn, reply, None, "model",
+                                    display_text, vision_note)
+            return self._result(user_id, reply, observation=observation,
+                                sources=context.get("sources"),
+                                looked=len(images) if images and upload is None else 0)
 
         except Exception as exc:
             logger.error("Processing error: %s", exc, exc_info=True)
             return self._result(user_id, "Sorry, something went wrong on my side. "
                                          "Could you say that again?")
 
-    async def _look(self, user_id: str, message: str, image: Optional[tuple], force=False):
-        """Ask the VLM about the attached frame, if this question needs eyes."""
-        if image is None or not self.vision.available:
+    async def _look(self, user_id: str, message: str, image: tuple, force=False):
+        """Ask a separate VLM about one frame, if this question needs eyes."""
+        if not self.vision.available:
             return None
         if not force and (detect_navigation(message) or not wants_vision(
                 message, classify_facet(message), self.vision.config.mode)):
             return None
-
         visit = self.store.current_visit(user_id)
+        recipe = self.context.active_recipe(visit)
         request = VisionRequest(question=message, recipe=visit.recipe_name)
-        if visit.recipe_id is not None and visit.step is not None:
-            steps = self.knowledge.steps(visit.recipe_id)
-            if visit.step < len(steps):
-                request.step_text = steps[visit.step]["text"]
-                request.done_when = steps[visit.step].get("done_when")
+        if recipe is not None and visit.step is not None and visit.step < len(recipe.steps):
+            request.step_text = recipe.steps[visit.step]["text"]
+            request.done_when = recipe.steps[visit.step].get("done_when")
         raw, mime = image
         return await self.vision.observe(raw, mime, request)
 
-    @staticmethod
-    def _persona(turn) -> str:
-        if turn.nav:
-            return "step"
-        if turn.facet == "safety" or (turn.observation and turn.observation.hazards):
-            return "safety"
-        return "help"
+    # -- uploaded recipes -------------------------------------------------------
+    async def import_recipe(self, user_id: str, text: str = "", image: Optional[tuple] = None,
+                            on_delta=None) -> Dict[str, Any]:
+        """Parse an uploaded recipe, make it the active one, and present it."""
+        if not self.model.available:
+            return self._result(user_id, "Reading an uploaded recipe needs the AI model. "
+                                         "Add your API key in the launcher's settings.")
+        try:
+            recipe = await parse_recipe(self.model.streaming_openai.client, self.model.config,
+                                        text, image)
+        except RecipeImportError as exc:
+            return self._result(user_id, str(exc))
+        visit = self.store.current_visit(user_id)
+        custom_id = await asyncio.to_thread(self.store.save_custom_recipe, visit, recipe)
+        await asyncio.to_thread(self.store.set_recipe, visit, None, recipe["name"], custom_id)
+        logger.info("Imported %r: %d steps", recipe["name"], len(recipe["steps"]))
+        return await self.process_message(
+            f"I just uploaded my own recipe for {recipe['name']}. Give me the overview.",
+            user_id, on_delta=on_delta, display_text=f"Uploaded recipe: {recipe['name']}",
+            allow_nav=False)
 
-    def _result(self, user_id, reply, cooking=None, observation=None, sources=None) -> Dict[str, Any]:
+    # -- camera watch -------------------------------------------------------------
+    async def watch(self, user_id: str, frames: List[tuple],
+                    last_alert: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Look at the latest frames against the current step; maybe speak up.
+
+        Returns None when there is nothing to check (no step in progress, no
+        inline vision), else {"status", "message", "step"}.
+        """
+        if not self.watch_available or not frames:
+            return None
+        visit = self.store.current_visit(user_id)
+        recipe = self.context.active_recipe(visit)
+        if recipe is None or visit.step is None or visit.step >= len(recipe.steps):
+            return None
+        step = recipe.steps[visit.step]
+        lines = [f"Recipe: {recipe.name}.",
+                 f"Current step {visit.step + 1} of {len(recipe.steps)}: {step['text']}"]
+        if step.get("done_when"):
+            lines.append(f"Done when: {step['done_when']}")
+        if visit.step + 1 < len(recipe.steps):
+            lines.append(f"Next step: {recipe.steps[visit.step + 1]['text']}")
+        if visit.dietary:
+            lines.append(f"Allergies or foods they avoid: {visit.dietary}")
+        lines.append(f"Previous alert: {last_alert}" if last_alert else "Previous alert: none.")
+        content = [{"type": "text", "text": "\n".join(lines)}] + [
+            {"type": "image_url", "image_url": {"url": to_data_url(*f), "detail": "low"}}
+            for f in frames]
+        reply = await self.model.complete([{"role": "system", "content": WATCH_PROMPT},
+                                           {"role": "user", "content": content}],
+                                          budget=700, json_mode=True)
+        data = _json_object(reply)
+        status = str(data.get("status") or "unclear").lower()
+        status = status if status in WATCH_STATUSES else "unclear"
+        message = " ".join(str(data.get("message") or "").split())[:400]
+        seen = " ".join(str(data.get("seen") or "").split())[:300] or None
+        logger.info("Watch %s (step %d): %s", status, visit.step + 1, seen)
+        if status in ("issue", "hazard", "step_done") and message:
+            await asyncio.to_thread(self.store.record_turn, visit, None, None, message,
+                                    intent=status, source="camera-watch", vision=seen)
+            return {"status": status, "message": message, "step": visit.step}
+        return {"status": status, "message": "", "step": visit.step}
+
+    # -- results -------------------------------------------------------------------
+    def _result(self, user_id, reply, observation=None, sources=None, looked=0) -> Dict[str, Any]:
+        vision = observation.to_dict() if observation else None
+        if vision is None and looked:
+            vision = {"summary": None, "frames": looked, "hazards": []}
         return {
             "message": reply,
-            "profile": self.store.onboarding_state(user_id),
-            "cooking": {**self.cooking_state(user_id), **(cooking or {})},
-            "vision": observation.to_dict() if observation else None,
+            "cooking": self.cooking_state(user_id),
+            "vision": vision,
             "sources": sources or [],
         }
 
@@ -193,42 +346,35 @@ class CookingAssistant:
         return self.store.visit_summary(user_id)
 
 
-async def test_cooking_session():
-    """Walk a cook through onboarding and part of a recipe, printing each reply."""
-    print("Testing the cooking coach")
-    print("=" * 60)
+def _tools():
+    from streaming_openai import TOOLS
+    return TOOLS
 
+
+def _json_object(text: Optional[str]) -> Dict[str, Any]:
+    match = re.search(r"\{.*\}", text or "", re.S)
+    if not match:
+        return {}
+    try:
+        data = json.loads(match.group(0))
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+async def demo_session():
+    """Walk through a short session against the configured model, printing replies."""
     assistant = CookingAssistant()
-    user_id = "test_cook"
-    print(assistant.start_visit(user_id))
-    for answer in ("Sam", "beginner", "none", "garlic pasta"):
-        result = await assistant.process_message(answer, user_id)
-        print(f"   profile: {answer!r} -> {result['message']}")
-
-    script = [
-        "What ingredients do I need?",
-        "Let's start",
-        "How salty should the water be?",
-        "Next",
-        "What does al dente mean?",
-        "Next",
-        "Can I use linguine instead?",
-        "Repeat that",
-        "The pan is smoking a lot, what do I do?",
-        "Thanks!",
-    ]
-    for i, query in enumerate(script, 1):
-        result = await assistant.process_message(query, user_id)
+    user_id = "demo_cook"
+    print("Coach:", await assistant.greet(user_id))
+    for message in ("Any ideas for a quick dinner? I'm a beginner.", "the first one",
+                    "start", "next", "what does al dente mean?"):
+        result = await assistant.process_message(message, user_id)
         cooking = result["cooking"]
         where = (f"step {cooking['step'] + 1}/{cooking['total_steps']}"
                  if cooking["step"] is not None else "not started")
-        print(f"\n{i}. {query!r}   [{where}]")
-        print(f"   -> {result['message']}")
-
-    print("\n" + "=" * 60)
-    import json
-    print(json.dumps(assistant.get_user_insights(user_id), indent=2))
+        print(f"\nCook: {message}   [{cooking['recipe']} · {where}]\nCoach: {result['message']}")
 
 
 if __name__ == "__main__":
-    asyncio.run(test_cooking_session())
+    asyncio.run(demo_session())

@@ -18,58 +18,88 @@ stays in PAL_OP.
 
 ```
 phone browser (chatbot/static/index.html)
-  camera  -> JPEG frame, attached to each question
+  camera  -> rolling buffer of JPEG frames (one every ~1.2 s, last 3 kept)
   mic     -> Web Speech API -> text
   speaker <- speechSynthesis
-      |  wss://<domain>/ws   {"type": "ask", "message": "...", "image": "data:image/jpeg;base64,..."}
+      |  wss://<domain>/ws   ask {message, images:[frames]} | recipe_upload | watch
       v
 chatbot (FastAPI, cook_api.py)
-  cook_main.py        one turn: onboarding -> look -> context -> model -> record
-  vision.py           VLM provider (none | openai_compatible | azure)
-  context_builder.py  step navigation, subject resolution, layered prompt
+  cook_main.py        greet, one turn, tools, recipe upload, camera watch
+  streaming_openai.py system prompt + tool loop -> gpt-5-mini (HKUST GenAI)
+  context_builder.py  step fast path, subject resolution, layered prompt
+  recipe_import.py    uploaded text/photo -> structured recipe (JSON mode)
+  vision.py           frames inline to the chat model, or a separate VLM
   knowledge_base.py   recipes.yaml + glossary.yaml -> knowledge.db
-  conversation_state  memory.db: session profile, recipe + step, turns, ledger
-  streaming_openai.py personas: step | help | safety  -> gpt-5-mini (Azure)
+  conversation_state  memory.db: profile, recipe + step, uploads, turns, ledger
       ^
 Caddy (HTTPS) on Tencent Cloud Lighthouse
 ```
 
-Speech runs in the browser, so the server only ever handles text and an
-optional frame. A phone only allows camera and microphone access over HTTPS
-(localhost is the one exception), which is why production sits behind Caddy
-with a real domain.
+Speech runs in the browser, so the server only ever handles text and images.
+A phone only allows camera and microphone access over HTTPS (localhost is the
+one exception), which is why production sits behind Caddy with a real domain.
 
 ### One turn
 
-1. **Onboarding** (first four answers of a session, no model call): name,
-   kitchen experience, allergies / foods avoided, and what they're cooking.
-   The dish answer is resolved to a recipe if one matches. Selection returns
-   an ingredient preview with quantities and serving size before step 1, without
-   a model call. Saying `start` or tapping **Start cooking** begins the tutorial.
-   Switching to another recipe also returns its preview first, including for
-   commands such as `start chicken curry`. The cooking payload always includes
-   `ingredients`, `serves` and `time_minutes`, including after reconnecting.
-   The saved recipe picker searches names, aliases and ingredient text across
-   50 curated recipes. Ingredient lists are indexed in `recipe_ingredients`;
-   YAML remains the source of truth.
-2. **Navigation** is decided by pattern, not by the model: `start`, `next`,
-   `go back`, `repeat`, `step 4`, `stop cooking`. It moves the step pointer
-   before the prompt is built. "Is it done?" is a doneness question, not
-   "next".
-3. **Look** -- only if a VLM is configured, the phone attached a frame, and
-   the question needs eyes ("is this done?", "does this look right?", a
-   safety question). The observation goes into the prompt; it never answers
-   the cook directly.
-4. **Context** is rendered as labelled layers: `[COOK] [RECIPE] [NOW]
-   [RECENT] [FACTS] [QUESTION]`. `[RECIPE]` carries the current step and its
-   "done when" cue, so the model and the camera judge against the same
-   target.
-5. **Persona**: `step` for navigation, `safety` for a safety facet or a
-   hazard the camera saw, `help` otherwise. Model text streams as WebSocket
-   `delta` events; one final `response` carries the full text and updated state.
-   The browser queues complete sentences for speech as they arrive, without
-   speaking the final response a second time. Interrupted streams retain the
-   text already delivered and append an interruption notice.
+The model drives the conversation. There is no scripted questionnaire and no
+canned reply: every message the cook sees is written by the model, except the
+notes-only fallbacks when no model is configured.
+
+1. **Greeting**: a new chat gets one model-written greeting inviting the cook
+   to name a dish, ask for ideas, or upload a recipe. It is stored as the first
+   turn, so a reconnect does not greet again.
+2. **Step fast path**: short commands (six words or fewer) are matched by
+   pattern and move the step pointer before the prompt is built: `next`,
+   `back`, `repeat`, `step 4`, `start` / `ok start` (restart at step 1), and
+   `ready` / `let's go` (only starts a recipe that has not begun). Longer or
+   fuzzier messages ("I've finished chopping, does this look right?") go to the
+   model. "Is it done?" is a doneness question, not "next".
+3. **Camera**: when the camera is on, each question carries the last three
+   frames (oldest first). With `VLM_PROVIDER=azure` and the same deployment as
+   chat, the frames go straight into the chat call at `detail: low`, so the
+   model that answers also looks, next to the current step. A photo the cook
+   attaches on purpose goes at `detail: auto`. Step commands skip the frames.
+   A separate VLM (`openai_compatible`) still writes a text observation first.
+4. **Context** layers: `[COOK]` (profile or "not known yet"), `[RECIPE]` (all
+   ingredients, every numbered step, the current step with its "done when"
+   cue and timer), `[CATALOG]` (only while choosing: one compact line per
+   recipe), `[NOW]`, `[FACTS]`, `[QUESTION]`. The last six exchanges are sent
+   as real chat messages.
+5. **Model + tools**: one streamed call with four tools: `choose_recipe`,
+   `go_to_step`, `stop_recipe`, `update_cook_profile`. If the model calls one,
+   it runs, its result is appended, and a second tool-free call writes the
+   reply (one tool round only, so it never starts step 1 on its own after
+   loading a recipe). The system prompt sets the format: short replies,
+   numbered lists for multi-action instructions, `- ` bullets for ingredients,
+   at most 2 suggestions, never the whole catalog.
+6. **Streaming and speech**: text streams as WebSocket `delta` events; one
+   final `response` carries the full text and updated state. The browser
+   renders lists as real lists. Speech reads complete lines and sentences as
+   they arrive, reads `1. Boil` as "1, Boil", and replaces runs of three or more
+   bullets (ingredient lists) with "The list is on your screen."
+
+### Uploaded recipes
+
+**Upload recipe** takes pasted text, a `.txt`/`.md` file, or a photo or
+screenshot. `recipe_import.py` asks the chat model (JSON mode, image attached)
+for `name, serves, time_minutes, ingredients[], steps[{text, done_when,
+timer_seconds}]`, keeping the recipe's own quantities and splitting long
+paragraphs into one action per step. The result is validated, stored in
+`custom_recipes` (private to the browser's user ID), and becomes the active
+recipe via `visits.recipe_custom_id`. From then on the step card, step
+commands, timers, camera questions and watch mode work exactly as for a
+catalog recipe.
+
+### Coach watches
+
+While the camera is on and a step is in progress, the phone sends the latest
+frames every `WATCH_INTERVAL_SECONDS` (default 20) unless the cook is talking,
+listening or waiting for a reply. The server rate-limits to half that interval.
+The model answers in JSON with `ok | unclear | issue | hazard | step_done`.
+Only `issue` and `hazard` (once per new problem) and `step_done` (once per
+step) reach the phone, as an `alert` bubble that is spoken and vibrates. Alerts
+are stored as turns, so later answers know what was already said. The toggle
+**Coach watches** turns it off.
 
 The recipe and step pointer live on the session, not on the current topic,
 so "what does emulsify mean?" in the middle of step 6 doesn't lose the
@@ -91,9 +121,9 @@ and `VLM_MODEL=<an image-capable deployment>`. The VLM reuses slot 1's
 endpoint and key.
 
 **Both slots can stay empty.** The coach then runs in *notes-only* mode:
-onboarding, step navigation, timers and retrieval all work, and replies are
-the recipe notes read back verbatim instead of model-written answers. Good
-enough to test the app before any model is chosen.
+naming a catalog dish selects it, step navigation, timers and retrieval all
+work, and replies are the recipe notes read back verbatim instead of
+model-written answers. Suggestions, uploads and camera checks need the model.
 
 `GET /health` shows configuration: `model.configured`, the deployment, and the
 vision provider. It does not prove connectivity. Run
@@ -234,7 +264,8 @@ The browser header has Profile and History dialogs. A `profiles` table stores
 name, experience and dietary needs for the browser's existing random user ID.
 Upgrading an existing database seeds it from the latest completed visit; edits
 update the active visit without changing its recipe or step. New visits copy
-the profile and start onboarding at today's dish.
+the profile. The model fills it in from conversation with
+`update_cook_profile` (only the fields the cook mentioned).
 
 Profile/history commands use the existing WebSocket: `profile_get`,
 `profile_save`, `history_list`, and `history_detail`, with a `request_id` for

@@ -26,12 +26,21 @@ Not decided here. Pick one with environment variables:
 A provider that fits neither shape is one subclass of VisionProvider: take
 image bytes and a VisionRequest, return an Observation (or None).
 
+INLINE VISION (azure)
+---------------------
+When the VLM is the same image-capable chat model (VLM_PROVIDER=azure, e.g.
+gpt-5-mini on HKUST), there is no separate observation step: the phone's
+latest camera frames (or an uploaded photo) are attached straight to the
+chat call, and the model that writes the reply looks at them itself. That is
+one call instead of two, and the model sees the frames next to the recipe
+step it is judging. Separate VLMs (openai_compatible) still produce a text
+Observation first.
+
 WHEN TO LOOK
 ------------
-A VLM call adds a second or more before the reply can start, so by default
-the coach only looks when the question needs eyes -- "is this done?", "does
-this look right?", "what's that?" -- see wants_vision(). VLM_MODE=always
-sends every frame the phone attaches.
+With a separate VLM, a call adds a second or more before the reply can start,
+so by default it only looks when the question needs eyes -- see
+wants_vision(). VLM_MODE=always sends every frame the phone attaches.
 
 PRIVACY
 -------
@@ -144,6 +153,23 @@ def decode_image(data_url: str, max_bytes: int) -> tuple:
     return raw, mime
 
 
+MAX_FRAMES = 4
+
+
+def decode_images(data_urls, max_bytes: int, limit: int = MAX_FRAMES) -> List[tuple]:
+    """Decode a list of camera-frame data URLs, keeping the newest ``limit``.
+
+    Raises ImageError if the list is malformed or any frame is invalid.
+    """
+    if not isinstance(data_urls, list):
+        raise ImageError("images must be a list of data URLs")
+    return [decode_image(url, max_bytes) for url in data_urls[-limit:]]
+
+
+def to_data_url(raw: bytes, mime: str) -> str:
+    return f"data:{mime};base64,{base64.b64encode(raw).decode('ascii')}"
+
+
 def wants_vision(message: str, facet: Optional[str], mode: str = "auto") -> bool:
     """Does this question need the camera?"""
     if mode == "always":
@@ -207,6 +233,8 @@ class VisionProvider:
     """Base class. Subclass and implement _complete() for a new VLM."""
 
     name = "none"
+    # True when the chat model itself can take the frames (see INLINE VISION).
+    inline = False
 
     def __init__(self, config: VisionConfig):
         self.config = config
@@ -280,7 +308,8 @@ class VisionProvider:
 
     def describe(self) -> Dict[str, Any]:
         return {"provider": self.name, "model": self.config.model,
-                "available": self.available, "mode": self.config.mode}
+                "available": self.available, "mode": self.config.mode,
+                "inline": self.inline}
 
 
 class NoVision(VisionProvider):
@@ -325,6 +354,12 @@ class AzureVision(VisionProvider):
 
     name = "azure"
 
+    @property
+    def inline(self) -> bool:
+        # Frames go straight into the chat call when the vision deployment is
+        # the chat deployment; a different deployment keeps the two-step path.
+        return self.available and self.config.model == load_chat_deployment()
+
     def __init__(self, config: VisionConfig):
         super().__init__(config)
         from config import load_azure_openai_config
@@ -357,6 +392,11 @@ class AzureVision(VisionProvider):
             **self.chat_config.completion_kwargs(self.config.max_tokens),
         )
         return response.choices[0].message.content if response.choices else ""
+
+
+def load_chat_deployment() -> str:
+    from config import load_azure_openai_config
+    return load_azure_openai_config().deployment_name
 
 
 PROVIDERS = {

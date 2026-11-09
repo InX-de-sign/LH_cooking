@@ -1,18 +1,128 @@
-# streaming_openai.py - Prompt assembly and streaming calls for the cooking coach
+# streaming_openai.py - Prompt assembly, tool loop and streaming calls
+"""
+One model call per turn (two when the model uses a tool):
+
+    messages = [system prompt,
+                last few exchanges as real user/assistant messages,
+                user: language rule + context layers + camera frames]
+
+The model can change the session through tools (choose_recipe, go_to_step,
+stop_recipe, update_cook_profile). When it calls one, the tool runs, its
+result is appended, and the model is called again to write the reply. Text is
+streamed to the phone as it arrives in both rounds.
+"""
+
+import json
 import logging
 import os
-from typing import AsyncGenerator, Dict, Any
+from typing import Any, AsyncGenerator, Dict, List
 
 from api_client import create_async_client
 from config import load_azure_openai_config
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_PERSONA = "help"
+# Brevity is enforced by the system prompt, not the token budget: on gpt-5
+# the budget also pays for reasoning, and a recipe overview with ingredients
+# and numbered steps needs room.
+REPLY_TOKEN_BUDGET = 1600
+# One round of tool calls (possibly several in parallel), then a final reply
+# without tools: a second round let the model "helpfully" start step 1 right
+# after loading a recipe, before the cook said they were ready.
+MAX_TOOL_ROUNDS = 1
+HISTORY_TURNS = 6
+
+SYSTEM_PROMPT = """You are the cooking coach in a phone app, helping a home cook \
+make a dish step by step. Your replies are shown in a chat and also read aloud, \
+so the cook may have busy hands and be glancing at the screen.
+
+HOW TO REPLY
+- Sound like a calm, encouraging friend who cooks well. Be brief and practical:
+  usually one to three short sentences.
+- When you give instructions with more than one action, use a numbered list with
+  one action per line ("1. ...", "2. ..."). Use "- " bullets for ingredients.
+  No headings, tables, emojis or code blocks. **Bold** at most a word or two.
+- When a recipe has just been chosen or uploaded: one short line, the ingredients
+  as "- " bullets, then the steps as a numbered overview (a few words each), then
+  ask if they are ready to start.
+- When giving the current step: just that step with its quantities, then its
+  "done when" cue or timer. Never paste the whole recipe again.
+- When asked what to cook or for ideas: suggest exactly 2 dishes from [CATALOG]
+  that suit their profile, each with a few words on why. Never list more than 2
+  recipes and never paste the catalog. Mention they can also upload their own
+  recipe with the Upload recipe button.
+- Pitch explanations to their experience. If you don't know their experience or
+  allergies yet, you may ask once, briefly, in passing; never run a questionnaire.
+- Ask at most one question per reply, and only when it helps.
+
+TOOLS
+- choose_recipe: as soon as the cook picks a catalog dish, including "the first
+  one" or "that one" after your suggestions, or asks to switch dish. If the dish
+  is not in the catalog, say so and offer the 2 closest catalog options or
+  uploading their own recipe.
+- go_to_step: when they say they finished a step, want to skip ahead, go back or
+  jump to a step. Steps are numbered from 1; 0 means back to the ingredients.
+  If the recipe has not started (Status: not started) and they say start, ready,
+  let's go, or that they have everything, call go_to_step with step 1 and then
+  give step 1. Don't show the overview again.
+- stop_recipe: when they want to stop or cook something else without naming it.
+- update_cook_profile: whenever the cook reveals their name, experience
+  ("not confident at all" -> beginner), allergies or diet ("no allergies" ->
+  none), even in passing, call it in that same turn.
+- Never say you changed the recipe or step unless you called the tool.
+
+GROUNDING
+- Quantities, times and temperatures for the recipe come only from [RECIPE] and
+  [FACTS]. Never invent them. For anything else you may give general advice.
+- Respect [COOK] allergies and diet: warn when a recipe or idea conflicts.
+
+CAMERA
+- Camera frames, when attached, are the latest frames from the cook's phone,
+  oldest first. Use them to see what the cook is doing right now.
+- For "is this right?", "how does this look?" and similar: compare what you see
+  with the current step in [RECIPE]. Say plainly whether it looks right. If not,
+  say what to change and why, as one or two short instructions.
+- Describe only what is visible. A picture cannot show temperature, taste or
+  whether meat is cooked inside: say what to check instead.
+- If the frames are dark, blurry or don't show the food, say so and ask them to
+  point the camera at the pan or board.
+- If you see anything unsafe (smoke, flames, boiling over, a knife near the
+  counter edge, raw meat touching ready-to-eat food), say that FIRST, as a short
+  instruction."""
+
+TOOLS = [
+    {"type": "function", "function": {
+        "name": "choose_recipe",
+        "description": "Load a recipe from the catalog as the dish being cooked "
+                       "(also to switch dish). Returns its ingredients and steps.",
+        "parameters": {"type": "object", "properties": {
+            "recipe_name": {"type": "string", "description": "Exact name from [CATALOG]."}},
+            "required": ["recipe_name"]}}},
+    {"type": "function", "function": {
+        "name": "go_to_step",
+        "description": "Move to a step of the current recipe. 1 is the first step; "
+                       "0 returns to the ingredient overview.",
+        "parameters": {"type": "object", "properties": {
+            "step": {"type": "integer", "minimum": 0}}, "required": ["step"]}}},
+    {"type": "function", "function": {
+        "name": "stop_recipe",
+        "description": "Stop the current recipe so the cook can choose another.",
+        "parameters": {"type": "object", "properties": {}}}},
+    {"type": "function", "function": {
+        "name": "update_cook_profile",
+        "description": "Remember what the cook said about themselves. Only include "
+                       "fields they actually told you.",
+        "parameters": {"type": "object", "properties": {
+            "name": {"type": "string"},
+            "skill_level": {"type": "string",
+                            "description": "e.g. beginner, some experience, confident"},
+            "dietary": {"type": "string",
+                        "description": "Allergies and foods they avoid, or 'none'."}}}}},
+]
 
 
 class StreamingOpenAI:
-    """Streaming HKUST GenAI or Azure client for real-time text generation."""
+    """Streaming HKUST GenAI or Azure client for the coach's replies."""
 
     def __init__(self):
         self.config = load_azure_openai_config()
@@ -21,109 +131,98 @@ class StreamingOpenAI:
             timeout=float(os.getenv("AZURE_OPENAI_TIMEOUT_SECONDS", "30")),
             max_retries=1,
         )
+        self.system_prompt = SYSTEM_PROMPT
 
-        # The user prompt arrives as labelled layers -- [COOK], [RECIPE],
-        # [NOW], [RECENT], [FACTS] -- built by context_builder. Every persona
-        # shares the same grounding contract; only the job differs.
-        grounding = """
-            GROUNDING - this matters more than style:
-                - Quantities, times and temperatures for this recipe come ONLY
-                  from [RECIPE] and [FACTS]. Never make one up.
-                - If [FACTS] says the notes do not cover the question, you may
-                  give brief general cooking advice and say it is general.
-                - [NOW] says what they are asking about and what the camera
-                  sees. A photo cannot show temperature, taste or whether meat
-                  is cooked inside; never claim it does.
-                - If [NOW] reports a SAFETY problem, say that first.
-                - [RECENT] is what was already said. Do not repeat it."""
-
-        voice = """
-            VOICE - every reply is spoken aloud to someone with busy hands:
-                - Calm, warm and encouraging, like a friend who cooks well.
-                - Plain sentences only. No lists, markdown, emojis or symbols.
-                - Say numbers the way you would speak them ("half a teaspoon").
-                - Pitch the explanation to [COOK] experience."""
-
-        self.system_prompts = {
-            'step': f"""
-                You are a voice cooking coach guiding someone through a recipe
-                at home. They just asked to move through the steps.
-                {grounding}
-                {voice}
-                JOB:
-                    - Read the current step from [RECIPE] completely, keeping
-                      every quantity and time.
-                    - Then add at most one short sentence: the "done when" cue,
-                      or a timer if the step has one.
-                    - Never skip ahead or merge steps.""",
-
-            'help': f"""
-                You are a voice cooking coach helping someone cook at home.
-                {grounding}
-                {voice}
-                JOB:
-                    - Answer the question directly in one or two short
-                      sentences, at most 40 words.
-                    - If it relates to the current step in [RECIPE], tie the
-                      answer back to that step.
-                    - Do not end with a question unless you genuinely need an
-                      answer to help them.""",
-
-            'safety': f"""
-                You are a voice cooking coach, and this is a safety moment.
-                {grounding}
-                {voice}
-                JOB:
-                    - Lead with the single most important action, as a short
-                      instruction ("Turn off the heat now.").
-                    - Then one sentence of why or what next. Nothing else.
-                    - For fire that will not go out, or a serious injury,
-                      tell them to call the emergency services.""",
-        }
-
-    async def stream_response(self, query: str, context: Dict[str, Any]) -> AsyncGenerator[str, None]:
-        """Stream the model's reply chunk by chunk."""
-        persona = context.get('query_type', DEFAULT_PERSONA)
-        system_prompt = self.system_prompts.get(persona, self.system_prompts[DEFAULT_PERSONA])
-        user_prompt = self._build_short_prompt(query, context)
-
-        # Brevity is enforced by the system prompt, not the token budget. On
-        # gpt-5 the budget also pays for reasoning tokens, so a small one
-        # returns an empty string rather than a short one.
-        stream = await self.client.chat.completions.create(
-            model=self.config.deployment_name,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            stream=True,
-            **self.config.completion_kwargs()
-        )
-
-        accumulated = ""
-        try:
-            async for chunk in stream:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    content = chunk.choices[0].delta.content
-                    accumulated += content
-                    yield content
-        finally:
-            await stream.close()
-        logger.info("Streaming completed: %d chars", len(accumulated))
-
-    def _language_instruction(self, context: Dict[str, Any]) -> str:
-        """Name the target language outright rather than asking the model to infer it."""
+    # -- messages -------------------------------------------------------------
+    @staticmethod
+    def _language_instruction(context: Dict[str, Any]) -> str:
         if context.get("language") == "zh":
             return "Reply in Mandarin, using simplified Chinese characters."
         return "Reply in English only."
 
-    def _build_short_prompt(self, query: str, context: Dict[str, Any]) -> str:
-        """The language instruction plus the context_builder layers."""
-        parts = [self._language_instruction(context)]
-        rendered = context.get("prompt_context")
-        if rendered:
-            parts.append(rendered)
+    def build_messages(self, query: str, context: Dict[str, Any]) -> List[Dict[str, Any]]:
+        messages: List[Dict[str, Any]] = [{"role": "system", "content": self.system_prompt}]
+        for turn in context.get("history") or []:
+            if turn.get("user_text"):
+                messages.append({"role": "user", "content": turn["user_text"][:800]})
+            if turn.get("assistant_text"):
+                messages.append({"role": "assistant", "content": turn["assistant_text"][:1500]})
+        text = "\n\n".join([self._language_instruction(context),
+                            context.get("prompt_context") or f"[QUESTION]\n{query}"])
+        images = context.get("images") or []
+        if images:
+            content: Any = [{"type": "text", "text": text}] + [
+                {"type": "image_url", "image_url": {"url": url, "detail": detail}}
+                for url, detail in images]
         else:
-            parts.append(f"[QUESTION]\n{query}")
-        parts.append("Reply now, following the JOB in your instructions.")
-        return "\n\n".join(parts)
+            content = text
+        messages.append({"role": "user", "content": content})
+        return messages
+
+    # -- the streamed reply with tools ----------------------------------------
+    async def stream_response(self, query: str, context: Dict[str, Any]) -> AsyncGenerator[str, None]:
+        """Stream the reply, running any tools the model calls in between."""
+        messages = self.build_messages(query, context)
+        handler = context.get("tool_handler")
+        tools = context.get("tools") if handler else None
+
+        for round_number in range(MAX_TOOL_ROUNDS + 1):
+            offer_tools = bool(tools) and round_number < MAX_TOOL_ROUNDS
+            stream = await self.client.chat.completions.create(
+                model=self.config.deployment_name,
+                messages=messages,
+                stream=True,
+                **({"tools": tools} if offer_tools else {}),
+                **self.config.completion_kwargs(REPLY_TOKEN_BUDGET),
+            )
+            text, calls = "", {}
+            try:
+                async for chunk in stream:
+                    if not chunk.choices:
+                        continue
+                    delta = chunk.choices[0].delta
+                    if delta.content:
+                        text += delta.content
+                        yield delta.content
+                    for call in getattr(delta, "tool_calls", None) or []:
+                        slot = calls.setdefault(call.index, {"id": "", "name": "", "arguments": ""})
+                        slot["id"] = call.id or slot["id"]
+                        if call.function is not None:
+                            slot["name"] += call.function.name or ""
+                            slot["arguments"] += call.function.arguments or ""
+            finally:
+                await stream.close()
+
+            if not calls:
+                logger.info("Reply streamed: %d chars after %d tool round(s)", len(text), round_number)
+                return
+
+            ordered = [calls[i] for i in sorted(calls)]
+            messages.append({"role": "assistant", "content": text or None, "tool_calls": [
+                {"id": c["id"] or f"call_{i}", "type": "function",
+                 "function": {"name": c["name"], "arguments": c["arguments"] or "{}"}}
+                for i, c in enumerate(ordered)]})
+            for i, call in enumerate(ordered):
+                try:
+                    arguments = json.loads(call["arguments"] or "{}")
+                except json.JSONDecodeError:
+                    arguments = {}
+                result = await handler(call["name"], arguments if isinstance(arguments, dict) else {})
+                logger.info("Tool %s(%s) -> %s", call["name"], arguments, str(result)[:120])
+                messages.append({"role": "tool", "tool_call_id": call["id"] or f"call_{i}",
+                                 "content": json.dumps(result)})
+            if text and not text.endswith(("\n", " ")):
+                yield "\n\n"
+
+    # -- one-shot helpers -------------------------------------------------------
+    async def complete(self, messages: List[Dict[str, Any]], budget: int = 800,
+                       json_mode: bool = False) -> str:
+        response = await self.client.chat.completions.create(
+            model=self.config.deployment_name,
+            messages=messages,
+            **({"response_format": {"type": "json_object"}} if json_mode else {}),
+            **self.config.completion_kwargs(budget),
+        )
+        if response.choices and response.choices[0].message.content:
+            return response.choices[0].message.content.strip()
+        return ""

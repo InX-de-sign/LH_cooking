@@ -21,17 +21,15 @@ class ProfileHistoryTests(unittest.TestCase):
 
     def test_profile_changes_reach_active_visit_and_new_sessions_without_changing_recipe(self):
         with patch("conversation_state.time.time", return_value=2_000_000_000):
-            self.store.start_visit("sam")
-            for answer in ("Sam", "beginner", "peanuts", "pasta"):
-                self.store.submit_onboarding_answer("sam", answer)
             visit = self.store.current_visit("sam")
+            self.assertIsNone(visit.cook_name, "a new cook starts with no questionnaire and no profile")
+            self.store.update_profile("sam", {"cook_name": "Sam", "dietary": "peanuts"})
             self.store.set_recipe(visit, 7, "Pasta")
             self.store.set_step(visit, 2)
             self.store.save_profile("sam", {"cook_name": "Alex", "skill_level": "confident", "dietary": "Peanut allergy; vegetarian"})
             updated = self.store.current_visit("sam")
             self.assertEqual((updated.cook_name, updated.dietary), ("Alex", "Peanut allergy; vegetarian"))
             self.assertEqual((updated.recipe_id, updated.step), (7, 2))
-            self.assertTrue(updated.onboarding_complete)
         self.store.close()
         self.store = ConversationStore(self.path)
         with patch("conversation_state.time.time", return_value=2_000_000_000 + SESSION_IDLE_SECONDS + 1):
@@ -39,23 +37,41 @@ class ProfileHistoryTests(unittest.TestCase):
             self.assertNotEqual(new_visit.session_id, visit.session_id)
             self.assertEqual(new_visit.cook_name, "Alex")
             self.assertEqual(new_visit.dietary, "Peanut allergy; vegetarian")
-            self.assertEqual(new_visit.onboarding_step, "dish")
             self.assertIsNone(new_visit.recipe_id)
             self.assertIsNone(new_visit.dish)
 
-    def test_profile_form_skips_repeated_setup_questions_and_can_clear_allergies(self):
+    def test_model_profile_updates_only_change_given_fields_and_form_can_clear(self):
         self.store.save_profile("sam", {"cook_name": "Sam", "skill_level": "beginner", "dietary": "Peanuts"})
-        self.assertEqual(self.store.onboarding_state("sam")["step"], "dish")
-        result = self.store.submit_onboarding_answer("sam", "pasta")
-        self.assertTrue(result["just_completed"])
+        self.store.update_profile("sam", {"skill_level": "some experience"})
+        self.assertEqual(self.store.get_profile("sam"),
+                         {"cook_name": "Sam", "skill_level": "some experience", "dietary": "Peanuts"})
+        with self.assertRaises(ValueError):
+            self.store.update_profile("sam", {"dietary": "x" * 1001})
         self.store.save_profile("sam", {"cook_name": "", "skill_level": "", "dietary": ""})
         self.assertEqual(self.store.get_profile("sam")["dietary"], "")
         self.assertIsNone(self.store.current_visit("sam").dietary)
 
+    def test_uploaded_recipe_is_private_to_its_browser_and_switchable(self):
+        visit = self.store.current_visit("sam")
+        recipe = {"name": "Grandma's noodles", "serves": 2, "ingredients": ["200 g noodles"],
+                  "steps": [{"text": "Boil noodles.", "done_when": None, "timer_seconds": 180}]}
+        custom_id = self.store.save_custom_recipe(visit, recipe)
+        self.store.set_recipe(visit, None, recipe["name"], custom_id=custom_id)
+        resumed = self.store.current_visit("sam")
+        self.assertEqual((resumed.recipe_custom_id, resumed.recipe_id, resumed.step), (custom_id, None, None))
+        self.assertTrue(resumed.has_recipe)
+        self.assertEqual(self.store.custom_recipe(custom_id, "sam")["steps"][0]["timer_seconds"], 180)
+        self.assertIsNone(self.store.custom_recipe(custom_id, "someone-else"))
+        self.store.set_recipe(resumed, 7, "Pasta")
+        switched = self.store.current_visit("sam")
+        self.assertEqual((switched.recipe_id, switched.recipe_custom_id), (7, None))
+        with self.assertRaises(ValueError):
+            self.store.set_recipe(switched, 7, "Pasta", custom_id=custom_id)
+
     def test_legacy_profile_is_kept_on_database_upgrade(self):
-        self.store.start_visit("legacy")
-        for answer in ("Sam", "beginner", "Peanuts", "pasta"):
-            self.store.submit_onboarding_answer("legacy", answer)
+        visit = self.store.current_visit("legacy")
+        self.store._update_visit(visit.session_id, cook_name="Sam", skill_level="beginner",
+                                 dietary="Peanuts", onboarding_step="complete")
         with self.store._lock:
             self.store._conn.execute("DROP TABLE profiles")
             self.store._conn.commit()

@@ -102,6 +102,9 @@ dialog::backdrop { background: rgb(0 0 0 / 0.4); }
 .dialog-help, .dialog-status { color: var(--muted); font-size: 0.9rem; margin: 8px 0 14px; }
 .dialog-status[data-error="true"] { color: var(--flame); }
 .profile-form { display: grid; gap: 8px; }
+.recipe-form textarea { min-height: 180px; }
+.recipe-file { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 0.9rem; color: var(--muted); }
+.recipe-file img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; }
 .profile-form input, .profile-form select, .profile-form textarea {
   width: 100%; padding: 10px 12px; margin-bottom: 8px; border: 1px solid var(--line);
   border-radius: 10px; background: var(--bg); color: var(--ink); font: inherit;
@@ -189,7 +192,12 @@ main {
 .ingredients-panel summary { cursor: pointer; font-weight: 600; }
 .ingredients-panel ul { padding-left: 22px; margin: 10px 0 0; max-height: 230px; overflow-y: auto; }
 .ingredients-panel li { margin-bottom: 6px; }
+.ingredients-panel ol { padding-left: 26px; margin: 10px 0 0; max-height: 260px; overflow-y: auto; }
+.ingredients-panel ol li.done { color: var(--muted); }
+.ingredients-panel ol li.now { font-weight: 700; }
+.ingredients-panel ol li.now::marker { color: var(--basil); }
 .recipe-details { margin: 0; color: var(--muted); }
+.empty-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* conversation */
 .log {
@@ -202,6 +210,23 @@ main {
 .msg.note { align-self: center; max-width: 100%; font-size: 0.8rem; color: var(--muted); padding: 2px 8px; }
 .msg .seen { display: block; margin-top: 6px; font-size: 0.8rem; color: var(--muted); }
 .msg .seen.hazard { color: var(--flame); font-weight: 700; }
+/* coach replies: short paragraphs, bullets for ingredients, numbered steps */
+.msg.coach p { margin: 0 0 6px; }
+.msg.coach p:last-child { margin-bottom: 0; }
+.msg.coach ul, .msg.coach ol { margin: 4px 0 8px; padding-left: 22px; }
+.msg.coach li { margin: 3px 0; }
+.msg.coach ol > li::marker { font-weight: 700; color: var(--basil); }
+.msg.coach strong { font-weight: 700; }
+/* things the coach noticed on camera without being asked */
+.msg.alert { border: 2px solid var(--yolk); }
+.msg.alert.hazard { border-color: var(--flame); }
+.msg.alert.done { border-color: var(--basil); }
+.msg .tag {
+  display: block; margin-bottom: 4px; font-size: 0.72rem; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted);
+}
+.msg.alert.hazard .tag { color: var(--flame); }
+.msg.alert.done .tag { color: var(--basil); }
 .typing { display: inline-flex; gap: 4px; }
 .typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: blink 1.2s infinite; }
 .typing i:nth-child(2) { animation-delay: 0.2s; } .typing i:nth-child(3) { animation-delay: 0.4s; }
@@ -272,6 +297,10 @@ main {
   <span class="brand">Stovetop Coach</span>
   <span class="conn" id="conn" data-state="connecting">Connecting</span>
   <nav class="header-actions" aria-label="Profile and history">
+    <button class="header-button" id="uploadRecipeButton" type="button" aria-haspopup="dialog" aria-controls="recipeDialog" title="Cook from your own recipe">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6M12 18v-6M9 15l3-3 3 3"></path></svg>
+      Upload recipe
+    </button>
     <button class="header-button" id="newChatButton" type="button" title="Start a new chat for a different dish">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
       New chat
@@ -315,6 +344,23 @@ main {
   </section>
 </dialog>
 
+<dialog id="recipeDialog" aria-labelledby="recipeTitle">
+  <div class="dialog-heading"><h2 id="recipeTitle">Cook from your recipe</h2><button class="btn" id="closeRecipe" type="button" aria-label="Close recipe upload">Close</button></div>
+  <p class="dialog-help">Paste a recipe, or choose a photo, screenshot or text file of one. The coach breaks it into steps, guides you through them and can check your progress on camera.</p>
+  <form class="profile-form recipe-form" id="recipeForm">
+    <label for="recipeText">Recipe text</label>
+    <textarea id="recipeText" maxlength="20000" placeholder="Paste the ingredients and method here"></textarea>
+    <div class="recipe-file">
+      <button class="btn" id="chooseRecipeFile" type="button">Choose photo or file</button>
+      <input id="recipeFile" type="file" accept="image/jpeg,image/png,image/webp,.txt,.md,text/plain,text/markdown" hidden aria-label="Choose a recipe photo or text file">
+      <img id="recipeImagePreview" alt="Recipe photo to upload" hidden>
+      <span id="recipeFileName"></span>
+    </div>
+    <button class="btn primary" id="submitRecipe" type="submit">Use this recipe</button>
+  </form>
+  <p class="dialog-status" id="recipeStatus" role="status" aria-live="polite"></p>
+</dialog>
+
 <main>
   <section class="top" aria-label="Recipe">
     <div class="camera compact" id="camera">
@@ -338,13 +384,21 @@ main {
         <summary>Ingredients</summary>
         <ul id="ingredientsList"></ul>
       </details>
-      <p class="step-text" id="stepText">Answer a few quick questions, then pick what you're cooking.</p>
+      <details class="ingredients-panel" id="stepsPanel" hidden>
+        <summary>All steps</summary>
+        <ol id="stepsList"></ol>
+      </details>
+      <p class="step-text" id="stepText">Ask me for ideas, name a dish, or upload your own recipe.</p>
       <p class="done-when" id="doneWhen" hidden></p>
       <div class="step-actions">
         <button class="btn" id="startCooking" type="button" hidden>Start cooking</button>
         <button class="timer-btn" id="timerBtn" type="button" hidden></button>
       </div>
-      <label class="recipe-search" id="recipeSearchLabel" hidden>Find a recipe
+      <div class="empty-actions" id="emptyActions" hidden>
+        <button class="btn" id="ideasButton" type="button">Give me 2 ideas</button>
+        <button class="btn" id="uploadRecipeInline" type="button">Upload my recipe</button>
+      </div>
+      <label class="recipe-search" id="recipeSearchLabel" hidden>Or search the recipe book
         <input id="recipeSearch" type="search" placeholder="Search dishes or ingredients" autocomplete="off">
       </label>
       <p id="recipeSearchStatus" class="recipe-details" role="status" hidden></p>
@@ -356,13 +410,7 @@ main {
 </main>
 
 <footer class="dock">
-  <div class="chips" id="chips" hidden>
-    <button type="button" data-say="What's next?">Next step</button>
-    <button type="button" data-say="Repeat that step">Repeat</button>
-    <button type="button" data-say="Does this look done?">Is this done?</button>
-    <button type="button" data-say="What ingredients do I need?">Ingredients</button>
-    <button type="button" data-say="Go back a step">Back</button>
-  </div>
+  <div class="chips" id="chips" hidden></div>
   <div class="attachment" id="attachment" hidden>
     <img id="photoPreview" alt="Photo attached to your next message" hidden>
     <div class="attachment-info" role="status">
@@ -399,6 +447,7 @@ main {
   <div class="dock-foot">
     <label><input type="checkbox" id="handsFree"> Hands-free</label>
     <label><input type="checkbox" id="voiceOut" checked> Speak replies</label>
+    <label id="watchToggle" hidden title="While the camera is on, the coach checks your progress every few seconds and speaks up if something looks wrong"><input type="checkbox" id="watch" checked> Coach watches</label>
     <span class="hint" id="hint">Tap the mic and ask.</span>
   </div>
 </footer>
@@ -428,14 +477,22 @@ main {
     historyStatus: $("historyStatus"), historyOverview: $("historyOverview"), historyList: $("historyList"),
     historyDetail: $("historyDetail"), historySessionTitle: $("historySessionTitle"), historyTurns: $("historyTurns"),
     moreHistory: $("moreHistory"), olderHistory: $("olderHistory"), backHistory: $("backHistory"),
+    stepsPanel: $("stepsPanel"), stepsList: $("stepsList"), emptyActions: $("emptyActions"),
+    ideasButton: $("ideasButton"), uploadRecipeInline: $("uploadRecipeInline"),
+    watch: $("watch"), watchToggle: $("watchToggle"),
+    uploadRecipeButton: $("uploadRecipeButton"), recipeDialog: $("recipeDialog"), closeRecipe: $("closeRecipe"),
+    recipeForm: $("recipeForm"), recipeText: $("recipeText"), chooseRecipeFile: $("chooseRecipeFile"),
+    recipeFile: $("recipeFile"), recipeImagePreview: $("recipeImagePreview"), recipeFileName: $("recipeFileName"),
+    submitRecipe: $("submitRecipe"), recipeStatus: $("recipeStatus"),
   };
 
   const state = {
     ws: null, queue: [], retry: 0,
-    onboarded: false, cooking: {}, visionAvailable: false,
+    cooking: {}, visionAvailable: false, watchAvailable: false, watchInterval: 20,
     stream: null, listening: false, recognition: null, typingEl: null,
+    frames: [], frameTimer: null, watchTimer: null, recipeImage: null,
     timer: { id: null, remaining: 0, key: null }, wakeLock: null, audioUnlocked: false,
-    awaitingReply: false, replyBubble: null, speechBuffer: "", streamed: false,
+    awaitingReply: false, replyBubble: null, replyText: "", speechBuffer: "", speechList: [], streamed: false,
     speechPending: 0, speechEpoch: 0, muteReply: false,
     photo: null, preparingPhoto: false, photoRequest: 0,
     requests: new Map(), requestSequence: 0, profileLoading: false,
@@ -507,12 +564,11 @@ main {
     state.timer = { id: null, remaining: 0, key: null };
     clearPhoto(); hideTyping();
     state.queue = []; state.retry = 0;
-    state.awaitingReply = false; state.replyBubble = null;
-    state.speechBuffer = ""; state.streamed = false; state.muteReply = false;
+    state.awaitingReply = false; state.replyBubble = null; state.replyText = "";
+    state.speechBuffer = ""; state.speechList = []; state.streamed = false; state.muteReply = false;
     els.textInput.value = ""; els.log.replaceChildren();
     els.hint.textContent = "Tap the mic and ask.";
-    els.profileDialog.close(); els.historyDialog.close();
-    setOnboarded(false);
+    els.profileDialog.close(); els.historyDialog.close(); els.recipeDialog.close();
     renderCooking({ recipe: null, step: null, total_steps: 0 });
   }
   function newChat() {
@@ -536,7 +592,9 @@ main {
     if (data.type === "thinking") {
       state.awaitingReply = true;
       state.replyBubble = null;
+      state.replyText = "";
       state.speechBuffer = "";
+      state.speechList = [];
       state.streamed = false;
       state.muteReply = false;
       showTyping(); return;
@@ -545,32 +603,56 @@ main {
       hideTyping();
       state.streamed = true;
       if (!state.replyBubble) state.replyBubble = addMsg("coach", "");
-      state.replyBubble.textContent += data.text;
+      state.replyText += data.text;
+      renderRich(state.replyBubble, state.replyText);
       els.log.scrollTop = els.log.scrollHeight;
       state.speechBuffer += data.text;
       flushSpeech(false);
       return;
     }
     if (data.type === "pong") return;
+    if (data.type === "alert") return showAlert(data);
     hideTyping();
     if ("vision_available" in data) state.visionAvailable = data.vision_available;
-    if (data.profile) setOnboarded(Boolean(data.profile.complete));
+    if ("watch_available" in data) {
+      state.watchAvailable = data.watch_available;
+      state.watchInterval = data.watch_interval || state.watchInterval;
+      updateWatch();
+    }
     if (data.cooking) renderCooking(data.cooking);
     if (data.message) {
       const streamed = data.type === "response" && state.streamed;
       const bubble = streamed ? state.replyBubble : addMsg("coach", data.message);
-      if (streamed) bubble.textContent = data.message;
+      if (streamed) renderRich(bubble, data.message);
       if (data.vision) noteVision(bubble, data.vision);
       if (data.sources?.length) noteSources(bubble, data.sources);
       if (data.type === "response") state.awaitingReply = false;
       if (streamed) {
         flushSpeech(true);
         if (!state.speechPending) afterSpeaking();
-      } else if (!state.muteReply) speak(data.message);
+      } else if (!state.muteReply) speakReply(data.message);
       state.replyBubble = null;
+      state.replyText = "";
       state.streamed = false;
+    } else if (data.type === "response") {
+      state.awaitingReply = false;
     }
     if (data.image_error) addNote(`Image not used: ${data.image_error}`);
+  }
+
+  // Something the coach noticed on camera without being asked.
+  function showAlert(data) {
+    if (data.cooking) renderCooking(data.cooking);
+    const level = data.level === "hazard" ? "hazard" : data.level === "step_done" ? "done" : "issue";
+    const bubble = addMsg("coach", data.message);
+    bubble.className = `msg coach alert ${level}`;
+    const tag = document.createElement("span");
+    tag.className = "tag";
+    tag.textContent = { hazard: "Safety check", done: "Looks done", issue: "Camera check" }[level];
+    bubble.prepend(tag);
+    navigator.vibrate?.(level === "hazard" ? [250, 120, 250] : 120);
+    // Never talk over the cook or an answer in progress.
+    if (!state.awaitingReply && !state.listening && !state.speechPending) speakReply(data.message);
   }
 
   // --- profile and past sessions -----------------------------------------
@@ -628,11 +710,9 @@ main {
       const result = await settingsRequest("profile_save", { profile: {
         cook_name: els.profileName.value.trim(), skill_level: els.profileSkill.value, dietary: els.profileDietary.value.trim(),
       }});
-      setOnboarded(Boolean(result.onboarding.complete));
       if (result.cooking) renderCooking(result.cooking);
       els.profileDialog.close();
       addNote("Profile saved. Your coach will use these details in your next reply.");
-      if (!result.onboarding.complete && result.onboarding.question) addMsg("coach", result.onboarding.question);
     } catch (error) { dialogStatus(els.profileStatus, error.message, true); }
     finally {
       state.profileLoading = false; els.saveProfile.disabled = false;
@@ -720,8 +800,12 @@ main {
     const bubble = addMsg("cook", text);
     const payload = { type: "ask", message: text };
     const photo = state.photo;
-    const frame = photo?.data || captureFrame();
-    if (frame) payload.image = frame;
+    if (photo) payload.image = photo.data;
+    else {
+      // The last few seconds of camera, so the coach sees what you're doing.
+      const frames = recentFrames();
+      if (frames.length) payload.images = frames;
+    }
     if (photo) {
       payload.image_source = "upload";
       const preview = document.createElement("img");
@@ -797,20 +881,80 @@ main {
       if (request === state.photoRequest) state.preparingPhoto = false;
     }
   }
-  els.uploadPhoto.addEventListener("click", () => {
-    if (!state.onboarded) { addNote("Finish the setup questions, then attach a photo to your cooking question."); return; }
-    els.photoInput.click();
-  });
+  els.uploadPhoto.addEventListener("click", () => els.photoInput.click());
   els.photoInput.addEventListener("change", () => {
     const file = els.photoInput.files?.[0];
     els.photoInput.value = ""; // Allow selecting the same file again.
     attachPhoto(file);
   });
   els.removePhoto.addEventListener("click", clearPhoto);
-  els.chips.addEventListener("click", (e) => {
-    const say = e.target.closest("button")?.dataset.say;
-    if (say) ask(say);
+
+  // --- upload your own recipe -----------------------------------------------
+  function resetRecipeForm() {
+    state.recipeImage = null;
+    els.recipeText.value = ""; els.recipeFile.value = "";
+    els.recipeImagePreview.removeAttribute("src"); els.recipeImagePreview.hidden = true;
+    els.recipeFileName.textContent = "";
+    els.submitRecipe.disabled = false;
+    dialogStatus(els.recipeStatus, "");
+  }
+  function openRecipeDialog() {
+    pauseForDialog();
+    if (!els.recipeDialog.open) els.recipeDialog.showModal();
+  }
+  async function chooseRecipeFile(file) {
+    if (!file) return;
+    els.recipeFileName.textContent = file.name;
+    try {
+      if (file.type.startsWith("image/")) {
+        dialogStatus(els.recipeStatus, "Preparing photo...");
+        state.recipeImage = await preparePhoto(file);
+        els.recipeImagePreview.src = state.recipeImage; els.recipeImagePreview.hidden = false;
+      } else {
+        if (file.size > 200_000) throw new Error("Choose a text file smaller than 200 KB, or paste the recipe.");
+        els.recipeText.value = (await file.text()).slice(0, 20000);
+      }
+      dialogStatus(els.recipeStatus, "");
+    } catch (error) {
+      state.recipeImage = null; els.recipeImagePreview.hidden = true; els.recipeFileName.textContent = "";
+      dialogStatus(els.recipeStatus, error.message || "Could not open that file.", true);
+    }
+  }
+  function submitRecipe(event) {
+    event.preventDefault();
+    const text = els.recipeText.value.trim(), image = state.recipeImage;
+    if (!text && !image) return dialogStatus(els.recipeStatus, "Paste a recipe, or choose a photo or text file of one.", true);
+    if (image && !state.visionAvailable) return dialogStatus(els.recipeStatus, "Reading photos needs a vision model. Paste the recipe text instead.", true);
+    if (state.awaitingReply) return dialogStatus(els.recipeStatus, "Wait for the current reply to finish, then try again.", true);
+    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return dialogStatus(els.recipeStatus, "Not connected. Try again when the coach is connected.", true);
+    unlockAudio(); stopSpeaking(); state.muteReply = false;
+    state.awaitingReply = true;
+    const bubble = addMsg("cook", text ? `Here's my recipe:\n${text.slice(0, 160)}${text.length > 160 ? "..." : ""}` : "Here's my recipe.");
+    if (image) {
+      const preview = document.createElement("img");
+      preview.className = "sent-photo"; preview.src = image; preview.alt = "Recipe photo you uploaded";
+      bubble.appendChild(preview);
+    }
+    state.ws.send(JSON.stringify({ type: "recipe_upload", text, ...(image ? { image } : {}) }));
+    resetRecipeForm();
+    els.recipeDialog.close();
+  }
+  els.uploadRecipeButton.addEventListener("click", openRecipeDialog);
+  els.closeRecipe.addEventListener("click", () => els.recipeDialog.close());
+  els.chooseRecipeFile.addEventListener("click", () => els.recipeFile.click());
+  els.recipeFile.addEventListener("change", () => {
+    const file = els.recipeFile.files?.[0];
+    els.recipeFile.value = "";
+    chooseRecipeFile(file);
   });
+  els.recipeForm.addEventListener("submit", submitRecipe);
+  els.chips.addEventListener("click", (e) => {
+    const button = e.target.closest("button");
+    if (button?.dataset.action === "upload") openRecipeDialog();
+    else if (button?.dataset.say) ask(button.dataset.say);
+  });
+  els.ideasButton.addEventListener("click", () => ask("Give me 2 ideas for what to cook"));
+  els.uploadRecipeInline.addEventListener("click", () => openRecipeDialog());
   els.recipePicks.addEventListener("click", (e) => {
     const name = e.target.closest("button")?.dataset.recipe;
     if (name) ask(`Let's make ${name}`);
@@ -822,10 +966,48 @@ main {
   function addMsg(who, text) {
     const div = document.createElement("div");
     div.className = `msg ${who}`;
-    div.textContent = text;
+    if (who === "coach") renderRich(div, text);
+    else div.textContent = text;
     els.log.appendChild(div);
     els.log.scrollTop = els.log.scrollHeight;
     return div;
+  }
+
+  // The coach writes short paragraphs, "- " bullets and "1. " numbered steps,
+  // with the odd **bold** word. Built from DOM nodes, never innerHTML.
+  const BULLET = /^[-*•]\s+(.*)$/, NUMBERED = /^(\d{1,2})[.)]\s+(.*)$/;
+  function renderRich(el, text) {
+    const blocks = [];
+    let list = null;
+    for (const raw of String(text || "").split("\n")) {
+      const line = raw.trim();
+      const bullet = BULLET.exec(line), numbered = NUMBERED.exec(line);
+      if (bullet || numbered) {
+        const tag = bullet ? "UL" : "OL";
+        if (!list || list.tagName !== tag) {
+          list = document.createElement(tag.toLowerCase());
+          if (numbered && numbered[1] !== "1") list.start = Number(numbered[1]);
+          blocks.push(list);
+        }
+        const li = document.createElement("li");
+        inlineText(li, bullet ? bullet[1] : numbered[2]);
+        list.appendChild(li);
+        continue;
+      }
+      if (!line) { list = null; continue; }
+      list = null;
+      const p = document.createElement("p");
+      inlineText(p, line.replace(/^#{1,6}\s+/, ""));
+      blocks.push(p);
+    }
+    el.replaceChildren(...blocks);
+  }
+  function inlineText(el, text) {
+    text.split(/\*\*(.+?)\*\*/g).forEach((part, i) => {
+      if (!part) return;
+      if (i % 2) { const b = document.createElement("strong"); b.textContent = part; el.append(b); }
+      else el.append(part);
+    });
   }
   function addNote(text) { return addMsg("note", text); }
   function noteSources(bubble, sources) {
@@ -849,7 +1031,8 @@ main {
     const seen = document.createElement("span");
     const hazards = vision.hazards || [];
     seen.className = "seen" + (hazards.length ? " hazard" : "");
-    seen.textContent = hazards.length ? `Camera: ${hazards.join("; ")}` : `Camera saw: ${vision.summary}`;
+    seen.textContent = hazards.length ? `Camera: ${hazards.join("; ")}`
+      : vision.summary ? `Camera saw: ${vision.summary}` : "Checked your camera";
     bubble.appendChild(seen);
   }
   function showTyping() {
@@ -859,11 +1042,26 @@ main {
   }
   function hideTyping() { state.typingEl?.remove(); state.typingEl = null; }
 
-  // --- onboarding + recipe state -----------------------------------------
-  function setOnboarded(done) {
-    state.onboarded = done;
-    els.chips.hidden = !done;
-    els.textInput.placeholder = done ? "Type, or tap the mic" : "Type your answer, or tap the mic";
+  // --- recipe state ---------------------------------------------------------
+  // Quick replies that fit where the cook is: choosing, about to start, cooking.
+  function renderChips(c) {
+    const cooking = c.recipe && c.step !== null && c.step !== undefined && c.step < (c.total_steps || 0);
+    const chips = !c.recipe
+      ? [["Give me 2 ideas", "Give me 2 ideas for what to cook"], ["Upload my recipe", null, "upload"]]
+      : cooking
+        ? [["Next step", "Next"], ["Am I doing this right?", "Am I doing this right?"],
+           ["Repeat", "Repeat that step"], ["Back", "Go back a step"]]
+        : c.step === null || c.step === undefined
+          ? [["Start cooking", "Start cooking"], ["Something else", "I want to cook something else"]]
+          : [["Something else", "I want to cook something else"]];
+    els.chips.replaceChildren(...chips.map(([label, say, action]) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = label;
+      if (say) b.dataset.say = say;
+      if (action) b.dataset.action = action;
+      return b;
+    }));
+    els.chips.hidden = chips.length === 0;
   }
 
   let recipesLoaded = null;
@@ -875,12 +1073,20 @@ main {
     return recipesLoaded;
   }
 
+  // The recipe book stays out of the way until the cook searches it.
+  const MAX_PICKS = 6;
   function renderRecipePicks() {
     const terms = els.recipeSearch.value.toLowerCase().trim().split(/\s+/).filter(Boolean);
-    const recipes = recipeOptions.filter((r) => {
+    if (!terms.length) {
+      els.recipePicks.replaceChildren(); els.recipePicks.hidden = true;
+      els.recipeSearchStatus.hidden = true;
+      return;
+    }
+    const matches = recipeOptions.filter((r) => {
       const text = [r.name, ...(r.aliases || []), ...(r.ingredients || [])].join(" ").toLowerCase();
       return terms.every((term) => text.includes(term));
     });
+    const recipes = matches.slice(0, MAX_PICKS);
     els.recipePicks.replaceChildren(...recipes.map((r) => {
       const b = document.createElement("button");
       b.type = "button"; b.className = "btn"; b.dataset.recipe = r.name;
@@ -888,8 +1094,9 @@ main {
       return b;
     }));
     els.recipePicks.hidden = recipes.length === 0;
-    els.recipeSearchStatus.textContent = recipes.length ? `${recipes.length} recipes` : "No recipes found. Try another dish or ingredient.";
-    els.recipeSearchStatus.hidden = false;
+    els.recipeSearchStatus.textContent = !matches.length ? "No recipes found. Try another dish or ingredient, or upload your own."
+      : matches.length > MAX_PICKS ? `Top ${MAX_PICKS} of ${matches.length}. Add a word to narrow it down.` : "";
+    els.recipeSearchStatus.hidden = !els.recipeSearchStatus.textContent;
   }
 
   async function renderCooking(c) {
@@ -908,20 +1115,21 @@ main {
     els.recipePicks.hidden = true;
     els.recipeSearchLabel.hidden = true;
     els.recipeSearchStatus.hidden = true;
+    els.emptyActions.hidden = true;
     els.ingredientsPanel.hidden = true;
     els.ingredientsList.replaceChildren();
+    els.stepsPanel.hidden = true;
+    els.stepsList.replaceChildren();
     els.recipeDetails.hidden = true;
     els.startCooking.hidden = true;
     setTimerFor(c);
+    renderChips(c);
 
     if (!c.recipe) {
-      els.recipeName.textContent = state.onboarded ? "No recipe yet" : "Getting set up";
+      els.recipeName.textContent = "What are we cooking?";
       els.stepCount.textContent = "";
-      if (!state.onboarded) {
-        els.stepText.textContent = "Answer a few quick questions, then pick what you're cooking.";
-        return;
-      }
-      els.stepText.textContent = "What are we cooking?";
+      els.stepText.textContent = "Ask me for ideas, name a dish, or upload your own recipe.";
+      els.emptyActions.hidden = false;
       const recipes = await loadRecipes();
       if (state.cooking !== c) return; // A new chat may have opened while recipes loaded.
       recipeOptions = recipes;
@@ -930,7 +1138,15 @@ main {
       return;
     }
 
-    els.recipeName.textContent = c.recipe;
+    els.recipeName.textContent = c.custom ? `${c.recipe} (your recipe)` : c.recipe;
+    const steps = c.steps || [];
+    els.stepsList.replaceChildren(...steps.map((text, i) => {
+      const li = document.createElement("li");
+      li.textContent = text;
+      if (c.step !== null && c.step !== undefined) li.className = i < c.step ? "done" : i === c.step ? "now" : "";
+      return li;
+    }));
+    els.stepsPanel.hidden = steps.length === 0;
     const preparing = c.step === null || c.step === undefined;
     els.recipeDetails.textContent = [c.serves ? `Serves ${c.serves}` : "", c.time_minutes ? `About ${c.time_minutes} min` : ""].filter(Boolean).join(" · ");
     els.recipeDetails.hidden = !els.recipeDetails.textContent;
@@ -1016,6 +1232,11 @@ main {
       els.camBadge.hidden = false;
       els.camBadge.textContent = state.visionAvailable ? "Coach can see this" : "Preview only: no vision model set";
       keepAwake();
+      // Keep the last few seconds of frames so a question shows motion, not one still.
+      state.frames = [];
+      clearInterval(state.frameTimer);
+      if (state.visionAvailable) state.frameTimer = setInterval(sampleFrame, FRAME_EVERY_MS);
+      updateWatch();
     } catch (err) {
       addNote(`Camera unavailable: ${err.name === "NotAllowedError" ? "permission was denied" : err.message}.`);
     }
@@ -1023,6 +1244,8 @@ main {
   function cameraOff() {
     state.stream?.getTracks().forEach((t) => t.stop());
     state.stream = null;
+    clearInterval(state.frameTimer); state.frameTimer = null; state.frames = [];
+    updateWatch();
     els.video.hidden = true; els.camEmpty.hidden = false; els.camOff.hidden = true; els.camBadge.hidden = true;
     els.camera.classList.add("compact");
   }
@@ -1030,14 +1253,45 @@ main {
   els.camOff.addEventListener("click", cameraOff);
 
   // A downscaled JPEG of the current frame, only when a VLM is configured.
+  const FRAME_EVERY_MS = 1200, FRAME_WIDTH = 640, KEEP_FRAMES = 3;
   function captureFrame() {
     if (!state.stream || !state.visionAvailable || !els.video.videoWidth) return null;
-    const scale = Math.min(1, 768 / els.video.videoWidth);
+    const scale = Math.min(1, FRAME_WIDTH / els.video.videoWidth);
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(els.video.videoWidth * scale);
     canvas.height = Math.round(els.video.videoHeight * scale);
     canvas.getContext("2d").drawImage(els.video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.7);
+    return canvas.toDataURL("image/jpeg", 0.65);
+  }
+  function sampleFrame() {
+    const frame = captureFrame();
+    if (!frame) return;
+    state.frames.push(frame);
+    if (state.frames.length > KEEP_FRAMES) state.frames.shift();
+  }
+  // Oldest first: two buffered frames plus one taken right now.
+  function recentFrames() {
+    const now = captureFrame();
+    return now ? [...state.frames.slice(-(KEEP_FRAMES - 1)), now] : [];
+  }
+
+  // --- coach watches ---------------------------------------------------------
+  // While a step is in progress and the camera is on, send the latest frames
+  // every few seconds. The server stays silent unless something looks wrong,
+  // unsafe, or the step looks finished.
+  function updateWatch() {
+    const on = Boolean(state.stream && state.watchAvailable);
+    els.watchToggle.hidden = !on;
+    clearInterval(state.watchTimer); state.watchTimer = null;
+    if (on) state.watchTimer = setInterval(sendWatch, Math.max(10, state.watchInterval) * 1000);
+  }
+  function sendWatch() {
+    const c = state.cooking;
+    if (!els.watch.checked || !state.stream || !state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+    if (state.awaitingReply || state.listening || state.speechPending || document.visibilityState !== "visible") return;
+    if (c.step === null || c.step === undefined || c.step >= (c.total_steps || 0)) return;
+    const images = recentFrames();
+    if (images.length) state.ws.send(JSON.stringify({ type: "watch", images }));
   }
 
   // Keep the screen on while cooking; flour-covered hands can't unlock a phone.
@@ -1101,17 +1355,65 @@ main {
     state.audioUnlocked = true;
     speechSynthesis.speak(new SpeechSynthesisUtterance(""));
   }
-  function flushSpeech(final) {
-    // Wait for a sentence boundary; a token is too small to speak naturally.
-    // Requiring whitespace after a period keeps decimals such as 2.5 intact.
-    let match;
-    while ((match = /[.!?]["')\u201d\u2019]*\s+|[\u3002\uff01\uff1f]/.exec(state.speechBuffer))) {
+  // What a line sounds like: no markdown, "1. Boil" read as "1, Boil".
+  function speakable(text) {
+    return String(text).replace(/\*\*|__|`/g, "").replace(/^\s*#{1,6}\s+/, "")
+      .replace(/^\s*(\d{1,2})[.)]\s+/, "$1, ").replace(/\s+/g, " ").trim();
+  }
+  // Sentences that are complete in a line still being streamed. A period
+  // needs whitespace after it (keeps 2.5 intact) and a list marker such as
+  // "1." is not a sentence.
+  function completeSentences(line) {
+    const chunks = [];
+    const boundary = /[.!?]["')\u201d\u2019]*\s+|[\u3002\uff01\uff1f]/g;
+    let start = 0, match;
+    while ((match = boundary.exec(line))) {
       const end = match.index + match[0].length;
-      speak(state.speechBuffer.slice(0, end).trim(), true);
-      state.speechBuffer = state.speechBuffer.slice(end);
+      if (/^\s*\d{1,2}$/.test(line.slice(start, match.index))) continue;
+      chunks.push(line.slice(start, end));
+      start = end;
     }
-    if (final && state.speechBuffer.trim()) speak(state.speechBuffer.trim(), true);
-    if (final) state.speechBuffer = "";
+    return [chunks, line.slice(start)];
+  }
+  // Bullet runs (ingredient lists) are for reading, not hearing: three or
+  // more in a row are replaced by one pointer to the screen.
+  function speakBullets() {
+    const bullets = state.speechList;
+    state.speechList = [];
+    if (bullets.length >= 3) speak("The list is on your screen.", true);
+    else bullets.forEach((line) => speak(speakable(line.replace(BULLET, "$1")), true));
+  }
+  function speakLine(line) {
+    if (!line.trim()) return;
+    if (BULLET.test(line.trim())) { state.speechList.push(line.trim()); return; }
+    if (state.speechList.length) speakBullets();
+    speak(speakable(line), true);
+  }
+  function flushSpeech(final) {
+    // Whole lines first; within the line still arriving, only full sentences.
+    let newline;
+    while ((newline = state.speechBuffer.indexOf("\n")) !== -1) {
+      speakLine(state.speechBuffer.slice(0, newline));
+      state.speechBuffer = state.speechBuffer.slice(newline + 1);
+    }
+    if (final) {
+      speakLine(state.speechBuffer);
+      state.speechBuffer = "";
+      if (state.speechList.length) speakBullets();
+      return;
+    }
+    if (BULLET.test(state.speechBuffer.trim())) return; // wait for the whole bullet
+    const [chunks, rest] = completeSentences(state.speechBuffer);
+    if (chunks.length && state.speechList.length) speakBullets();
+    chunks.forEach((chunk) => speak(speakable(chunk), true));
+    state.speechBuffer = rest;
+  }
+  // A whole reply at once (not streamed): same rules as the streamed path.
+  function speakReply(text) {
+    stopSpeaking(); state.muteReply = false;
+    state.speechBuffer = String(text || ""); state.speechList = [];
+    flushSpeech(true);
+    if (!state.speechPending) afterSpeaking();
   }
   function speak(text, append = false) {
     if (!els.voiceOut.checked || !("speechSynthesis" in window) || !text || state.muteReply) return afterSpeaking();
@@ -1147,9 +1449,10 @@ main {
   });
   function afterSpeaking() {
     // Hands-free: once the coach finishes talking, listen for the next question.
-    if (!state.exiting && els.handsFree.checked && !state.listening && !state.awaitingReply && !state.speechPending && !els.profileDialog.open && !els.historyDialog.open && document.visibilityState === "visible") {
+    const dialogOpen = () => els.profileDialog.open || els.historyDialog.open || els.recipeDialog.open;
+    if (!state.exiting && els.handsFree.checked && !state.listening && !state.awaitingReply && !state.speechPending && !dialogOpen() && document.visibilityState === "visible") {
       const expectedChat = chatId;
-      setTimeout(() => { if (!state.exiting && expectedChat === chatId && els.handsFree.checked && !state.listening && !state.awaitingReply && !state.speechPending && !els.profileDialog.open && !els.historyDialog.open && !window.speechSynthesis?.speaking) listen(); }, 350);
+      setTimeout(() => { if (!state.exiting && expectedChat === chatId && els.handsFree.checked && !state.listening && !state.awaitingReply && !state.speechPending && !dialogOpen() && !window.speechSynthesis?.speaking) listen(); }, 350);
     }
   }
 

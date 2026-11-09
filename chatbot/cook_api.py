@@ -3,11 +3,15 @@
 Serves the phone web app and the one WebSocket it talks to.
 
 The phone does speech both ways in the browser (Web Speech API for listening,
-speechSynthesis for speaking), so the server only ever sees text plus an
-optional camera frame:
+speechSynthesis for speaking), so the server only ever sees text plus images:
 
-    phone -> {"type": "ask", "message": "is this done?", "image": "data:image/jpeg;base64,..."}
-    phone <- {"type": "response", "message": "...", "cooking": {...}, "vision": {...}}
+    phone -> {"type": "ask", "message": "is this right?", "images": [<latest camera frames>]}
+    phone -> {"type": "ask", "message": "...", "image": <photo>, "image_source": "upload"}
+    phone -> {"type": "recipe_upload", "text": "...", "image": <photo of a recipe>}
+    phone -> {"type": "watch", "images": [...]}     periodic camera check while cooking
+    phone <- {"type": "thinking"} / {"type": "delta", "text": "..."} /
+             {"type": "response", "message": "...", "cooking": {...}, "vision": {...}}
+    phone <- {"type": "alert", "level": "issue|hazard|step_done", "message": "..."}
 
 Camera and microphone access in a mobile browser require HTTPS (localhost is
 the only exception), which is why production runs behind Caddy.
@@ -17,6 +21,7 @@ import asyncio
 import logging
 import os
 import sqlite3
+import time
 import uuid
 
 from fastapi import FastAPI, Query, Request, WebSocket, WebSocketDisconnect
@@ -29,8 +34,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from cook_main import CookingAssistant
-from vision import ImageError, VisionRequest, decode_image
+from cook_main import WATCH_INTERVAL_SECONDS, CookingAssistant
+from vision import ImageError, VisionRequest, decode_image, decode_images
+
+# The phone asks every WATCH_INTERVAL_SECONDS; the server refuses anything
+# faster so a misbehaving tab cannot burn the API quota.
+WATCH_MIN_SECONDS = max(5, WATCH_INTERVAL_SECONDS // 2)
+MAX_UPLOAD_TEXT = 20_000
 
 app = FastAPI(title="LH Cooking Coach API")
 
@@ -47,15 +57,27 @@ async def root():
     return FileResponse(os.path.join(STATIC, "index.html"))
 
 
-def _session_payload(session_id: str, message: str) -> dict:
+def _session_payload(session_id: str) -> dict:
     return {
         "type": "system",
         "client_id": session_id,
-        "message": message,
-        "profile": assistant.onboarding_state(session_id),
         "cooking": assistant.cooking_state(session_id),
         "vision_available": assistant.vision.available,
+        "watch_available": assistant.watch_available,
+        "watch_interval": WATCH_INTERVAL_SECONDS,
     }
+
+
+async def _open_chat(websocket: WebSocket, session_id: str):
+    """Send the session state, then a greeting if this chat has not started."""
+    await websocket.send_json(await asyncio.to_thread(_session_payload, session_id))
+    visit = await asyncio.to_thread(assistant.store.current_visit, session_id)
+    if visit.turn_count == 0:
+        await websocket.send_json({"type": "thinking"})
+        greeting = await assistant.greet(session_id)
+        if greeting:
+            await websocket.send_json({"type": "response", "message": greeting,
+                                       "cooking": assistant.cooking_state(session_id)})
 
 
 @app.websocket("/ws")
@@ -70,9 +92,16 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str = Query(None),
     chat_token = assistant.store.bind_chat((chat_id or "").strip()[:64] or None)
     logger.info("Phone connected: %s", session_id)
 
+    max_bytes = assistant.vision.config.max_image_bytes
+    last_watch = 0.0
+    last_alert = None
+    nudged_steps = set()
+
+    async def send_delta(text):
+        await websocket.send_json({"type": "delta", "text": text})
+
     try:
-        greeting = await asyncio.to_thread(assistant.start_visit, session_id)
-        await websocket.send_json(_session_payload(session_id, greeting))
+        await _open_chat(websocket, session_id)
 
         while True:
             data = await websocket.receive_json()
@@ -82,8 +111,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str = Query(None),
                 requested = (data.get("client_id") or "").strip()[:64]
                 if requested and requested != session_id:
                     session_id = requested
-                    greeting = await asyncio.to_thread(assistant.start_visit, session_id)
-                    await websocket.send_json(_session_payload(session_id, greeting))
+                    await _open_chat(websocket, session_id)
                 continue
             if kind == "ping":
                 await websocket.send_json({"type": "pong"})
@@ -97,8 +125,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str = Query(None),
                         result = {"profile": await asyncio.to_thread(assistant.store.get_profile, session_id)}
                     elif kind == "profile_save":
                         profile = await asyncio.to_thread(assistant.store.save_profile, session_id, data.get("profile"))
-                        result = {"profile": profile, "onboarding": assistant.onboarding_state(session_id),
-                                  "cooking": assistant.cooking_state(session_id)}
+                        result = {"profile": profile, "cooking": assistant.cooking_state(session_id)}
                     elif kind == "history_list":
                         result = await asyncio.to_thread(assistant.store.history, session_id, data.get("offset", 0))
                     else:
@@ -109,35 +136,83 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str = Query(None),
                     await websocket.send_json({"type": "settings_result", "request_id": request_id, "error": str(exc)})
                 continue
 
+            if kind == "watch":
+                # Periodic camera check while a step is in progress. Silent
+                # unless the model sees a problem or a finished step.
+                now = time.monotonic()
+                if now - last_watch < WATCH_MIN_SECONDS:
+                    continue
+                last_watch = now
+                try:
+                    frames = decode_images(data.get("images"), max_bytes)
+                except ImageError as exc:
+                    logger.warning("Watch frames from %s rejected: %s", session_id, exc)
+                    continue
+                result = await assistant.watch(session_id, frames, last_alert)
+                if not result or not result["message"]:
+                    continue
+                if result["status"] == "step_done":
+                    if result["step"] in nudged_steps:
+                        continue
+                    nudged_steps.add(result["step"])
+                else:
+                    last_alert = result["message"]
+                await websocket.send_json({"type": "alert", "level": result["status"],
+                                           "message": result["message"],
+                                           "cooking": assistant.cooking_state(session_id)})
+                continue
+
+            if kind == "recipe_upload":
+                text = data.get("text") if isinstance(data.get("text"), str) else ""
+                image, image_error = None, None
+                if data.get("image"):
+                    try:
+                        image = decode_image(data["image"], max_bytes)
+                    except ImageError as exc:
+                        image_error = str(exc)
+                await websocket.send_json({"type": "thinking"})
+                if image_error or len(text) > MAX_UPLOAD_TEXT:
+                    await websocket.send_json({"type": "response", **assistant._result(
+                        session_id, "That upload could not be used. Paste up to 20,000 characters "
+                                    "of recipe text, or choose a JPEG, PNG or WebP photo."),
+                        "image_error": image_error})
+                    continue
+                logger.info("Recipe upload from %s: %d chars, photo: %s",
+                            session_id, len(text), "yes" if image else "no")
+                result = await assistant.import_recipe(session_id, text, image, on_delta=send_delta)
+                await websocket.send_json({"type": "response", **result})
+                continue
+
             message = (data.get("message") or "").strip()
             if not message:
                 continue
 
-            image, image_error = None, None
-            if data.get("image"):
-                try:
-                    image = decode_image(data["image"],
-                                         assistant.vision.config.max_image_bytes)
-                except ImageError as exc:
-                    image_error = str(exc)
-                    logger.warning("Frame from %s rejected: %s", session_id, exc)
+            upload, frames, image_error = None, [], None
+            try:
+                if data.get("image_source") == "upload":
+                    if not data.get("image"):
+                        raise ImageError("No photo was received.")
+                    upload = decode_image(data["image"], max_bytes)
+                elif data.get("images"):
+                    frames = decode_images(data["images"], max_bytes)
+                elif data.get("image"):  # older pages send one camera frame
+                    frames = [decode_image(data["image"], max_bytes)]
+            except ImageError as exc:
+                image_error = str(exc)
+                logger.warning("Image from %s rejected: %s", session_id, exc)
 
-            logger.info("Question from %s: %r (frame: %s)", session_id, message[:80],
-                        f"{len(image[0])} bytes" if image else "none")
+            logger.info("Question from %s: %r (frames: %d, photo: %s)", session_id, message[:80],
+                        len(frames), "yes" if upload else "no")
             await websocket.send_json({"type": "thinking"})
 
-            image_source = "upload" if data.get("image_source") == "upload" else "camera"
-            if image_source == "upload" and (image_error or image is None):
+            if image_error and data.get("image_source") == "upload":
                 await websocket.send_json({"type": "response", **assistant._result(
                     session_id, "The photo could not be attached. Choose another JPEG, PNG or WebP photo and try again."),
-                    "image_error": image_error or "No photo was received."})
+                    "image_error": image_error})
                 continue
 
-            async def send_delta(text):
-                await websocket.send_json({"type": "delta", "text": text})
-
             result = await assistant.process_message(
-                message, session_id, image=image, on_delta=send_delta, image_source=image_source)
+                message, session_id, frames=frames, upload=upload, on_delta=send_delta)
             payload = {"type": "response", **result}
             if image_error:
                 payload["image_error"] = image_error

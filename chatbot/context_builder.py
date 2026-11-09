@@ -3,43 +3,39 @@
 The join between what the coach knows (knowledge_base), what it remembers
 (conversation_state) and what the camera sees (vision).
 
-The context is built in labelled layers, widest first:
+The model drives the conversation; this module only gathers what it needs to
+answer well, in labelled layers:
 
-    [COOK]      session profile: name, skill, dietary needs
-    [RECIPE]    the recipe being cooked and the step they are on
-    [NOW]       what this question is about, and what the camera sees
-    [RECENT]    the last few exchanges, verbatim
-    [FACTS]     retrieved facts, each tagged with the facet it answers
+    [COOK]      profile: name, experience, allergies (or "not known yet")
+    [RECIPE]    the active recipe: ingredients, every step, and where they are
+    [CATALOG]   only when nothing is being cooked: what can be suggested
+    [NOW]       what this turn is about, and whether camera frames are attached
+    [FACTS]     retrieved notes, each tagged with the facet it answers
     [QUESTION]  the utterance itself
 
-STEP NAVIGATION
----------------
-"next", "go back", "say that again", "step 4", "let's start" move the step
-pointer before anything is rendered, so the [RECIPE] layer already shows the
-step the cook asked for. Navigation is decided by pattern, not by the model:
-it has to be instant and it has to be right.
+The last few exchanges are sent as real chat messages (see streaming_openai),
+not pasted into this context.
 
-SUBJECT PRIORITY
-----------------
-What "it" refers to, in order:
-
-    1. something named outright ("how do I emulsify?")
-    2. a pronoun ("how long does IT rest?") -> the episode's subject
-    3. a pointing word ("is THIS done?") -> what the camera recognised
-    4. a follow-up ("anything else?") -> the episode's subject
-    5. the recipe being cooked
-    6. nothing - a general kitchen question
+STEP NAVIGATION FAST PATH
+-------------------------
+Short, unambiguous commands -- "next", "back", "repeat", "step 4", "start" --
+move the step pointer before anything is rendered, so they are instant and
+always right. Anything longer or fuzzier ("I've finished chopping, what now?")
+goes to the model, which moves the pointer with its go_to_step tool. Choosing,
+switching and stopping recipes is always the model's call (choose_recipe /
+stop_recipe), so "give me suggestions" is never mistaken for a dish name.
 
 GROUNDING
 ---------
-Recipe quantities, times and temperatures come only from [FACTS] and
-[RECIPE]. When retrieval comes back empty the context says so, and the coach
+Quantities, times and temperatures for the recipe come only from [RECIPE] and
+[FACTS]. When retrieval comes back empty the context says so, and the coach
 may offer general cooking advice but must not invent recipe numbers.
 """
 
 import logging
 import os
 import re
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from knowledge_base import KnowledgeBase, Subject, classify_facet
@@ -49,15 +45,11 @@ from web_search import explicit_search
 logger = logging.getLogger(__name__)
 
 MAX_FACTS = 4
-MAX_RECENT_TURNS = 3
+MAX_NAV_WORDS = 6
 
 # Pronouns point back into the CONVERSATION: "how long does IT rest?" means
 # whatever we were just discussing.
 ANAPHORIC_MARKERS = ("it", "its", "it's", "them", "they", "their")
-
-# Pointing words point out into the WORLD: "is THIS done?" means the thing in
-# front of the camera.
-DEMONSTRATIVE_MARKERS = ("this", "these", "this one", "that one", "those")
 
 # A question that only makes sense as a continuation. Kept narrow: a false
 # positive carries the previous subject into a question not about it.
@@ -84,9 +76,6 @@ _NUMBER_WORDS = {
     "seventh": 7, "eighth": 8, "ninth": 9, "tenth": 10,
 }
 NAV_PATTERNS = (
-    ("stop", r"\b(stop cooking|cancel (the )?recipe|forget (the )?recipe|"
-             r"change (the )?(recipe|dish)|different recipe|something else to cook|"
-             r"switch (the )?(dish|recipe)|(make|cook) something else)\b"),
     ("start", r"\b(let'?s (start|begin|go)|start cooking|start over|start again|"
               r"from the (top|beginning|start)|i'?m ready to start|begin)\b"),
     ("previous", r"\b(go back|previous step|step before|back a step|back one step|"
@@ -99,6 +88,13 @@ NAV_PATTERNS = (
 )
 _GOTO = re.compile(
     r"\bstep (\d{1,2}|" + "|".join(_NUMBER_WORDS) + r")\b")
+# "ok start", "yes let's go", "i'm ready" -- a whole message that only says
+# go. "how do I start the sauce" is not one. START (re)starts at step 1;
+# READY only starts a recipe that has not begun (see ContextBuilder.build).
+_GO_PREFIX = (r"^(ok(ay)?|yes|yeah|yep|sure|alright|right|great|cool|good)?\s*"
+              r"(i'?m |i am |we'?re )?(let'?s )?")
+START_COMMAND = re.compile(_GO_PREFIX + r"(start|begin|start cooking|get started)( now| please| then)?$")
+READY_COMMAND = re.compile(_GO_PREFIX + r"(ready|go|do it|got everything)( now| please| then)?$")
 
 
 def _clean(text: str) -> str:
@@ -106,21 +102,26 @@ def _clean(text: str) -> str:
 
 
 def detect_navigation(text: str) -> Optional[tuple]:
-    """("next",) / ("previous",) / ("repeat",) / ("start",) / ("stop",) /
-    ("goto", n) for a navigation request, else None.
+    """("next",) / ("previous",) / ("repeat",) / ("start",) / ("goto", n) for a
+    short step command, else None.
 
-    A doneness question ("is it done?") is not navigation, even though it
-    contains "done".
+    Only short commands qualify: "I'm done chopping, does this look right?"
+    is a question for the model (and the camera), not a bare "next". A
+    doneness question ("is it done?") is never navigation.
     """
+    cleaned = _clean(text)
+    if not cleaned or len(cleaned.split()) > MAX_NAV_WORDS:
+        return None
     if classify_facet(text) == "doneness":
         return None
     if explicit_search(text):
         return None
-    if re.search(r"\bnext time\b", (text or "").lower()):
+    if re.search(r"\bnext time\b", cleaned) or "?" in (text or "") and "next" not in cleaned:
         return None
-    cleaned = _clean(text)
-    if cleaned in ("start", "start please"):
+    if START_COMMAND.match(cleaned):
         return ("start",)
+    if READY_COMMAND.match(cleaned):
+        return ("ready",)
     if cleaned in ("back", "back please"):
         return ("previous",)
     goto = _GOTO.search(cleaned)
@@ -131,38 +132,6 @@ def detect_navigation(text: str) -> Optional[tuple]:
         if re.search(pattern, cleaned):
             return (intent,)
     return None
-
-
-# Phrases that mean "I want to cook this one now", as opposed to asking about
-# a recipe while cooking another.
-SWITCH_PATTERN = re.compile(
-    r"\b(let'?s (make|cook|do)|i'?m (making|cooking)|"
-    r"i want to (make|cook|change)|"
-    r"switch to|change to|instead|"
-    r"change (the )?(dish|recipe)|switch (the )?(dish|recipe)|"
-    r"(make|cook) something else|start)\b")
-
-# Follow-ups that pick a dish the coach just named ("the one you mentioned").
-RECIPE_ANAPHORA_PICK = re.compile(
-    r"\b(the one (you|u) mentioned|that one|the .+ one)\b")
-
-# Unlock the session with no replacement dish. Deliberately excludes bare
-# "start" so "let's start" still only rewinds the current recipe's steps.
-CLEAR_RECIPE_PATTERN = re.compile(
-    r"\b(i want to change|change (the )?(dish|recipe)|switch (the )?(dish|recipe)|"
-    r"(make|cook) something else|different recipe|something else to cook|"
-    r"stop cooking|cancel (the )?recipe|forget (the )?recipe)\b")
-
-
-def wants_recipe_switch(text: str) -> bool:
-    """True when the cook is changing or confirming a dish, not just asking about one."""
-    cleaned = _clean(text)
-    return bool(SWITCH_PATTERN.search(cleaned) or RECIPE_ANAPHORA_PICK.search(cleaned))
-
-
-def wants_recipe_clear(text: str) -> bool:
-    """True when the cook wants to drop the current dish without naming a new one."""
-    return bool(CLEAR_RECIPE_PATTERN.search(_clean(text)))
 
 
 def is_social(text: str) -> bool:
@@ -182,10 +151,6 @@ def is_anaphoric(text: str) -> bool:
     return _has_marker(text, ANAPHORIC_MARKERS)
 
 
-def is_demonstrative(text: str) -> bool:
-    return _has_marker(text, DEMONSTRATIVE_MARKERS)
-
-
 def is_follow_up(text: str) -> bool:
     lowered = (text or "").lower()
     return any(marker in lowered for marker in FOLLOW_UP_MARKERS)
@@ -201,12 +166,48 @@ def detect_language(text: str) -> str:
     return DEFAULT_LANGUAGE
 
 
+# --- The active recipe ----------------------------------------------------------
+@dataclass
+class ActiveRecipe:
+    """A catalog or uploaded recipe in one shape, for prompts and the phone."""
+    kind: str                       # "catalog" | "custom"
+    id: int
+    name: str
+    steps: List[Dict[str, Any]]     # {"n", "text", "done_when", "timer_seconds"}
+    ingredients: List[str] = field(default_factory=list)
+    serves: Optional[int] = None
+    time_minutes: Optional[int] = None
+    subject: Optional[Subject] = None   # knowledge-base subject, catalog only
+
+    @property
+    def custom(self) -> bool:
+        return self.kind == "custom"
+
+
+_QUANTITY = re.compile(
+    r"^(about |around |a |an |\d+[\d/.,\s-]*|½|¼|¾)*"
+    r"(g|kg|grams?|ml|millilitres?|milliliters?|l|litres?|liters?|tbsp|tablespoons?|"
+    r"tsp|teaspoons?|cups?|cloves?|pinch(es)?|handfuls?|slices?|pieces?|cans?|tins?|"
+    r"sticks?|stalks?|sprigs?|bunch(es)?|large|medium|small|of)?\b\s*", re.I)
+
+
+def ingredient_core(text: str) -> str:
+    """'200 grams spaghetti, dried' -> 'spaghetti'; for the compact catalog."""
+    core = re.split(r"[,(]", text or "", maxsplit=1)[0].strip()
+    for _ in range(3):
+        stripped = _QUANTITY.sub("", core, count=1).strip()
+        if stripped == core:
+            break
+        core = stripped
+    return core.lower() or (text or "").lower()
+
+
 class TurnContext:
     """Everything decided about one turn, plus the rendered prompt context."""
 
     __slots__ = ("visit", "episode", "subject", "subject_source", "facet", "language",
-                 "facts", "text", "grounded", "message", "recipe", "steps", "nav",
-                 "observation", "social")
+                 "facts", "text", "grounded", "message", "recipe", "nav",
+                 "observation", "social", "frames")
 
     def __init__(self, **fields):
         for name in self.__slots__:
@@ -225,21 +226,14 @@ class TurnContext:
         return self.visit.step if self.visit else None
 
     @property
-    def current_step(self) -> Optional[Dict[str, Any]]:
-        if not self.steps or self.step is None or self.step >= len(self.steps):
-            return None
-        return self.steps[self.step]
-
-    def cooking_state(self) -> Dict[str, Any]:
-        """What the phone shows on its step card."""
-        return cooking_state(self.recipe.name if self.recipe else None,
-                             self.step, self.steps or [])
+    def steps(self) -> List[Dict[str, Any]]:
+        return self.recipe.steps if self.recipe else []
 
     def __repr__(self):
         return (f"TurnContext(subject={self.subject_name!r} via {self.subject_source},"
                 f" facet={self.facet}, nav={self.nav}, step={self.step},"
-                f" facts={len(self.facts or [])},"
-                f" camera={'yes' if self.observation else 'no'})")
+                f" facts={len(self.facts or [])}, frames={self.frames or 0},"
+                f" observation={'yes' if self.observation else 'no'})")
 
 
 class ContextBuilder:
@@ -250,51 +244,37 @@ class ContextBuilder:
         self.store = store
 
     # -- recipe and step ---------------------------------------------------
-    def active_recipe(self, visit: Visit) -> Optional[Subject]:
+    def active_recipe(self, visit: Visit) -> Optional[ActiveRecipe]:
+        if visit.recipe_custom_id is not None:
+            data = self.store.custom_recipe(visit.recipe_custom_id, visit.user_id)
+            if data is None:
+                return None
+            return ActiveRecipe(
+                kind="custom", id=data["id"], name=data["name"],
+                steps=[{"n": i + 1, "text": s.get("text", ""), "done_when": s.get("done_when"),
+                        "timer_seconds": s.get("timer_seconds")}
+                       for i, s in enumerate(data.get("steps") or [])],
+                ingredients=list(data.get("ingredients") or []),
+                serves=data.get("serves"), time_minutes=data.get("time_minutes"))
         if visit.recipe_id is None:
             return None
-        return self.knowledge.subject_by_id(visit.recipe_id, source="recipe")
+        subject = self.knowledge.subject_by_id(visit.recipe_id, source="recipe")
+        if subject is None:
+            return None
+        details = self.knowledge.recipe_details(visit.recipe_id)
+        return ActiveRecipe(
+            kind="catalog", id=visit.recipe_id, name=subject.name,
+            steps=self.knowledge.steps(visit.recipe_id),
+            ingredients=details.get("ingredients", []),
+            serves=details.get("serves"), time_minutes=details.get("time_minutes"),
+            subject=subject)
 
-    def _recipe_from_recent(self, visit: Visit) -> Optional[Subject]:
-        """Find a recipe named in recent chat that is not the one currently cooking."""
-        current_id = visit.recipe_id
-        for turn in reversed(self.store.recent_turns(visit.session_id, limit=6)):
-            for text in (turn.get("assistant_text"), turn.get("user_text")):
-                found = self.knowledge.resolve_recipe(text or "")
-                if found is not None and found.id != current_id:
-                    return found
-        return None
-
-    def _maybe_switch_recipe(self, visit: Visit, message: str,
-                             recipe: Optional[Subject]) -> Optional[Subject]:
-        named = self.knowledge.resolve_recipe(message)
-        switch = wants_recipe_switch(message)
-        # "the one you mentioned" / switch with no name: recover from recent chat.
-        if named is None and switch and (
-                detect_navigation(message) != ("start",) or RECIPE_ANAPHORA_PICK.search(_clean(message))):
-            named = self._recipe_from_recent(visit)
-        if named is None:
-            # Explicit change/cancel with no target unlocks the session.
-            # Do not clear on bare "start" or a failed "that one" anaphora.
-            if recipe is not None and wants_recipe_clear(message):
-                self.store.set_recipe(visit, None, None)
-                return None
-            return recipe
-        if named == recipe:
-            return recipe
-        # With nothing on the go, naming a dish starts it. Mid-recipe, only an
-        # explicit switch -- otherwise "is aglio olio spicy?" mid-cook would
-        # throw away the cook's place.
-        if recipe is None or switch:
-            self.store.set_recipe(visit, named.id, named.name)
-            return self.knowledge.subject_by_id(named.id, source="recipe")
-        return recipe
-
-    def _navigate(self, visit: Visit, nav: tuple, steps: List[Dict[str, Any]]):
+    def navigate(self, visit: Visit, nav: tuple, steps: List[Dict[str, Any]]) -> Optional[int]:
+        """Move the step pointer. Returns the new 0-based step."""
         intent = nav[0]
         total = len(steps)
         current = visit.step
-        if intent == "start":
+        if intent == "start" or (intent == "ready" and current is None):
             target = 0
         elif intent == "next":
             target = 0 if current is None else min(current + 1, total)
@@ -305,37 +285,25 @@ class ContextBuilder:
         elif intent == "goto":
             target = min(max(nav[1] - 1, 0), max(total - 1, 0))
         else:
-            return
+            return current
         if target != current:
             self.store.set_step(visit, target)
+        return target
 
     # -- subject ----------------------------------------------------------
     def resolve_subject(self, message: str, episode: Optional[Episode],
-                        recipe: Optional[Subject], observation=None):
-        """Work out what this turn is about. See the module docstring for order."""
+                        recipe: Optional[ActiveRecipe]):
+        """What this turn is about: named > pronoun > follow-up > the recipe."""
         named = self.knowledge.resolve_subject(message)
         if named is not None:
             return named, "named"
-
         carried = self._episode_subject(episode)
-        if is_anaphoric(message) and carried is not None:
+        if (is_anaphoric(message) or is_follow_up(message)) and carried is not None:
             return carried, "carried"
-
-        if is_demonstrative(message) and observation is not None:
-            for item in observation.items:
-                seen = self.knowledge.subject_for_label(item)
-                if seen is not None:
-                    return seen, "camera"
-
-        if is_follow_up(message) and carried is not None:
-            return carried, "carried"
-
-        if recipe is not None:
-            return recipe, "recipe"
-
+        if recipe is not None and recipe.subject is not None:
+            return recipe.subject, "recipe"
         if carried is not None and classify_facet(message) is not None:
             return carried, "carried"
-
         return None, "none"
 
     def _episode_subject(self, episode: Optional[Episode]) -> Optional[Subject]:
@@ -345,26 +313,20 @@ class ContextBuilder:
                        episode.subject_name, source="episode")
 
     # -- build ------------------------------------------------------------
-    def build(self, user_id: str, message: str, observation=None) -> TurnContext:
+    def build(self, user_id: str, message: str, observation=None, frames: int = 0,
+              allow_nav: bool = True) -> TurnContext:
         visit = self.store.current_visit(user_id)
         language = visit.language or detect_language(message)
+        recipe = self.active_recipe(visit)
 
-        previous_recipe_id = visit.recipe_id
-        recipe = self._maybe_switch_recipe(visit, message, self.active_recipe(visit))
-
-        nav = detect_navigation(message)
-        # Choosing a dish always previews ingredients, even for "start curry".
-        if recipe and recipe.id != previous_recipe_id:
-            nav = None
-        if nav and nav[0] == "stop":
-            self.store.set_recipe(visit, None, None)
-            recipe = None
-        steps = self.knowledge.steps(recipe.id) if recipe else []
-        if nav and recipe and steps:
-            self._navigate(visit, nav, steps)
+        nav = detect_navigation(message) if allow_nav and recipe and recipe.steps else None
+        if nav == ("ready",) and visit.step is not None:
+            nav = None   # mid-recipe "ready" means something; let the model read it
+        if nav:
+            self.navigate(visit, nav, recipe.steps)
 
         active = self.store.active_episode(visit.session_id)
-        subject, subject_source = self.resolve_subject(message, active, recipe, observation)
+        subject, subject_source = self.resolve_subject(message, active, recipe)
         facet = classify_facet(message)
         social = not nav and subject_source in ("none", "recipe") and is_social(message)
 
@@ -376,76 +338,41 @@ class ContextBuilder:
         # Navigation reads a step; the step is the content, so no facts.
         facts: List[Dict[str, Any]] = []
         if not social and not nav:
+            kb_recipe = recipe.subject if recipe else None
             delivered = self.store.delivered_fact_ids(visit.session_id)
             facts = self.knowledge.retrieve(subject, facet, query=message,
                                             exclude_ids=delivered, limit=MAX_FACTS,
-                                            recipe=recipe)
+                                            recipe=kb_recipe)
             # Everything relevant has been said. Rather than answer with
             # nothing, let the ledger go and repeat the best material.
             if not facts and subject is not None and delivered:
                 self.store.forget_delivered(visit.session_id)
                 facts = self.knowledge.retrieve(subject, facet, query=message,
-                                                limit=MAX_FACTS, recipe=recipe)
+                                                limit=MAX_FACTS, recipe=kb_recipe)
 
         turn = TurnContext(
             visit=visit, episode=episode, subject=subject, subject_source=subject_source,
             facet=facet, language=language, facts=facts, message=message,
-            recipe=recipe, steps=steps, nav=nav, observation=observation, social=social,
-            grounded=bool(social or nav or facts),
+            recipe=recipe, nav=nav, observation=observation, social=social,
+            frames=frames, grounded=bool(social or nav or facts),
         )
-        turn.text = self._render(turn)
+        turn.text = self.render(turn)
         return turn
 
     # -- render -----------------------------------------------------------
-    def _render(self, turn: TurnContext) -> str:
-        visit = turn.visit
+    def render(self, turn: TurnContext) -> str:
         lines: List[str] = []
+        lines += ["[COOK]", *self.cook_lines(turn.visit), ""]
+        lines += ["[RECIPE]", *self.recipe_lines(turn.visit, turn.recipe), ""]
+        if turn.recipe is None:
+            lines += ["[CATALOG]", *self.catalog_lines(), ""]
+        lines += ["[NOW]", *self._now_lines(turn), ""]
 
-        # --- COOK --------------------------------------------------------
-        lines.append("[COOK]")
-        if visit.cook_name:
-            lines.append(f"Name: {visit.cook_name}.")
-        if visit.skill_level:
-            lines.append(f"Kitchen experience: {visit.skill_level}. Pitch explanations to it.")
-        if visit.dietary:
-            lines.append(f"Allergies or foods they avoid: {visit.dietary}. If anything "
-                         f"in the recipe conflicts, say so.")
-        lines.append(f"{visit.minutes_so_far} minutes into the session, "
-                     f"{visit.turn_count} question{'s' if visit.turn_count != 1 else ''} so far.")
-        lines.append("")
-
-        # --- RECIPE ------------------------------------------------------
-        lines.append("[RECIPE]")
-        lines.extend(self._recipe_lines(turn))
-        lines.append("")
-
-        # --- NOW ---------------------------------------------------------
-        lines.append("[NOW]")
-        lines.extend(self._now_lines(turn))
-        lines.append("")
-
-        # --- RECENT ------------------------------------------------------
-        recent = self.store.recent_turns(visit.session_id, MAX_RECENT_TURNS)
-        if recent:
-            lines.append("[RECENT]")
-            for past in recent:
-                if past.get("user_text"):
-                    lines.append(f"Cook: {past['user_text']}")
-                if past.get("assistant_text"):
-                    reply = past["assistant_text"]
-                    if len(reply) > 200:
-                        reply = reply[:200].rstrip() + "..."
-                    lines.append(f"Coach: {reply}")
-            lines.append("")
-
-        # --- FACTS -------------------------------------------------------
         lines.append("[FACTS]")
         if turn.social:
-            lines.append("This is small talk, not a question. Reply warmly in one short "
-                         "sentence. No facts needed.")
+            lines.append("Small talk, not a question. Reply warmly in one short sentence.")
         elif turn.nav:
-            lines.append("Navigation request: the step in [RECIPE] is the content. "
-                         "No other facts needed.")
+            lines.append("Step navigation: the current step in [RECIPE] is the content.")
         elif turn.facts:
             lines.append("Use these for anything specific to this recipe. Do not invent "
                          "quantities, times or temperatures.")
@@ -454,120 +381,128 @@ class ContextBuilder:
         else:
             # The grounding guard. Left implicit, the model invents recipe
             # numbers with total confidence.
-            lines.append("The recipe notes do not cover this question.")
-            lines.append("You may give brief general cooking advice and say that it is "
-                         "general advice. Do NOT invent quantities, times or "
+            lines.append("The recipe notes do not cover this question. You may give "
+                         "general cooking advice. Do NOT invent quantities, times or "
                          "temperatures for this recipe. On food safety, if unsure, "
                          "recommend the cautious option.")
         lines.append("")
-
-        lines.append("[QUESTION]")
-        lines.append(turn.message)
+        lines += ["[QUESTION]", turn.message]
         return "\n".join(lines)
 
-    def _recipe_lines(self, turn: TurnContext) -> List[str]:
-        visit, recipe, steps = turn.visit, turn.recipe, turn.steps or []
-        if recipe is None:
-            lines = ["No recipe chosen yet."]
-            if visit.dish:
-                lines.append(f"They said they are cooking: {visit.dish}. There are no "
-                             f"recipe notes for that.")
-            available = [r["name"] for r in self.knowledge.recipes()]
-            if available:
-                lines.append(f"Recipes you can walk them through: {', '.join(available)}.")
-            return lines
+    @staticmethod
+    def cook_lines(visit: Visit) -> List[str]:
+        lines = [f"Name: {visit.cook_name or 'not known yet'}.",
+                 f"Kitchen experience: {visit.skill_level or 'not known yet'}.",
+                 f"Allergies or foods they avoid: {visit.dietary or 'not known yet'}."]
+        lines.append(f"{visit.minutes_so_far} minutes into the session, "
+                     f"{visit.turn_count} message{'s' if visit.turn_count != 1 else ''} so far.")
+        return lines
 
-        total = len(steps)
-        lines = [f"Cooking: {recipe.name} ({total} steps)."]
+    @staticmethod
+    def recipe_lines(visit: Visit, recipe: Optional[ActiveRecipe]) -> List[str]:
+        if recipe is None:
+            return ["No recipe chosen yet."]
+        steps, total = recipe.steps, len(recipe.steps)
+        origin = "uploaded by the cook" if recipe.custom else "from the catalog"
+        about = ", ".join(filter(None, [f"serves {recipe.serves}" if recipe.serves else "",
+                                        f"about {recipe.time_minutes} min" if recipe.time_minutes else ""]))
+        lines = [f"Cooking: {recipe.name} ({origin}{', ' + about if about else ''}, {total} steps)."]
+        if recipe.ingredients:
+            lines.append("Ingredients:")
+            lines += [f"- {item}" for item in recipe.ingredients]
+        lines.append("Steps:")
+        for i, step in enumerate(steps):
+            marker = "  <- CURRENT STEP" if visit.step == i else ""
+            lines.append(f"{i + 1}. {step['text']}{marker}")
         if visit.step is None:
-            lines.append("Not started yet. When they are ready, they say 'start'.")
-            ingredients = self.knowledge.ingredients_text(recipe.id)
-            if ingredients:
-                lines.append(ingredients)
+            lines.append("Status: not started yet (they are looking at the ingredients).")
         elif visit.step >= total:
-            lines.append(f"All {total} steps are finished.")
+            lines.append(f"Status: all {total} steps are finished.")
         else:
             step = steps[visit.step]
             lines.append(f"Current step {visit.step + 1} of {total}: {step['text']}")
             if step.get("done_when"):
                 lines.append(f"Done when: {step['done_when']}")
             if step.get("timer_seconds"):
-                lines.append(f"Timer for this step: about "
-                             f"{spoken_duration(step['timer_seconds'])}.")
-            if visit.step + 1 < total:
-                lines.append(f"Next step after this: {steps[visit.step + 1]['text']}")
+                lines.append(f"Timer for this step: about {spoken_duration(step['timer_seconds'])}.")
+        return lines
+
+    def catalog_lines(self) -> List[str]:
+        lines = ["Recipes you can load with choose_recipe (suggest at most 2 at a time; "
+                 "never list them all):"]
+        for r in self.knowledge.recipes():
+            key = ", ".join(dict.fromkeys(ingredient_core(i) for i in r["ingredients"][:6]))
+            facts = [f"{r['time_minutes']} min" if r.get("time_minutes") else "",
+                     r.get("difficulty") or ""]
+            lines.append(f"- {r['name']} ({', '.join(filter(None, facts))}): {key}")
         return lines
 
     def _now_lines(self, turn: TurnContext) -> List[str]:
         lines: List[str] = []
         nav = turn.nav
         if nav:
-            if nav[0] == "stop":
-                lines.append("They stopped the recipe. Acknowledge briefly.")
-            elif turn.recipe is None:
-                lines.append("They want to move through recipe steps, but no recipe is "
-                             "chosen. Ask which dish they are making.")
-            elif turn.step is not None and turn.step >= len(turn.steps):
+            if turn.step is not None and turn.step >= len(turn.steps):
                 lines.append("They finished the last step. Congratulate them briefly.")
             else:
                 verb = {"next": "move to the next step", "previous": "go back a step",
                         "repeat": "hear the step again", "start": "start the recipe",
+                        "ready": "start the recipe",
                         "goto": f"jump to step {nav[1] if len(nav) > 1 else ''}"}[nav[0]]
-                lines.append(f"They asked to {verb}. Read the current step from [RECIPE] "
-                             f"clearly and completely, quantities included.")
-        elif turn.subject is not None:
-            how = {
-                "camera": "the camera sees it",
-                "named": "they named it",
-                "carried": "carried over from the last question",
-                "recipe": "the recipe being cooked",
-            }.get(turn.subject_source, "")
-            lines.append(f"They are asking about {turn.subject.name}"
-                         + (f" ({how})." if how else "."))
-            if turn.episode is not None:
-                covered = turn.episode.summary()
-                if covered:
-                    lines.append(covered)
-        else:
-            lines.append("A general kitchen question, not tied to a recipe.")
+                lines.append(f"They asked to {verb}; the pointer has already moved. Give "
+                             f"the current step from [RECIPE] with its quantities, then its "
+                             f"'done when' cue or timer. Do not call go_to_step.")
+        elif turn.subject is not None and turn.subject_source != "recipe":
+            lines.append(f"They seem to be asking about {turn.subject.name}.")
         if turn.facet and not nav:
-            lines.append(f"They want to know about: {turn.facet}.")
-
+            lines.append(f"Question type: {turn.facet}.")
+        if turn.frames:
+            lines.append(f"{turn.frames} live camera frame{'s are' if turn.frames > 1 else ' is'} "
+                         f"attached (oldest first, about a second apart). Use them if the "
+                         f"question is about what they are doing or what the food looks like.")
         if turn.observation is not None:
             lines.extend(turn.observation.prompt_lines())
-            lines.append("Use what the camera sees to answer, but describe it rather "
-                         "than overclaim: a photo cannot show temperature or taste.")
+        if not lines:
+            lines.append("A general message.")
         return lines
 
     # -- after the answer -------------------------------------------------
     def record(self, turn: TurnContext, response: str, intent: str = None,
-               source: str = None):
+               source: str = None, user_text: str = None, vision: str = None):
         """Persist the turn and mark its facts as delivered."""
+        if vision is None and turn.observation is not None:
+            vision = turn.observation.summary
+        if vision is None and turn.frames:
+            vision = f"Looked at {turn.frames} camera frame{'s' if turn.frames > 1 else ''}."
         self.store.record_turn(
             visit=turn.visit,
             episode=turn.episode,
-            user_text=turn.message,
+            user_text=user_text if user_text is not None else turn.message,
             assistant_text=response,
             language=turn.language,
             intent=intent or (turn.nav[0] if turn.nav else None),
             facet=turn.facet,
             fact_ids=turn.fact_ids,
             source=source,
-            vision=turn.observation.summary if turn.observation else None,
+            vision=vision,
         )
 
 
-def cooking_state(recipe_name: Optional[str], step: Optional[int],
-                  steps: List[Dict[str, Any]]) -> Dict[str, Any]:
+def cooking_state(recipe: Optional[ActiveRecipe], step: Optional[int]) -> Dict[str, Any]:
     """The recipe/step payload the phone renders, shared by every reply path."""
+    steps = recipe.steps if recipe else []
     current = steps[step] if step is not None and 0 <= step < len(steps) else {}
     return {
-        "recipe": recipe_name,
-        "step": step,
+        "recipe": recipe.name if recipe else None,
+        "custom": bool(recipe and recipe.custom),
+        "step": step if recipe else None,
         "total_steps": len(steps),
+        "steps": [s["text"] for s in steps],
         "step_text": current.get("text"),
         "done_when": current.get("done_when"),
         "timer_seconds": current.get("timer_seconds"),
+        "ingredients": recipe.ingredients if recipe else [],
+        "serves": recipe.serves if recipe else None,
+        "time_minutes": recipe.time_minutes if recipe else None,
     }
 
 
