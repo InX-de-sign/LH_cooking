@@ -465,6 +465,18 @@ async function main() {
   click(h.els.keyboardToggle);
   assert.equal(h.els.textForm.hidden, false);
   assert.equal(h.els.keyboardToggle.getAttribute('aria-pressed'), 'true');
+  // The typing box grows with the text; Enter sends, Shift+Enter makes a new line.
+  h.els.textInput.scrollHeight = 120; h.els.textInput.value = 'Line one';
+  h.els.textInput.listeners.input();
+  assert.equal(h.els.textInput.style.height, '123px');
+  let prevented = false;
+  h.els.textInput.listeners.keydown({ key: 'Enter', shiftKey: true, preventDefault() { prevented = true; } });
+  assert.equal(prevented, false, 'Shift+Enter keeps typing');
+  h.handle({ type: 'response', message: 'ok' });
+  h.els.textInput.listeners.keydown({ key: 'Enter', shiftKey: false, isComposing: false, preventDefault() { prevented = true; } });
+  assert.equal(prevented, true);
+  assert.equal(h.els.textInput.value, '', 'Enter sends and clears the box');
+  assert.equal(h.els.youSaid.textContent, 'Line one');
   h.handle({ type: 'response', message: 'Done.' });
   h.ask('next'); h.ask('again');
   assert.equal(h.els.toast.hidden, false, 'notes pop up where they are seen');
