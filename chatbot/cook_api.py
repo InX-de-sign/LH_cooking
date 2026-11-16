@@ -251,8 +251,9 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str = Query(None),
                 continue
 
             if kind == "watch":
-                # Periodic camera check while a step is in progress. Silent
-                # unless the model sees a problem or a finished step.
+                # The once-a-minute camera check (3 photos over 3 seconds).
+                # Every result updates the phone's status line; only problems,
+                # a finished step or a jump ahead are spoken, each once.
                 now = time.monotonic()
                 if now - last_watch < WATCH_MIN_SECONDS:
                     continue
@@ -263,17 +264,25 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str = Query(None),
                     logger.warning("Watch frames from %s rejected: %s", session_id, exc)
                     continue
                 result = await assistant.watch(session_id, frames, last_alert)
-                if not result or not result["message"]:
+                if not result:
                     continue
-                if result["status"] == "step_done":
-                    if result["step"] in nudged_steps:
+                await websocket.send_json({"type": "watch_status", **{
+                    key: result[key] for key in ("status", "activity", "step", "step_seen",
+                                                 "ingredients_seen", "at")}})
+                if not result["message"]:
+                    continue
+                if result["status"] in ("step_done", "ahead"):
+                    key = (result["status"], result["step"], result["step_seen"])
+                    if key in nudged_steps:
                         continue
-                    nudged_steps.add(result["step"])
+                    nudged_steps.add(key)
                 else:
                     last_alert = result["message"]
-                await websocket.send_json({"type": "alert", "level": result["status"],
-                                           "message": result["message"],
-                                           "cooking": assistant.cooking_state(session_id)})
+                alert = {"type": "alert", "level": result["status"], "message": result["message"],
+                         "cooking": assistant.cooking_state(session_id)}
+                if result["status"] == "ahead":
+                    alert["goto_step"] = result["step_seen"]
+                await websocket.send_json(alert)
                 continue
 
             if kind == "recipe_upload":

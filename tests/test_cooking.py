@@ -385,27 +385,45 @@ class AppTests(unittest.TestCase):
                     self.assertEqual(result["sources"], sources)
                     self.assertEqual(result["cooking"]["step"], 1)
 
-    def test_watch_alerts_are_rate_limited_and_step_done_nudges_once(self):
-        watch = AsyncMock(return_value={"status": "issue", "message": "The heat looks too high.", "step": 0})
+    def test_camera_checks_update_status_and_speak_only_once_per_event(self):
+        def check(status, message="", step=0, step_seen=None, activity="stirring garlic"):
+            return {"status": status, "activity": activity, "message": message, "step": step,
+                    "step_seen": step_seen, "ingredients_seen": [], "at": 1.0}
+        watch = AsyncMock(return_value=check("issue", "The heat looks too high."))
         with patch.object(cook_api.assistant, "watch", watch), TestClient(cook_api.app) as client:
             with client.websocket_connect("/ws?client_id=watch-regression") as ws:
                 open_chat(ws)
-                ws.send_json({"type": "watch", "images": [FRAME, FRAME]})
+                ws.send_json({"type": "watch", "images": [FRAME, FRAME, FRAME]})
+                status = ws.receive_json()
+                self.assertEqual((status["type"], status["status"], status["activity"]),
+                                 ("watch_status", "issue", "stirring garlic"))
                 alert = ws.receive_json()
                 self.assertEqual((alert["type"], alert["level"]), ("alert", "issue"))
                 self.assertEqual(alert["message"], "The heat looks too high.")
-                self.assertEqual(len(watch.call_args.args[1]), 2)
+                self.assertEqual(len(watch.call_args.args[1]), 3)
                 ws.send_json({"type": "watch", "images": [FRAME]})   # too soon: ignored
                 ws.send_json({"type": "ping"})
                 self.assertEqual(ws.receive_json()["type"], "pong")
                 self.assertEqual(watch.await_count, 1)
-                watch.return_value = {"status": "step_done", "message": "Looks done, say next.", "step": 0}
                 with patch.object(cook_api, "WATCH_MIN_SECONDS", 0):
+                    watch.return_value = check("on_track")
                     ws.send_json({"type": "watch", "images": [FRAME]})
+                    self.assertEqual(ws.receive_json()["status"], "on_track")
+                    watch.return_value = check("step_done", "Looks done, say next.")
+                    ws.send_json({"type": "watch", "images": [FRAME]})
+                    ws.receive_json()
                     self.assertEqual(ws.receive_json()["level"], "step_done")
-                    ws.send_json({"type": "watch", "images": [FRAME]})   # same step: no second nudge
+                    ws.send_json({"type": "watch", "images": [FRAME]})   # same step: status only
+                    self.assertEqual(ws.receive_json()["type"], "watch_status")
+                    watch.return_value = check("ahead", "Looks like you're on step 3.", step_seen=3)
+                    ws.send_json({"type": "watch", "images": [FRAME]})
+                    ws.receive_json()
+                    ahead = ws.receive_json()
+                    self.assertEqual((ahead["level"], ahead["goto_step"]), ("ahead", 3))
+                    ws.send_json({"type": "watch", "images": [FRAME]})   # same jump: status only
                     ws.send_json({"type": "watch", "images": "not-a-list"})
                     ws.send_json({"type": "ping"})
+                    self.assertEqual(ws.receive_json()["type"], "watch_status")
                     self.assertEqual(ws.receive_json()["type"], "pong")
                     self.assertEqual(watch.call_args.args[2], "The heat looks too high.",
                                      "the model is told what it already said")
@@ -570,29 +588,53 @@ class AssistantTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(RecipeImportError):
                 validate_recipe(bad)
 
-    async def test_watch_speaks_only_about_problems_during_a_step(self):
+    async def test_camera_check_recognises_activity_progress_and_ingredients(self):
         model = self.assistant.model
         provider = SimpleNamespace(available=True, inline=True, config=VisionConfig())
-        frames = [(b"abc", "image/jpeg")]
+        frames = [(b"abc", "image/jpeg")] * 3
         with patch.object(self.assistant, "vision", provider), patch.object(model, "openai_client", object()):
             with patch.object(model, "complete", AsyncMock()) as complete:
-                self.assertIsNone(await self.assistant.watch(self.user, frames), "nothing to check before a step")
+                self.assertIsNone(await self.assistant.watch(self.user, frames), "nothing to check without a recipe")
                 self.assistant.run_tool(self.user, "choose_recipe", {"recipe_name": "Egg Fried Rice"})
+                # Preparing: spot ingredients on the counter.
+                complete.return_value = json.dumps({"activity": "laying out ingredients", "status": "on_track",
+                                                    "ingredients_seen": [1, 2, 99, "x"], "message": ""})
+                prep = await self.assistant.watch(self.user, frames)
+                self.assertEqual((prep["status"], prep["ingredients_seen"]), ("on_track", [1, 2]))
+                prompt = complete.call_args.args[0][1]["content"][0]["text"]
+                self.assertIn("Ingredient list:\n1. ", prompt)
+                self.assertIn("Not started yet", prompt)
+                self.assertEqual(len(complete.call_args.args[0][1]["content"]), 4, "text plus three photos")
                 self.assistant.run_tool(self.user, "go_to_step", {"step": 1})
-                complete.return_value = '{"status": "ok", "message": "Looks good", "seen": "rice in a wok"}'
+                complete.return_value = json.dumps({"activity": "frying rice", "status": "on_track",
+                                                    "step_seen": 1, "message": "chatty"})
                 quiet = await self.assistant.watch(self.user, frames)
-                self.assertEqual((quiet["status"], quiet["message"]), ("ok", ""))
-                complete.return_value = '{"status": "hazard", "message": "Pan is smoking. Turn the heat down.", "seen": "smoke"}'
+                self.assertEqual((quiet["status"], quiet["message"], quiet["ingredients_seen"]), ("on_track", "", []))
+                note = self.assistant.camera_note(self.visit())
+                self.assertRegex(note, r"Camera check \d+ s ago: frying rice \(on track\)")
+                self.assertIn("frying rice", self.assistant.context.build(
+                    self.user, "what now?", camera_note=note).text, "the coach knows what the camera saw")
+                complete.return_value = json.dumps({"activity": "smoke from the wok", "status": "hazard",
+                                                    "message": "Pan is smoking. Turn the heat down."})
                 turns = self.visit().turn_count
                 alert = await self.assistant.watch(self.user, frames, last_alert="earlier note")
-                self.assertEqual(alert, {"status": "hazard", "message": "Pan is smoking. Turn the heat down.", "step": 0})
+                self.assertEqual((alert["status"], alert["message"]), ("hazard", "Pan is smoking. Turn the heat down."))
                 self.assertEqual(self.visit().turn_count, turns + 1, "alerts become part of the conversation")
                 sent = complete.call_args.args[0][1]["content"]
                 self.assertIn("Current step 1", sent[0]["text"])
                 self.assertIn("earlier note", sent[0]["text"])
                 self.assertEqual(sent[1]["image_url"]["detail"], "low")
+                # "ahead" needs a real later step; otherwise it is just on track.
+                complete.return_value = json.dumps({"activity": "tossing rice", "status": "ahead", "step_seen": 3})
+                ahead = await self.assistant.watch(self.user, frames)
+                self.assertEqual((ahead["status"], ahead["step_seen"]), ("ahead", 3))
+                self.assertIn("step 3", ahead["message"])
+                complete.return_value = json.dumps({"activity": "frying", "status": "ahead", "step_seen": 1})
+                self.assertEqual((await self.assistant.watch(self.user, frames))["status"], "on_track")
                 complete.return_value = "not json"
                 self.assertEqual((await self.assistant.watch(self.user, frames))["status"], "unclear")
+                self.assistant.run_tool(self.user, "go_to_step", {"step": 99})
+                self.assertIsNone(await self.assistant.watch(self.user, frames), "nothing to check once finished")
 
 
 class StageFeatureTests(unittest.IsolatedAsyncioTestCase):

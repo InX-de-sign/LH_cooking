@@ -65,12 +65,17 @@ Already working, tested locally:
   through it like a built-in recipe. Uploads are kept under **My recipes**
   (star favourites, cook again). Installed as an app on Android, the coach also
   appears in the share sheet for web pages and screenshots.
-- **Mobile flow in four stages**: Choose (two idea cards, search, upload) →
-  Prep (tick-off ingredient checklist, "Missing?" asks for a substitute,
-  servings stepper that rescales quantities) → Cook (huge step text, Back /
-  Repeat / Next, swipe left/right, tap the step to talk, voice switched on,
-  chat shrunk to the latest reply, camera as a corner thumbnail) → Done ("How
-  did it go?" plus a note the coach remembers next time).
+- **Mobile flow in four stages**, one card at a time with the coach's latest
+  reply underneath (the full conversation is one tap away): Choose (two idea
+  cards, search, upload) → Prep (tick-off ingredient checklist, "Missing?"
+  asks for a substitute, servings stepper that rescales quantities) → Cook
+  (huge step text; Back, mic and Next together in the bottom bar; swipe, tap
+  the step to talk; voice switched on; camera as a corner tile) → Done ("How
+  did it go?" plus a note the coach remembers next time). The page scrolls
+  like a normal web page, fits small phones and landscape, keeps the bottom
+  bar above the iPhone keyboard, and is voice-first (keyboard on demand).
+- **Short answers**: replies are capped at about two short sentences (25
+  words); the screen shows the lists, so the coach doesn't read them out.
 - **Timers**: several named timers at once, started from the step or by voice
   ("set a timer for the noodles"), kept across reloads, with a full-screen,
   repeating, vibrating alarm.
@@ -79,8 +84,11 @@ Already working, tested locally:
   watches. Camera and microphone get a one-line explanation before the browser
   asks. Installable to the home screen; a banner shows when the connection drops.
 - **Live camera checks**: with the camera on, "am I doing this right?" sends the
-  last few seconds of frames with the current step. **Coach watches** checks
-  every ~20 s and speaks up only if something looks wrong, unsafe, or done.
+  last few seconds of frames with the current step. Once a minute the phone
+  also takes **3 photos over 3 seconds**; the coach recognises what you're
+  doing ("On track · frying garlic" on the card), ticks off ingredients it can
+  see while you prepare, offers to jump when you're already on a later step,
+  and speaks only for a problem, a safety issue, or a finished step.
 - Runs with **no keys at all**: replies are then the recipe notes read back
   word for word
 

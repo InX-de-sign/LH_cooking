@@ -35,6 +35,7 @@ import json
 import logging
 import os
 import re
+import time
 from typing import Any, Dict, List, Optional
 
 from context_builder import ContextBuilder, cooking_state, detect_navigation
@@ -47,35 +48,44 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 HISTORY_TURNS = 6
-WATCH_INTERVAL_SECONDS = int(os.getenv("WATCH_INTERVAL_SECONDS", "20"))
+# The phone takes 3 photos over 3 seconds this often while the camera is on.
+WATCH_INTERVAL_SECONDS = int(os.getenv("WATCH_INTERVAL_SECONDS", "60"))
 
 GREETING_FALLBACK = ("Hi! I'm your cooking coach. Tell me what you'd like to cook, "
                      "ask me for ideas, or upload your own recipe.")
 
-WATCH_PROMPT = """You are watching a home cook through their phone camera while \
-they follow a recipe. You get the step they are on and the latest camera frames \
-(oldest first). Decide whether to speak up.
+WATCH_PROMPT = """You are the eyes of a cooking coach. Every minute the cook's \
+phone sends 3 photos taken over 3 seconds (oldest first). Work out what the cook \
+is doing right now and whether it matches the recipe.
 
 Return JSON only:
-{"status": "ok" | "unclear" | "issue" | "hazard" | "step_done",
- "message": "<what to say to the cook, or empty>",
- "seen": "<one short sentence describing what is visible>"}
+{"activity": "<what the cook is doing, at most 8 words, e.g. 'stirring garlic in a pan'; empty if nothing>",
+ "status": "on_track" | "issue" | "hazard" | "step_done" | "ahead" | "unclear" | "idle",
+ "step_seen": <the step number the cook appears to be doing, or null>,
+ "ingredients_seen": [<numbers from the ingredient list that are clearly visible>],
+ "message": "<at most 15 words for the cook, only for issue, hazard, step_done or ahead; else empty>"}
 
-- "hazard": something unsafe is visible (smoke, flames, boiling over, a knife near
-  the counter edge, raw meat touching ready-to-eat food, fingers near a blade).
-  message: one short, calm, urgent instruction.
-- "issue": the cook is clearly doing the current step wrong, or the food is going
-  wrong (burning, wrong ingredient, heat clearly too high, pieces far too big).
-  message: one or two short sentences: what is wrong and what to do.
-- "step_done": the frames clearly show the step's "done when" result.
-  message: one short sentence saying it looks done and they can say next.
-- "ok": normal progress. "unclear": food not visible, dark or blurry frames.
-  message empty for both.
-Only speak up when you are confident; when in doubt use "ok" or "unclear".
-Do not repeat the previous alert unless the problem is clearly still there.
-A picture cannot show temperature or taste; never claim it does."""
+status:
+- "hazard": something unsafe (smoke, flames, boiling over, a knife near the
+  counter edge, raw meat touching ready-to-eat food, fingers near a blade).
+  message: one calm, urgent instruction.
+- "issue": clearly doing the current step wrong, or the food is going wrong
+  (burning, wrong ingredient, heat clearly too high, pieces far too big).
+  message: what is wrong and what to do.
+- "step_done": the photos clearly show the current step's "done when" result.
+  message: it looks done; say next.
+- "ahead": they are clearly already doing a LATER step; set step_seen.
+- "on_track": doing the current step (or getting ready for it) normally.
+- "idle": food or kitchen visible but nobody is doing anything.
+- "unclear": dark, blurry, or the food is not in view.
+Only report a problem when you are confident; when in doubt use "on_track" or
+"unclear". Don't repeat the previous alert unless it is clearly still there.
+A photo cannot show temperature or taste; never claim it does.
+While the cook is still preparing (no step started), status is "on_track" or
+"unclear" and ingredients_seen matters most."""
 
-WATCH_STATUSES = ("ok", "unclear", "issue", "hazard", "step_done")
+WATCH_STATUSES = ("on_track", "issue", "hazard", "step_done", "ahead", "unclear", "idle")
+SPOKEN_WATCH = ("issue", "hazard", "step_done", "ahead")
 
 
 class CookingAssistant:
@@ -88,6 +98,8 @@ class CookingAssistant:
         self.store = ConversationStore()
         self.context = ContextBuilder(self.knowledge, self.store)
         self.vision = vision or load_vision_provider()
+        # Latest camera check per chat (memory only; photos are never kept).
+        self.observations: Dict[str, Dict[str, Any]] = {}
 
         from enhanced_rag_openai import EnhancedRAGWithOpenAI
         self.model = EnhancedRAGWithOpenAI()
@@ -117,10 +129,10 @@ class CookingAssistant:
                 LANGUAGE_INSTRUCTIONS.get(visit.language, LANGUAGE_INSTRUCTIONS["en"]), "",
                 "[COOK]", *self.context.cook_lines(visit), "",
                 "[RECIPE]", *self.context.recipe_lines(visit, recipe), "",
-                "The cook has just opened the app. Greet them warmly in one or two short "
-                "sentences (by name if you know it). Invite them to tell you what they'd "
-                "like to cook, ask you for ideas, or upload their own recipe. If a recipe "
-                "is in progress, say where they are instead. Do not list recipes."])
+                "The cook has just opened the app. Greet them in ONE short sentence (by "
+                "name if you know it), at most 15 words, inviting them to say what they'd "
+                "like to cook or ask for ideas. If a recipe is in progress, say where they "
+                "are instead. Do not list recipes."])
             reply = await self.model.complete([
                 {"role": "system", "content": self.model.streaming_openai.system_prompt},
                 {"role": "user", "content": prompt}], budget=600)
@@ -198,9 +210,10 @@ class CookingAssistant:
                     "originally_serves": recipe.base_serves,
                     "time_minutes": recipe.time_minutes, "ingredients": recipe.ingredients,
                     "steps": [s["text"] for s in recipe.steps],
-                    "status": "Loaded, not started. Show the ingredients as bullets and a "
-                              "short numbered overview of the steps, then ask if they're ready. "
-                              "When they say they're ready, call go_to_step(1)."}
+                    "status": "Loaded, not started. The screen now shows the ingredient checklist "
+                              "and steps: reply in ONE sentence (name, how many ingredients and "
+                              "steps, 'say ready when you are'). Don't list them. When they say "
+                              "they're ready, call go_to_step(1)."}
         if name == "go_to_step":
             recipe = self.context.active_recipe(visit)
             if recipe is None:
@@ -274,7 +287,7 @@ class CookingAssistant:
                                                      "Check your vision model settings and try again.")
 
             turn = await asyncio.to_thread(self.context.build, user_id, message, observation,
-                                           len(images), allow_nav)
+                                           len(images), allow_nav, self.camera_note(visit))
             logger.info("Resolved %r", turn)
 
             history = await asyncio.to_thread(self.store.recent_turns,
@@ -392,47 +405,82 @@ class CookingAssistant:
     # -- camera watch -------------------------------------------------------------
     async def watch(self, user_id: str, frames: List[tuple],
                     last_alert: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """Look at the latest frames against the current step; maybe speak up.
+        """Recognise what the cook is doing from a 3-photo burst, against the recipe.
 
-        Returns None when there is nothing to check (no step in progress, no
-        inline vision), else {"status", "message", "step"}.
+        Runs while preparing (to spot ingredients) and during a step. Returns
+        None when there is nothing to check, else {"status", "activity",
+        "message", "step", "step_seen", "ingredients_seen", "at"}. Only
+        SPOKEN_WATCH statuses carry a message; the rest update the phone's
+        status line silently.
         """
         if not self.watch_available or not frames:
             return None
         visit = self.store.current_visit(user_id)
         recipe = self.context.active_recipe(visit)
-        if recipe is None or visit.step is None or visit.step >= len(recipe.steps):
+        if recipe is None or (visit.step is not None and visit.step >= len(recipe.steps)):
             return None
-        step = recipe.steps[visit.step]
-        lines = [f"Recipe: {recipe.name}.",
-                 f"Current step {visit.step + 1} of {len(recipe.steps)}: {step['text']}"]
-        if step.get("done_when"):
-            lines.append(f"Done when: {step['done_when']}")
-        if visit.step + 1 < len(recipe.steps):
-            lines.append(f"Next step: {recipe.steps[visit.step + 1]['text']}")
+        total = len(recipe.steps)
+        lines = [f"Recipe: {recipe.name} ({total} steps)."]
+        if recipe.ingredients:
+            lines.append("Ingredient list:")
+            lines += [f"{i}. {item}" for i, item in enumerate(recipe.ingredients, 1)]
+        if visit.step is None:
+            lines.append("Not started yet: the cook is gathering ingredients. Step 1 will be: "
+                         f"{recipe.steps[0]['text'] if recipe.steps else ''}")
+        else:
+            step = recipe.steps[visit.step]
+            lines.append(f"Current step {visit.step + 1} of {total}: {step['text']}")
+            if step.get("done_when"):
+                lines.append(f"Done when: {step['done_when']}")
+            for later in range(visit.step + 1, min(visit.step + 3, total)):
+                lines.append(f"Step {later + 1}: {recipe.steps[later]['text']}")
         if visit.dietary:
             lines.append(f"Allergies or foods they avoid: {visit.dietary}")
         lines.append(f"Previous alert: {last_alert}" if last_alert else "Previous alert: none.")
         from streaming_openai import LANGUAGE_INSTRUCTIONS
         if visit.language in LANGUAGE_INSTRUCTIONS and visit.language != "en":
-            lines.append(f"Write \"message\" in this language: {LANGUAGE_INSTRUCTIONS[visit.language]}")
+            lines.append(f"Write \"activity\" and \"message\" in this language: "
+                         f"{LANGUAGE_INSTRUCTIONS[visit.language]}")
         content = [{"type": "text", "text": "\n".join(lines)}] + [
             {"type": "image_url", "image_url": {"url": to_data_url(*f), "detail": "low"}}
             for f in frames]
         reply = await self.model.complete([{"role": "system", "content": WATCH_PROMPT},
                                            {"role": "user", "content": content}],
-                                          budget=700, json_mode=True)
+                                          budget=800, json_mode=True)
         data = _json_object(reply)
         status = str(data.get("status") or "unclear").lower()
         status = status if status in WATCH_STATUSES else "unclear"
-        message = " ".join(str(data.get("message") or "").split())[:400]
-        seen = " ".join(str(data.get("seen") or "").split())[:300] or None
-        logger.info("Watch %s (step %d): %s", status, visit.step + 1, seen)
-        if status in ("issue", "hazard", "step_done") and message:
+        activity = " ".join(str(data.get("activity") or "").split())[:80]
+        message = " ".join(str(data.get("message") or "").split())[:200]
+        step_seen = _whole(data.get("step_seen"), 1, total)
+        current = None if visit.step is None else visit.step + 1
+        if status == "ahead" and (step_seen is None or current is None or step_seen <= current):
+            status = "on_track"   # "ahead" only means something with a later step to go to
+        if status == "ahead" and not message:
+            message = f"Looks like you're on step {step_seen}. Jump there?"
+        seen = sorted({n for n in (_whole(v, 1, len(recipe.ingredients))
+                                   for v in (data.get("ingredients_seen") or [])[:60]) if n})
+        result = {"status": status, "activity": activity, "step": visit.step, "step_seen": step_seen,
+                  "ingredients_seen": seen if visit.step is None else [], "message": "",
+                  "at": time.time()}
+        self.observations[visit.session_id] = result
+        logger.info("Watch %s (step %s): %s", status, current, activity)
+        if status in SPOKEN_WATCH and message:
+            result["message"] = message
             await asyncio.to_thread(self.store.record_turn, visit, None, None, message,
-                                    intent=status, source="camera-watch", vision=seen)
-            return {"status": status, "message": message, "step": visit.step}
-        return {"status": status, "message": "", "step": visit.step}
+                                    intent=status, source="camera-watch", vision=activity or None)
+        return result
+
+    def camera_note(self, visit) -> Optional[str]:
+        """What the last camera check saw, if it is recent enough to matter."""
+        seen = self.observations.get(visit.session_id)
+        if not seen or not seen.get("activity") or time.time() - seen["at"] > 3 * WATCH_INTERVAL_SECONDS:
+            return None
+        ago = int(time.time() - seen["at"])
+        label = {"on_track": "on track", "issue": "a problem", "hazard": "a safety problem",
+                 "step_done": "step looks done", "ahead": f"seems to be on step {seen.get('step_seen')}",
+                 "idle": "nothing happening", "unclear": "unclear"}.get(seen["status"], seen["status"])
+        return f"Camera check {ago} s ago: {seen['activity']} ({label})."
 
     # -- results -------------------------------------------------------------------
     def _result(self, user_id, reply, observation=None, sources=None, looked=0,
@@ -458,6 +506,15 @@ class CookingAssistant:
 def _tools():
     from streaming_openai import TOOLS
     return TOOLS
+
+
+def _whole(value, low: int, high: int) -> Optional[int]:
+    """An int in [low, high], or None."""
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if low <= number <= high else None
 
 
 def _json_object(text: Optional[str]) -> Dict[str, Any]:

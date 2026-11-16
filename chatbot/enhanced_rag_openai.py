@@ -19,7 +19,7 @@ import re
 from typing import Any, Dict, Optional
 
 from config import load_azure_openai_config
-from web_search import BuiltinWebSearch, SearchUnavailable, should_search
+from web_search import BuiltinWebSearch, SearchUnavailable, explicit_search, should_search
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -75,24 +75,47 @@ class EnhancedRAGWithOpenAI:
                                         user_id: str, on_delta=None) -> str:
         """Answer, optionally delivering streamed text through an async callback."""
         context["sources"] = []
-        if should_search(query, context):
+        notice = ""
+        explicit = explicit_search(query)
+        # Automatic lookups only when search is switched on; an explicit
+        # "search online for..." is always tried.
+        if should_search(query, context) and (explicit or getattr(self.web_search, "enabled", True)):
             try:
                 result = await self.web_search.search(query, context=context.get("prompt_context"))
                 context["sources"] = result.sources
                 return result.text
             except SearchUnavailable as exc:
-                # A model-only answer must never be presented as an online lookup.
-                return "Online search is unavailable. " + str(exc)
+                logger.info("Web search unavailable (%s); answering from the model", exc)
+                if not self.available:
+                    return "Online search is unavailable. " + str(exc)
+                if explicit:
+                    # A model answer must never pass for an online lookup.
+                    notice = ("I can't search the web from here, so this comes from my own cooking "
+                              "knowledge, not online sources.\n\n")
+                    # The note is already shown, so ask the model the question
+                    # without "search online for", or it apologises a second time.
+                    plain = re.sub(r"\b(please\s+)?(search|look\s*up|find|check)\s+(it\s+)?(online|on\s+the\s+web|the\s+web)"
+                                   r"(\s+for)?\s*|\b(online|on\s+the\s+web)\b", "", query, flags=re.I).strip(" ,.") or query
+                    rendered = context.get("prompt_context") or f"[QUESTION]\n{query}"
+                    context["prompt_context"] = rendered.replace(f"[QUESTION]\n{query}", f"[QUESTION]\n{plain}") + (
+                        "\n\n[NOTE]\nOnline search is not available and the cook has already been told. "
+                        "Answer from your own knowledge without mentioning search.")
         if not self.available:
             return self._offline_fallback(query, context)
         parts = []
+        if notice:
+            parts.append(notice)
+            if on_delta is not None:
+                await on_delta(notice)
         try:
             async for delta in self.streaming_openai.stream_response(query, context):
                 parts.append(delta)
                 if on_delta is not None:
                     await on_delta(delta)
             reply = "".join(parts).strip()
-            return reply or self._offline_fallback(query, context, failed=True)
+            if not reply or reply == notice.strip():
+                return notice + self._offline_fallback(query, context, failed=True)
+            return reply
         except Exception as e:
             logger.error(f"Query processing error: {e}")
             if parts and on_delta is not None:

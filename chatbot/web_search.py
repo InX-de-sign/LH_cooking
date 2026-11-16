@@ -26,12 +26,19 @@ def explicit_search(query):
         query or "", re.I))
 
 
+# "Give me 2 ideas for what to cook" is answered from the recipe catalog (as
+# tappable cards), never by an automatic web search.
+IDEA_REQUEST = re.compile(
+    r"\b(ideas?|suggest\w*|recommend\w*|what (should|can|could|shall) (i|we) (cook|make|eat)|"
+    r"what to (cook|make|eat))\b", re.I)
+
+
 def should_search(query, context):
     if context.get("query_type") == "step" or context.get("social"):
         return False
     if explicit_search(query):
         return True
-    if context.get("query_type") == "safety":
+    if context.get("query_type") == "safety" or IDEA_REQUEST.search(query or ""):
         return False
     return bool(context.get("missing_notes") and re.search(
         r"\b(recipe|recipes|ingredient|ingredients|cook|cooking|substitute|substitution|nutrition)\b",

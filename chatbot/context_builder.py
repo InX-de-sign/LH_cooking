@@ -224,7 +224,7 @@ class TurnContext:
 
     __slots__ = ("visit", "episode", "subject", "subject_source", "facet", "language",
                  "facts", "text", "grounded", "message", "recipe", "nav",
-                 "observation", "social", "frames")
+                 "observation", "social", "frames", "camera_note")
 
     def __init__(self, **fields):
         for name in self.__slots__:
@@ -332,7 +332,7 @@ class ContextBuilder:
 
     # -- build ------------------------------------------------------------
     def build(self, user_id: str, message: str, observation=None, frames: int = 0,
-              allow_nav: bool = True) -> TurnContext:
+              allow_nav: bool = True, camera_note: str = None) -> TurnContext:
         visit = self.store.current_visit(user_id)
         language = visit.language or detect_language(message)
         recipe = self.active_recipe(visit)
@@ -372,7 +372,7 @@ class ContextBuilder:
             visit=visit, episode=episode, subject=subject, subject_source=subject_source,
             facet=facet, language=language, facts=facts, message=message,
             recipe=recipe, nav=nav, observation=observation, social=social,
-            frames=frames, grounded=bool(social or nav or facts),
+            frames=frames, grounded=bool(social or nav or facts), camera_note=camera_note,
         )
         turn.text = self.render(turn)
         return turn
@@ -478,9 +478,9 @@ class ContextBuilder:
                         "repeat": "hear the step again", "start": "start the recipe",
                         "ready": "start the recipe",
                         "goto": f"jump to step {nav[1] if len(nav) > 1 else ''}"}[nav[0]]
-                lines.append(f"They asked to {verb}; the pointer has already moved. Give "
-                             f"the current step from [RECIPE] with its quantities, then its "
-                             f"'done when' cue or timer. Do not call go_to_step.")
+                lines.append(f"They asked to {verb}; the pointer has already moved. Say the "
+                             f"current step from [RECIPE] in one sentence with its quantities, "
+                             f"then 'Done when ...' in a few words. Do not call go_to_step.")
         elif turn.subject is not None and turn.subject_source != "recipe":
             lines.append(f"They seem to be asking about {turn.subject.name}.")
         if turn.facet and not nav:
@@ -491,6 +491,8 @@ class ContextBuilder:
                          f"question is about what they are doing or what the food looks like.")
         if turn.observation is not None:
             lines.extend(turn.observation.prompt_lines())
+        if turn.camera_note:
+            lines.append(turn.camera_note)
         if not lines:
             lines.append("A general message.")
         return lines

@@ -114,17 +114,47 @@ class WebSearchTests(unittest.IsolatedAsyncioTestCase):
             with self.transport(), self.assertRaises(SearchUnavailable):
                 await self.search.search("Find a recipe", force=True)
 
-    async def test_search_reply_carries_sources_and_failure_does_not_fall_back(self):
+    @staticmethod
+    def model_with(search, chat_tokens=None):
         model = EnhancedRAGWithOpenAI.__new__(EnhancedRAGWithOpenAI)
-        model.web_search = SimpleNamespace(search=AsyncMock(return_value=SearchResult("Cook tofu.", [{"url": "https://example.com"}])))
+        model.web_search = search
+        model.openai_client = object() if chat_tokens is not None else None
+
+        async def stream(*args):
+            for token in chat_tokens or []:
+                yield token
+        model.streaming_openai = SimpleNamespace(stream_response=stream)
+        return model
+
+    async def test_search_reply_carries_sources_and_failure_falls_back_honestly(self):
+        search = SimpleNamespace(enabled=True, search=AsyncMock(
+            return_value=SearchResult("Cook tofu.", [{"url": "https://example.com"}])))
+        model = self.model_with(search, chat_tokens=["Press the tofu first."])
         context = {"prompt_context": "Allergies: peanuts"}
         reply = await model.process_query_with_openai("Search online for tofu", context, "test")
         self.assertEqual(reply, "Cook tofu.")
         self.assertEqual(context["sources"], [{"url": "https://example.com"}])
-        model.web_search.search.side_effect = SearchUnavailable("HTTP 404")
-        reply = await model.process_query_with_openai("Search online for tofu", context, "test")
-        self.assertIn("Online search is unavailable", reply)
+        search.search.side_effect = SearchUnavailable("HTTP 404")
+        deltas = []
+
+        async def receive(delta):
+            deltas.append(delta)
+        reply = await model.process_query_with_openai("Search online for tofu", context, "test", on_delta=receive)
+        self.assertTrue(reply.startswith("I can't search the web from here"), "never passed off as an online lookup")
+        self.assertIn("Press the tofu first.", reply)
+        self.assertEqual(reply, "".join(deltas).strip())
         self.assertEqual(context["sources"], [])
+        no_model = self.model_with(search)
+        reply = await no_model.process_query_with_openai("Search online for tofu", {}, "test")
+        self.assertIn("Online search is unavailable", reply, "without a model there is nothing to fall back on")
+
+    async def test_disabled_search_never_blocks_ordinary_questions(self):
+        search = SimpleNamespace(enabled=False, search=AsyncMock(side_effect=SearchUnavailable("disabled")))
+        model = self.model_with(search, chat_tokens=["Try Egg Fried Rice or Mapo Tofu."])
+        for question in ("Give me 2 ideas for what to cook", "How do I cook tofu?"):
+            reply = await model.process_query_with_openai(question, {"missing_notes": True}, "test")
+            self.assertEqual(reply, "Try Egg Fried Rice or Mapo Tofu.", question)
+        search.search.assert_not_awaited()
 
     def test_search_routing_preserves_steps_and_immediate_safety(self):
         self.assertFalse(should_search("next", {"query_type": "step"}))
@@ -133,6 +163,10 @@ class WebSearchTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(should_search("Search online for safe ingredient storage", {"query_type": "safety"}))
         self.assertTrue(should_search("How do I cook tofu?", {"missing_notes": True}))
         self.assertFalse(should_search("How do I cook tofu?", {"missing_notes": False}))
+        for idea in ("Give me 2 ideas for what to cook", "What should I cook tonight?",
+                     "Any recipe suggestions?", "recommend something to cook"):
+            self.assertFalse(should_search(idea, {"missing_notes": True}), idea)
+        self.assertTrue(should_search("Search online for cooking ideas", {"missing_notes": True}))
 
     def test_documented_base_urls(self):
         self.assertEqual(default_responses_base("https://hkust.azure-api.net/"), "https://hkust.azure-api.net/hkust-genai/v1")

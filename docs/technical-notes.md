@@ -95,12 +95,24 @@ catalog recipe.
 The page follows the cook through four stages, set on `<body data-stage>` from
 the cooking state: **choose** (no recipe) → **prep** (recipe, step `null`) →
 **cook** (step in range) → **done** (step past the end). Each stage shows its
-own panel; Cook makes the step text large, shows Back / Repeat / Next and a
-swipe area (left = next, right = back; tap = talk), floats the camera as a
-thumbnail, and collapses the chat to the last coach message (CSS `:has()`).
-Entering Cook turns on spoken replies, and hands-free if the microphone was
-already allowed; leaving restores the saved settings. Step commands from
-buttons and swipes never attach camera frames.
+own panel on one card; under it the **coach line** shows only the latest
+reply (and "you said"), while the full log is a separate view
+(`<body data-view="chat">`) opened from the bottom bar. Cook makes the step
+text large, puts Back and Next either side of the mic in the bottom bar, has a
+swipe area (left = next, right = back; tap = talk) and turns the camera into a
+72 px corner tile. Entering Cook turns on spoken replies, and hands-free if the
+microphone was already allowed; leaving restores the saved settings. Step
+commands from buttons and swipes never attach camera frames.
+
+Phone fit: the page is one normally scrolling column (no nested scroll boxes)
+with a sticky header and a sticky bottom bar; `dvh` with a `vh` fallback;
+`interactive-widget=resizes-content` for Android keyboards and a
+`visualViewport` offset (`--kb`) that lifts the bar above iPhone keyboards;
+16 px minimum input text so iPhones don't zoom; safe-area insets for notches;
+dialogs become bottom sheets under 600 px; a landscape layout for short
+screens. Checked by rendering every stage at 375×667, 393×852, 412×915,
+360×740 and 844×390 and asserting no horizontal overflow and that the mic and
+Next are on screen.
 
 More model tools feed the phone directly: `suggest_recipes` (idea cards; the
 two names are stored on the visit so "the first one" is unambiguous),
@@ -123,16 +135,26 @@ manifest declares a share target; `/share-target` holds the shared text, link
 or image for ten minutes under a random token and the page opens it in the
 Upload dialog. `sw.js` caches only the page shell and icons.
 
-### Coach watches
+### Camera check (once a minute)
 
-While the camera is on and a step is in progress, the phone sends the latest
-frames every `WATCH_INTERVAL_SECONDS` (default 20) unless the cook is talking,
-listening or waiting for a reply. The server rate-limits to half that interval.
-The model answers in JSON with `ok | unclear | issue | hazard | step_done`.
-Only `issue` and `hazard` (once per new problem) and `step_done` (once per
-step) reach the phone, as an `alert` bubble that is spoken and vibrates. Alerts
-are stored as turns, so later answers know what was already said. The toggle
-**Coach watches** turns it off.
+While the camera is on during Prep or Cook, the phone takes **3 photos 1.5 s
+apart** every `WATCH_INTERVAL_SECONDS` (default 60; the first one 8 s after the
+camera starts) and sends them as one `watch` message, unless the cook is
+talking, listening or waiting for a reply. The server rate-limits to half the
+interval. The model returns JSON: `activity` (what the cook is doing),
+`status` (`on_track | issue | hazard | step_done | ahead | unclear | idle`),
+`step_seen`, `ingredients_seen` (numbers in the ingredient list) and a short
+`message`.
+
+Every result goes to the phone as `watch_status` and updates a quiet status
+line on the card ("On track · frying garlic"); two `unclear` results in a row
+turn it into "point the camera at the pan". During Prep, `ingredients_seen`
+ticks items on the checklist (marked "seen"). Only `issue` and `hazard` (once
+per new problem), `step_done` and `ahead` (once each per step) are spoken, as
+an `alert`; `ahead` carries `goto_step` for a one-tap "Go to step N". The
+latest result is kept in memory per chat and added to `[NOW]` for the next
+answer, so "what now?" knows what the camera saw. Photos are never stored.
+The setting **Camera check every minute** turns it off.
 
 The recipe and step pointer live on the session, not on the current topic,
 so "what does emulsify mean?" in the middle of step 6 doesn't lose the
