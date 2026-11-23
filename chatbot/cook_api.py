@@ -42,6 +42,7 @@ logger = logging.getLogger(__name__)
 from conversation_state import LANGUAGES
 from cook_main import WATCH_INTERVAL_SECONDS, CookingAssistant
 from vision import ALLOWED_MIME, ImageError, VisionRequest, decode_image, decode_images
+from recipe_presentation import present_recipe
 
 # The phone asks every WATCH_INTERVAL_SECONDS; the server refuses anything
 # faster so a misbehaving tab cannot burn the API quota.
@@ -206,7 +207,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str = Query(None),
                 await websocket.send_json({"type": "pong"})
                 continue
             if kind in ("profile_get", "profile_save", "history_list", "history_detail",
-                        "recipes_list", "recipe_favorite", "set_servings", "recipe_save", "recipe_leave"):
+                        "recipes_list", "favorites_list", "recipe_favorite", "set_servings", "recipe_save", "recipe_leave"):
                 request_id = data.get("request_id")
                 if not isinstance(request_id, str) or not 1 <= len(request_id) <= 64:
                     continue
@@ -222,11 +223,25 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str = Query(None),
                         result = await asyncio.to_thread(assistant.store.history_detail, session_id,
                                                         data.get("session_id"), data.get("offset", 0))
                     elif kind == "recipes_list":
-                        result = {"recipes": await asyncio.to_thread(assistant.store.list_custom_recipes, session_id)}
+                        rows = await asyncio.to_thread(assistant.store.list_custom_recipes, session_id)
+                        result = {"recipes": [present_recipe(row) for row in rows]}
+                    elif kind == "favorites_list":
+                        slugs = set(await asyncio.to_thread(assistant.store.catalog_favorites, session_id))
+                        catalog = [present_recipe(row, "catalog") for row in assistant.knowledge.recipes()]
+                        personal = await asyncio.to_thread(assistant.store.list_custom_recipes, session_id)
+                        result = {"recipes": [{**row, "favorite": True} for row in catalog if row.get("slug") in slugs]
+                                  + [present_recipe(row) for row in personal if row["favorite"]]}
                     elif kind == "recipe_favorite":
-                        favorite = await asyncio.to_thread(assistant.store.set_custom_favorite, session_id,
-                                                           data.get("recipe_id"), bool(data.get("favorite")))
-                        result = {"recipe_id": data.get("recipe_id"), "favorite": favorite}
+                        source = data.get("source", "personal")
+                        if source == "catalog":
+                            favorite = await asyncio.to_thread(assistant.store.set_catalog_favorite, session_id,
+                                                               data.get("slug"), bool(data.get("favorite")))
+                        elif source == "personal":
+                            favorite = await asyncio.to_thread(assistant.store.set_custom_favorite, session_id,
+                                                               data.get("recipe_id"), bool(data.get("favorite")))
+                        else:
+                            raise ValueError("Unknown recipe source.")
+                        result = {"recipe_id": data.get("recipe_id"), "slug": data.get("slug"), "source": source, "favorite": favorite}
                     elif kind == "recipe_save":
                         result = await asyncio.to_thread(assistant.save_recipe, session_id, data.get("expected_revision"))
                     elif kind == "recipe_leave":
@@ -379,7 +394,7 @@ async def health_check():
 @app.get("/api/recipes")
 async def list_recipes():
     """Every recipe the coach can walk through, with its step and fact counts."""
-    return {"recipes": assistant.knowledge.recipes()}
+    return {"recipes": [present_recipe(row, "catalog") for row in assistant.knowledge.recipes()]}
 
 
 @app.get("/api/recipes/{recipe_id}/steps")

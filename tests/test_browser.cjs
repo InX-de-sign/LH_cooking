@@ -144,6 +144,53 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
 
 async function main() {
 {
+  // Discovery filters combine, layouts persist, hearts do not start cooking.
+  const recipes = [
+    { id: 1, name: 'Garlic Noodles', slug: 'garlic-noodles', category: 'Main course', ingredients: ['garlic'], card_image: '/noodles.webp' },
+    { id: 2, name: 'Tomato Soup', slug: 'tomato-soup', category: 'Soup', ingredients: ['tomatoes'] },
+    { id: 3, name: 'Chicken Soup', slug: 'chicken-soup', category: 'Soup', ingredients: ['chicken'] },
+  ];
+  const h = harness({ recipes }); const sent = online(h);
+  await h.renderCooking({ recipe: null, step: null, total_steps: 0 });
+  assert.equal(h.els.recipePicks.children.length, 3);
+  h.handle({ type: 'response', message: 'Welcome to your kitchen.' }); h.flushFrames();
+  assert.equal(h.root.scrollTop, 0, 'the first greeting leaves discovery at the top');
+  const firstImage = h.els.recipePicks.children[0].children[0].children[0].children[0];
+  firstImage.listeners.error();
+  assert.equal(firstImage.hidden, true, 'failed images reveal a designed placeholder');
+  click(h.els.recipeCategories.children.find(b => b.textContent === 'Soup'));
+  assert.equal(h.els.recipeCount.textContent, '2 recipes');
+  h.els.recipeSearch.value = 'chicken'; h.els.recipeSearch.listeners.input();
+  assert.equal(h.els.recipePicks.children[0].dataset.recipe, 'Chicken Soup');
+  assert.equal(h.els.recipeCount.textContent, '1 recipe');
+  click(h.els.gridView);
+  assert.equal(h.els.recipePicks.dataset.layout, 'grid');
+  assert.equal(h.storage.get('lh_recipe_category'), 'Soup');
+  assert.equal(h.storage.get('lh_recipe_layout'), 'grid');
+  const before = JSON.stringify(h.state.cooking);
+  const hearting = click(h.els.recipePicks.children[0].children[1]);
+  const request = sent.at(-1);
+  assert.deepEqual([request.type, request.source, request.slug], ['recipe_favorite', 'catalog', 'chicken-soup']);
+  h.handle({ type: 'settings_result', request_id: request.request_id, favorite: true }); await hearting;
+  assert.equal(JSON.stringify(h.state.cooking), before, 'favouriting does not change cooking state');
+  assert.equal(sent.filter(r => r.type === 'ask' || r.type === 'recipe_open').length, 0);
+  assert.equal(h.els.recipePicks.children[0].children[1].getAttribute('aria-pressed'), 'true');
+  const restored = harness({ recipes, storage: Object.fromEntries(h.storage) });
+  await restored.renderCooking({ recipe: null, step: null, total_steps: 0 });
+  assert.equal(restored.els.recipePicks.dataset.layout, 'grid');
+  assert.equal(restored.els.recipePicks.children.length, 2);
+  const favorites = h.openMyRecipes('favorites');
+  h.handle({ type: 'settings_result', request_id: sent.at(-1).request_id, recipes: [
+    { ...recipes[2], source: 'catalog', favorite: true },
+    { id: 9, name: 'My soup', source: 'personal', favorite: true, category: 'Personal' },
+  ] }); await favorites;
+  assert.equal(h.els.myRecipesTitle.textContent, 'Favourite recipes');
+  const cards = h.els.myRecipesList.children.map(g => g.children[1].children[0]);
+  assert.equal(cards[0].children.length, 2, 'catalogue recipe has no personal star');
+  assert.equal(cards[1].children[2].getAttribute('aria-label'), 'Personal recipe');
+  assert.equal(cards[1].children[1].getAttribute('aria-pressed'), 'true', 'legacy personal favourites use hearts');
+}
+{
   const h = harness(); online(h); h.flushFrames();
   assert.equal(h.body.dataset.view, 'recipe');
   assert.ok(h.resizeObservers[0].targets.includes(h.els.stage), 'observe the visible cooking page, not only the hidden log');
@@ -255,6 +302,31 @@ async function main() {
   assert.equal(h.els.jumpNewest.hidden, true);
   h.els.log.listeners.load(); h.resizeObservers[0].callback(); h.flushFrames();
   assert.equal(h.root.scrollTop, 0, 'hidden conversation layout does not move recipe view');
+}
+{
+  // Opening details wins over the accompanying reply, even from conversation.
+  const h = harness(); online(h); h.settings.autoVoice = false;
+  const recipe = { recipe: 'Noodles', step: null, total_steps: 2,
+    steps: ['Boil noodles.', 'Serve.'], recipe_revision: 1 };
+  h.setView('chat');
+  h.ask("Let's make noodles"); h.flushFrames();
+  h.handle({ type: 'response', message: 'Here is your recipe.', cooking: recipe });
+  h.flushFrames();
+  assert.equal(h.body.dataset.view, 'recipe', 'opening a recipe displays its details');
+  assert.equal(h.root.scrollTop, 0, 'opening details stays at top after the reply');
+  h.root.scrollHeight += 200;
+  h.resizeObservers[0].callback(); h.els.coach.listeners.load();
+  h.viewport.listeners.resize(); h.flushFrames();
+  assert.equal(h.root.scrollTop, 0, 'late layout changes keep opened details at top');
+  h.ask('Use rice noodles instead');
+  h.handle({ type: 'response', message: 'Updated.', cooking: { ...recipe, recipe_revision: 2 } });
+  h.flushFrames();
+  assert.equal(h.root.scrollTop, h.root.scrollHeight - h.root.clientHeight,
+    'editing an open recipe still follows the answer to the bottom');
+  h.ask("Let's make noodles", { openRecipe: true });
+  h.handle({ type: 'response', message: 'Opened again.', cooking: { ...recipe, recipe_revision: 3 } });
+  h.flushFrames();
+  assert.equal(h.root.scrollTop, 0, 'reopening the same recipe also returns to top');
 }
 {
   // Start cooking, Next and Back keep the progress and large step visible throughout replies.
@@ -460,21 +532,21 @@ async function main() {
   h.handle({ type: 'response', message: 'Or these.' });
   click(h.els.ideaCards, button({ recipe: 'Mapo Tofu' }));
   assert.equal(sent.at(-1).message, "Let's make Mapo Tofu");
-  // The recipe book stays hidden until searched, and shows at most six.
-  assert.equal(h.els.recipePicks.children.length, 0, 'the recipe book is not dumped on screen');
+  // The full recipe book is visible immediately, with combined search/filtering.
+  assert.equal(h.els.recipePicks.children.length, 11, 'recipes are visible before searching');
   for (const term of ['curry', 'curry chicken', 'coconut']) {
     h.els.recipeSearch.value = term; h.els.recipeSearch.listeners.input();
     assert.equal(h.els.recipePicks.children.length, 1, `search matches ${term}`);
     assert.equal(h.els.recipePicks.children[0].dataset.recipe, 'Chicken Curry');
   }
   h.els.recipeSearch.value = 'noodle'; h.els.recipeSearch.listeners.input();
-  assert.equal(h.els.recipePicks.children.length, 6, 'search results are capped');
-  assert.match(h.els.recipeSearchStatus.textContent, /Top 6 of 9/);
+  assert.equal(h.els.recipePicks.children.length, 9, 'all matching recipes are available');
+  assert.equal(h.els.recipeCount.textContent, '9 recipes');
   h.els.recipeSearch.value = 'nothing matches'; h.els.recipeSearch.listeners.input();
   assert.equal(h.els.recipePicks.hidden, true);
   assert.match(h.els.recipeSearchStatus.textContent, /No recipes found/);
   h.els.recipeSearch.value = ''; h.els.recipeSearch.listeners.input();
-  assert.equal(h.els.recipePicks.hidden, true, 'clearing search hides the picks again');
+  assert.equal(h.els.recipePicks.children.length, 11, 'clearing search restores the recipe book');
 }
 
 {
@@ -647,10 +719,12 @@ async function main() {
 {
   // Viewing My recipes is harmless, and the direct save button uses the same API.
   const h = harness(); const sent = online(h);
+  assert.equal(h.els.unsavedRecipeStatus.hidden, true);
   const dirty = { recipe: 'Personal soup', temporary: true, saved_recipe_id: 9, recipe_revision: 2,
     draft_revision: 2, unsaved_changes: true, step: null, total_steps: 1, steps: ['Simmer.'],
     ingredients: ['1 cup stock'] };
   await h.renderCooking(dirty);
+  assert.equal(h.els.unsavedRecipeStatus.hidden, false, 'unsaved adaptations are marked in the header');
   const viewing = h.openMyRecipes();
   const list = sent.at(-1);
   assert.equal(list.type, 'recipes_list');
@@ -667,6 +741,7 @@ async function main() {
     cooking: { ...dirty, unsaved_changes: false } });
   await saving;
   assert.equal(h.els.saveRecipeChanges.hidden, true);
+  assert.equal(h.els.unsavedRecipeStatus.hidden, true, 'saving clears the header reminder');
   assert.equal(h.state.cooking.recipe, dirty.recipe);
   assert.equal(h.els.recipeName.textContent, 'Personal soup (your recipe)');
   assert.equal(h.els.recipeSaveStatus.textContent, 'Saved to My recipes.');
@@ -674,7 +749,7 @@ async function main() {
 }
 
 {
-  // Finish reminders appear once; unsaved new-chat changes require a decision.
+  // Finish reminders appear once; the header back button guards unsaved changes.
   const h = harness(); const sent = online(h);
   const dirty = { recipe: 'Adapted noodles', temporary: true, recipe_revision: 3, draft_revision: 3,
     step: null, total_steps: 2, steps: ['Boil.', 'Toss.'], ingredients: ['200 grams noodles'], unsaved_changes: true };
@@ -692,13 +767,14 @@ async function main() {
   await h.decideRecipeSave('discard');
   await h.renderCooking({ ...dirty, step: 2 });
   assert.equal(h.els.recipeSaveDialog.open, false, 'the same finished version is reminded only once');
-  h.newChat();
+  click(h.els.backToRecipes);
   assert.equal(h.els.recipeSaveDialog.open, true);
   assert.equal(h.els.recipeSaveConfirm.textContent, 'Save and continue');
   assert.equal(h.els.recipeSaveCancel.hidden, false);
   await h.decideRecipeSave('cancel');
   assert.equal(h.state.cooking.recipe, dirty.recipe);
-  h.newChat();
+  assert.equal(h.els.backToRecipes.hidden, false);
+  click(h.els.backToRecipes);
   const saving = h.decideRecipeSave('save');
   const request = sent.at(-1);
   assert.equal(request.type, 'recipe_save');
@@ -707,7 +783,38 @@ async function main() {
     cooking: { ...dirty, step: 2, unsaved_changes: false, saved_recipe_id: 7 } });
   assert.equal(await saving, true);
   assert.equal(h.state.cooking.recipe, null, 'new chat continues after a successful save');
+  assert.equal(h.body.dataset.stage, 'choose');
+  assert.equal(h.els.backToRecipes.hidden, true);
   assert.equal(h.windowEvents.beforeunload, undefined);
+}
+
+{
+  const h = harness(); online(h);
+  assert.equal(h.els.backToRecipes.hidden, true, 'no back button on the recipe chooser');
+  const recipe = { recipe: 'Soup', recipe_revision: 1, step: null, total_steps: 1,
+    steps: ['Simmer.'], ingredients: ['Stock'] };
+  await h.renderCooking(recipe);
+  assert.equal(h.els.backToRecipes.hidden, false, 'back is available in preparation');
+  await h.renderCooking({ ...recipe, step: 0 });
+  assert.equal(h.els.backToRecipes.hidden, false, 'back is available while cooking');
+  click(h.els.backToRecipes);
+  assert.equal(h.body.dataset.stage, 'choose');
+  assert.equal(h.els.recipeSaveDialog.open, false, 'unchanged recipes leave immediately');
+
+  online(h);
+  await h.renderCooking({ ...recipe, unsaved_changes: true });
+  click(h.els.backToRecipes);
+  const saving = h.decideRecipeSave('save');
+  // A failed save must keep the user on the dish with the decision still open.
+  const pendingId = [...h.state.requests.keys()][0];
+  h.handle({ type: 'settings_result', request_id: pendingId, error: 'Save failed. Try again.' });
+  assert.equal(await saving, false);
+  assert.equal(h.state.cooking.recipe, 'Soup');
+  assert.equal(h.els.recipeSaveDialog.open, true);
+  assert.match(h.els.recipeSaveError.textContent, /Save failed/);
+  await h.decideRecipeSave('discard');
+  assert.equal(h.body.dataset.stage, 'choose');
+  assert.equal(h.els.backToRecipes.hidden, true);
 }
 
 {
@@ -897,7 +1004,7 @@ async function main() {
 }
 
 {
-  // My recipes: list, star, cook again.
+  // My recipes: grouped cards, personal star badge, favourite heart, cook again.
   const h = harness();
   const sent = online(h);
   const opening = h.openMyRecipes();
@@ -905,20 +1012,30 @@ async function main() {
   h.handle({ type: 'settings_result', request_id: sent.at(-1).request_id, recipes: [
     { id: 7, name: '<b>Nan</b> noodles', favorite: false, steps: 5, serves: 2, time_minutes: 15 }] });
   await opening;
-  const row = h.els.myRecipesList.children[0];
-  const [star, info, cook] = row.children;
-  assert.equal(info.children[0].textContent, '<b>Nan</b> noodles', 'names are text, not HTML');
-  assert.equal(info.children[1].textContent, '5 steps · serves 2 · 15 min');
-  assert.equal(star.getAttribute('aria-pressed'), 'false');
-  const starring = star.listeners.click();
+  const row = h.els.myRecipesList.children[0].children[1].children[0];
+  const [cook, heart, badge] = row.children;
+  assert.equal(cook.children[1].children[0].textContent, '<b>Nan</b> noodles', 'names are text, not HTML');
+  assert.deepEqual(cook.children[1].children[1].children.map(c => c.textContent), ['15 mins', 'Serves 2']);
+  assert.equal(badge.tagName, 'SPAN', 'the personal star is not an interactive toggle');
+  assert.equal(badge.textContent, '\u2605');
+  assert.equal(badge.getAttribute('aria-label'), 'Personal recipe');
+  assert.equal(heart.getAttribute('aria-pressed'), 'false');
+  const starring = click(heart);
   assert.deepEqual([sent.at(-1).type, sent.at(-1).recipe_id, sent.at(-1).favorite], ['recipe_favorite', 7, true]);
   h.handle({ type: 'settings_result', request_id: sent.at(-1).request_id, recipe_id: 7, favorite: true });
   await starring;
-  assert.equal(star.getAttribute('aria-pressed'), 'true');
+  assert.equal(h.els.myRecipesList.children[0].children[1].children[0].children[1].getAttribute('aria-pressed'), 'true');
   cook.listeners.click();
   assert.deepEqual(sent.at(-1), { type: 'recipe_open', recipe_id: 7 });
   assert.equal(h.els.myRecipesDialog.open, false);
   assert.equal(h.els.log.children.at(-1).textContent, 'Cook again: <b>Nan</b> noodles');
+  h.setView('chat'); h.flushFrames();
+  h.handle({ type: 'response', message: 'Ready to cook.', cooking: {
+    recipe: '<b>Nan</b> noodles', saved_recipe_id: 7, recipe_revision: 1,
+    step: null, total_steps: 1, steps: ['Cook noodles.'] } });
+  h.flushFrames();
+  assert.equal(h.body.dataset.view, 'recipe');
+  assert.equal(h.root.scrollTop, 0, 'opening a saved recipe shows details at the top');
 }
 
 {
@@ -1149,7 +1266,7 @@ async function main() {
   assert.notEqual(h.sockets.at(-1).url, current.url, 'restoring a closed page from browser cache starts fresh');
 }
 
-console.log('PASS: 31 browser behavior scenarios: bottom scrolling after layout in both views, conversation reply visibility, auto-scroll and jump-to-newest, stages, checklist, servings, cooking mode, swipes, voice defaults, idea cards, coach line, conversation view, keyboard toggle, intro, camera-check bursts and status, '
+console.log('PASS: browser behavior scenarios: category/search filters, persistent card/grid layouts, favourites and personal badges, image fallback, bottom scrolling after layout in both views, conversation reply visibility, auto-scroll and jump-to-newest, stages, checklist, servings, cooking mode, swipes, voice defaults, idea cards, coach line, conversation view, keyboard toggle, intro, camera-check bursts and status, '
   + 'formatted replies, list speech, camera frames, watch alerts, timers and alarm, recipe upload, my recipes, settings, '
   + 'permission primers, offline banner, attachments, profile notes, history, new chats and reconnects.');
 }

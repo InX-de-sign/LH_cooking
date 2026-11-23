@@ -229,6 +229,29 @@ class ModelTests(unittest.IsolatedAsyncioTestCase):
 
 
 class AppTests(unittest.TestCase):
+    def test_unified_favourites_keep_personal_requests_compatible(self):
+        user = "catalog-favourite-regression"
+        visit = cook_api.assistant.store.current_visit(user)
+        custom_id = cook_api.assistant.store.save_custom_recipe(visit, {
+            "name": "My soup", "ingredients": ["1 cup stock"], "steps": [{"text": "Heat stock."}]})
+        with TestClient(cook_api.app) as client:
+            media = client.get("/api/recipes").json()["recipes"]
+            self.assertTrue(all(r.get("slug") and r.get("image") for r in media))
+            with client.websocket_connect(f"/ws?client_id={user}") as ws:
+                open_chat(ws)
+                for request in [
+                    {"type": "recipe_favorite", "recipe_id": custom_id, "favorite": True},
+                    {"type": "recipe_favorite", "source": "catalog", "slug": "tomato-soup", "favorite": True},
+                ]:
+                    ws.send_json({**request, "request_id": "heart"})
+                    self.assertTrue(ws.receive_json()["favorite"])
+                ws.send_json({"type": "favorites_list", "request_id": "list"})
+                recipes = ws.receive_json()["recipes"]
+                self.assertEqual({r["source"] for r in recipes}, {"personal", "catalog"})
+                self.assertTrue(next(r for r in recipes if r["source"] == "personal")["personal"])
+                ws.send_json({"type": "recipe_favorite", "source": "catalog", "slug": "missing", "favorite": True, "request_id": "bad"})
+                self.assertIn("error", ws.receive_json())
+
     def test_new_chat_greets_without_questionnaire_and_reconnect_resumes(self):
         with TestClient(cook_api.app) as client:
             with client.websocket_connect("/ws?client_id=new-chat-regression&chat_id=first") as first:

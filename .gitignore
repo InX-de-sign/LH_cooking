@@ -51,3 +51,6 @@ archived_chatbot/
 archived_esp32/
 *.backup
 *.backup.txt
+
+# Local UI review artifacts and optional image-delivery archive.
+.redesign-review/

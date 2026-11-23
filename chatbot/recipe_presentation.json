@@ -1,0 +1,1252 @@
+{
+  "Tomato and Egg Stir-fry": {
+    "slug": "tomato-and-egg-stir-fry",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-tomato-and-egg-stir-fry-detail.webp",
+    "card_image": "/static/recipes/stovetop-tomato-and-egg-stir-fry-card.webp",
+    "thumbnail": "/static/recipes/stovetop-tomato-and-egg-stir-fry-thumb.webp",
+    "image_alt": "Tomato and Egg Stir-fry served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Tomato and Egg Stir-fry: soft scrambled eggs folded into juicy red tomato wedges and spring onions, a home-style Chinese dish. Serve ready to eat. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-273136a0-aeca-417f-8ecf-3e21ee0721a2.png"
+  },
+  "Spaghetti Aglio e Olio": {
+    "slug": "spaghetti-aglio-e-olio",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-spaghetti-aglio-e-olio-detail.webp",
+    "card_image": "/static/recipes/stovetop-spaghetti-aglio-e-olio-card.webp",
+    "thumbnail": "/static/recipes/stovetop-spaghetti-aglio-e-olio-thumb.webp",
+    "image_alt": "Spaghetti Aglio e Olio served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Spaghetti Aglio e Olio. The dish uses: 200 grams dried spaghetti, 4 cloves garlic, 5 tablespoons olive oil, half a teaspoon chilli flakes, a small handful of parsley, salt for the pasta water. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-ce645260-b56e-4c1d-8a90-9d39b8ab7cf8.png"
+  },
+  "Pan-seared Chicken Breast": {
+    "slug": "pan-seared-chicken-breast",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-pan-seared-chicken-breast-detail.webp",
+    "card_image": "/static/recipes/stovetop-pan-seared-chicken-breast-card.webp",
+    "thumbnail": "/static/recipes/stovetop-pan-seared-chicken-breast-thumb.webp",
+    "image_alt": "Pan-seared Chicken Breast served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Pan-seared Chicken Breast. The dish uses: 2 boneless skinless chicken breasts, 1 tablespoon neutral oil, 1 tablespoon butter, salt and black pepper. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-c6ef470d-f13c-404c-86be-f3f0d1e167e4.png"
+  },
+  "Tomato and Cucumber Salad": {
+    "slug": "tomato-and-cucumber-salad",
+    "category": "Salad",
+    "image": "/static/recipes/stovetop-tomato-and-cucumber-salad-detail.webp",
+    "card_image": "/static/recipes/stovetop-tomato-and-cucumber-salad-card.webp",
+    "thumbnail": "/static/recipes/stovetop-tomato-and-cucumber-salad-thumb.webp",
+    "image_alt": "Tomato and Cucumber Salad served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Tomato and Cucumber Salad. The dish uses: 4 large tomatoes, 1 large cucumber, 1 cup red onion (measure after chopping), 1 cup green pepper (measure after chopping), one third cup parsley (measure after chopping), one third cup apple cider vinegar, 1 tablespoon olive oil, 2 cloves garlic, half a teaspoon each of salt, black pepper and sugar. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-f55d0b34-7ffe-4566-91fb-e2a10f817af2.png"
+  },
+  "Banana Oat Porridge": {
+    "slug": "banana-oat-porridge",
+    "category": "Breakfast",
+    "image": "/static/recipes/stovetop-banana-oat-porridge-detail.webp",
+    "card_image": "/static/recipes/stovetop-banana-oat-porridge-card.webp",
+    "thumbnail": "/static/recipes/stovetop-banana-oat-porridge-thumb.webp",
+    "image_alt": "Banana Oat Porridge served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Banana Oat Porridge. The dish uses: half a cup rolled oats, not steel-cut oats, 1 cup water, 1 ripe banana. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-6897e0cb-e8b6-458b-bcdf-5ccbaddff126.png"
+  },
+  "Spicy Shrimp Glass Noodles": {
+    "slug": "spicy-shrimp-glass-noodles",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-spicy-shrimp-glass-noodles-detail.webp",
+    "card_image": "/static/recipes/stovetop-spicy-shrimp-glass-noodles-card.webp",
+    "thumbnail": "/static/recipes/stovetop-spicy-shrimp-glass-noodles-thumb.webp",
+    "image_alt": "Spicy Shrimp Glass Noodles served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Spicy Shrimp Glass Noodles. The dish uses: 120 grams dry glass noodles, also called mung bean vermicelli, 250 grams raw shrimp (weight after peeling and deveining), 2 tablespoons neutral oil, 2 shallots, 3 garlic cloves, 3 spring onions, 1 small red chilli, optional, 2 tablespoons light soy sauce, 1 tablespoon oyster sauce, 1 teaspoon sugar, one third cup water. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-16af4476-ee00-45ff-9ce9-7fbff0f23e0e.png"
+  },
+  "Egg Fried Rice": {
+    "slug": "egg-fried-rice",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-egg-fried-rice-detail.webp",
+    "card_image": "/static/recipes/stovetop-egg-fried-rice-card.webp",
+    "thumbnail": "/static/recipes/stovetop-egg-fried-rice-thumb.webp",
+    "image_alt": "Egg Fried Rice served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Egg Fried Rice. The dish uses: 3 cups cooked rice, chilled promptly after cooking, 2 eggs, 2 spring onions, 2 tablespoons neutral oil, 1 tablespoon light soy sauce, quarter teaspoon salt, or to taste. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-86dbf263-477c-4955-986e-febf5ee1c7a9.png"
+  },
+  "Garlic Soy Noodles": {
+    "slug": "garlic-soy-noodles",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-garlic-soy-noodles-detail.webp",
+    "card_image": "/static/recipes/stovetop-garlic-soy-noodles-card.webp",
+    "thumbnail": "/static/recipes/stovetop-garlic-soy-noodles-thumb.webp",
+    "image_alt": "Garlic Soy Noodles served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Garlic Soy Noodles. The dish uses: 200 grams dried wheat noodles, 4 garlic cloves, 2 tablespoons light soy sauce, 1 teaspoon sugar, 1 tablespoon neutral oil, 2 spring onions. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-ec4200b6-a95c-42d5-8895-be975cee635d.png"
+  },
+  "Ginger Scallion Steamed Fish": {
+    "slug": "ginger-scallion-steamed-fish",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-ginger-scallion-steamed-fish-detail.webp",
+    "card_image": "/static/recipes/stovetop-ginger-scallion-steamed-fish-card.webp",
+    "thumbnail": "/static/recipes/stovetop-ginger-scallion-steamed-fish-thumb.webp",
+    "image_alt": "Ginger Scallion Steamed Fish served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Ginger Scallion Steamed Fish. The dish uses: 2 boneless white fish fillets, about 150 grams each, 20 grams ginger, 3 spring onions, 2 tablespoons light soy sauce, 1 tablespoon neutral oil, 2 tablespoons water. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-dbcc763d-a5ed-4032-81c5-51f62ae8bee1.png"
+  },
+  "Garlic Bok Choy": {
+    "slug": "garlic-bok-choy",
+    "category": "Snacks & sides",
+    "image": "/static/recipes/stovetop-garlic-bok-choy-detail.webp",
+    "card_image": "/static/recipes/stovetop-garlic-bok-choy-card.webp",
+    "thumbnail": "/static/recipes/stovetop-garlic-bok-choy-thumb.webp",
+    "image_alt": "Garlic Bok Choy served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Garlic Bok Choy. The dish uses: 400 grams baby bok choy, 3 garlic cloves, 1 tablespoon neutral oil, 2 tablespoons water, 1 tablespoon light soy sauce. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-dfa630dd-6b82-4527-8aec-011c46341fa3.png"
+  },
+  "Garlic Butter Shrimp": {
+    "slug": "garlic-butter-shrimp",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-garlic-butter-shrimp-detail.webp",
+    "card_image": "/static/recipes/stovetop-garlic-butter-shrimp-card.webp",
+    "thumbnail": "/static/recipes/stovetop-garlic-butter-shrimp-thumb.webp",
+    "image_alt": "Garlic Butter Shrimp served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Garlic Butter Shrimp. The dish uses: 300 grams raw shrimp (weight after peeling and deveining), 3 garlic cloves, 1 tablespoon neutral oil, 1 tablespoon butter, 1 tablespoon lemon juice, 1 tablespoon parsley (measure after chopping). Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-02d2c49e-815b-4813-9065-52836fcef3f0.png"
+  },
+  "Mushroom Tofu Stir-fry": {
+    "slug": "mushroom-tofu-stir-fry",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-mushroom-tofu-stir-fry-detail.webp",
+    "card_image": "/static/recipes/stovetop-mushroom-tofu-stir-fry-card.webp",
+    "thumbnail": "/static/recipes/stovetop-mushroom-tofu-stir-fry-thumb.webp",
+    "image_alt": "Mushroom Tofu Stir-fry served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Mushroom Tofu Stir-fry. The dish uses: 300 grams firm tofu, 200 grams mushrooms, 2 garlic cloves, 1 tablespoon neutral oil, 2 tablespoons light soy sauce, 1 teaspoon sugar, 2 tablespoons water. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-e614c922-7e7d-4350-be23-cf805e3e2442.png"
+  },
+  "Sesame Cucumber Salad": {
+    "slug": "sesame-cucumber-salad",
+    "category": "Salad",
+    "image": "/static/recipes/stovetop-sesame-cucumber-salad-detail.webp",
+    "card_image": "/static/recipes/stovetop-sesame-cucumber-salad-card.webp",
+    "thumbnail": "/static/recipes/stovetop-sesame-cucumber-salad-thumb.webp",
+    "image_alt": "Sesame Cucumber Salad served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Sesame Cucumber Salad. The dish uses: 1 large cucumber, 1 tablespoon rice vinegar, 1 teaspoon light soy sauce, 1 teaspoon sesame oil, 1 teaspoon sugar, 1 teaspoon toasted sesame seeds. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-170fb759-1b92-4a16-9f16-99ef5a736fd5.png"
+  },
+  "Chicken Congee": {
+    "slug": "chicken-congee",
+    "category": "Breakfast",
+    "image": "/static/recipes/stovetop-chicken-congee-detail.webp",
+    "card_image": "/static/recipes/stovetop-chicken-congee-card.webp",
+    "thumbnail": "/static/recipes/stovetop-chicken-congee-thumb.webp",
+    "image_alt": "Chicken Congee served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Chicken Congee. The dish uses: three quarters cup uncooked white rice, 6 cups water or low-salt chicken stock, 250 grams boneless chicken thigh, 10 grams ginger, 2 spring onions, salt to taste. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-4de61da0-086e-4ae6-bac6-492ee08382a8.png"
+  },
+  "Miso Tofu Soup": {
+    "slug": "miso-tofu-soup",
+    "category": "Soup",
+    "image": "/static/recipes/stovetop-miso-tofu-soup-detail.webp",
+    "card_image": "/static/recipes/stovetop-miso-tofu-soup-card.webp",
+    "thumbnail": "/static/recipes/stovetop-miso-tofu-soup-thumb.webp",
+    "image_alt": "Miso Tofu Soup served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Miso Tofu Soup. The dish uses: 3 cups water, 2 tablespoons white miso paste, 150 grams soft tofu, 1 tablespoon dried wakame, 1 spring onion. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-2c12c035-8ba3-4067-a584-51c981024318.png"
+  },
+  "Broccoli Garlic Pasta": {
+    "slug": "broccoli-garlic-pasta",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-broccoli-garlic-pasta-detail.webp",
+    "card_image": "/static/recipes/stovetop-broccoli-garlic-pasta-card.webp",
+    "thumbnail": "/static/recipes/stovetop-broccoli-garlic-pasta-thumb.webp",
+    "image_alt": "Broccoli Garlic Pasta served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Broccoli Garlic Pasta. The dish uses: 200 grams dried spaghetti, 250 grams broccoli (weight after cutting into florets), 3 garlic cloves, 2 tablespoons olive oil, quarter teaspoon chilli flakes, optional, salt to taste. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-134db327-52a1-4260-8832-b835686d4f66.png"
+  },
+  "Soy Glazed Chicken Rice Bowl": {
+    "slug": "soy-glazed-chicken-rice-bowl",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-soy-glazed-chicken-rice-bowl-detail.webp",
+    "card_image": "/static/recipes/stovetop-soy-glazed-chicken-rice-bowl-card.webp",
+    "thumbnail": "/static/recipes/stovetop-soy-glazed-chicken-rice-bowl-thumb.webp",
+    "image_alt": "Soy Glazed Chicken Rice Bowl served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Soy Glazed Chicken Rice Bowl. The dish uses: 300 grams boneless chicken thigh, 2 cups cooked rice, 2 tablespoons light soy sauce, 1 tablespoon honey, 1 tablespoon water, 1 tablespoon neutral oil, 1 spring onion. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-d439d653-9a27-47d4-8869-3682691f0c78.png"
+  },
+  "Tomato Tofu Soup": {
+    "slug": "tomato-tofu-soup",
+    "category": "Soup",
+    "image": "/static/recipes/stovetop-tomato-tofu-soup-detail.webp",
+    "card_image": "/static/recipes/stovetop-tomato-tofu-soup-card.webp",
+    "thumbnail": "/static/recipes/stovetop-tomato-tofu-soup-thumb.webp",
+    "image_alt": "Tomato Tofu Soup served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Tomato Tofu Soup. The dish uses: 2 medium tomatoes, 250 grams soft tofu, 2 cups water or vegetable stock, 1 spring onion, 1 teaspoon neutral oil, salt to taste. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-796a1074-bf65-4ab3-af10-50d4cfabc53d.png"
+  },
+  "Soy Garlic Green Beans": {
+    "slug": "soy-garlic-green-beans",
+    "category": "Snacks & sides",
+    "image": "/static/recipes/stovetop-soy-garlic-green-beans-detail.webp",
+    "card_image": "/static/recipes/stovetop-soy-garlic-green-beans-card.webp",
+    "thumbnail": "/static/recipes/stovetop-soy-garlic-green-beans-thumb.webp",
+    "image_alt": "Soy Garlic Green Beans served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Soy Garlic Green Beans. The dish uses: 300 grams green beans, 3 garlic cloves, 1 tablespoon neutral oil, 2 tablespoons water, 1 tablespoon light soy sauce. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-19f526c6-034d-49d9-beda-65d842a45870.png"
+  },
+  "Scallion Pancakes": {
+    "slug": "scallion-pancakes",
+    "category": "Snacks & sides",
+    "image": "/static/recipes/stovetop-scallion-pancakes-detail.webp",
+    "card_image": "/static/recipes/stovetop-scallion-pancakes-card.webp",
+    "thumbnail": "/static/recipes/stovetop-scallion-pancakes-thumb.webp",
+    "image_alt": "Scallion Pancakes served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Scallion Pancakes. The dish uses: 1 cup all-purpose flour, plus extra for dusting, half a cup water, 3 spring onions, quarter teaspoon salt, 2 tablespoons neutral oil, divided. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-eb230941-d5ce-41c1-86b2-063f6008843a.png"
+  },
+  "Spaghetti Bolognese": {
+    "slug": "spaghetti-bolognese",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-spaghetti-bolognese-detail.webp",
+    "card_image": "/static/recipes/stovetop-spaghetti-bolognese-card.webp",
+    "thumbnail": "/static/recipes/stovetop-spaghetti-bolognese-thumb.webp",
+    "image_alt": "Spaghetti Bolognese served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Spaghetti Bolognese. The dish uses: 200 grams dried spaghetti, 250 grams minced beef, 1 tablespoon olive oil, 1 small onion, 1 carrot, 2 garlic cloves, 400 grams canned chopped tomatoes, 1 tablespoon tomato paste, 1 teaspoon dried oregano, salt and black pepper to taste. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-674555ea-a282-4652-8b91-d7a62a969fe8.png"
+  },
+  "Creamy Chicken Alfredo": {
+    "slug": "creamy-chicken-alfredo",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-creamy-chicken-alfredo-detail.webp",
+    "card_image": "/static/recipes/stovetop-creamy-chicken-alfredo-card.webp",
+    "thumbnail": "/static/recipes/stovetop-creamy-chicken-alfredo-thumb.webp",
+    "image_alt": "Creamy Chicken Alfredo served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Creamy Chicken Alfredo. The dish uses: 200 grams fettuccine, 250 grams boneless chicken breast, 1 tablespoon olive oil, 1 tablespoon butter, 2 garlic cloves, 150 millilitres cream, 40 grams Parmesan, salt and black pepper to taste. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-a4e74562-7f3f-458e-8f27-c5eecb73f5b8.png"
+  },
+  "Macaroni and Cheese": {
+    "slug": "macaroni-and-cheese",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-macaroni-and-cheese-detail.webp",
+    "card_image": "/static/recipes/stovetop-macaroni-and-cheese-card.webp",
+    "thumbnail": "/static/recipes/stovetop-macaroni-and-cheese-thumb.webp",
+    "image_alt": "Macaroni and Cheese served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Macaroni and Cheese. The dish uses: 200 grams dried macaroni, 25 grams butter, 25 grams plain flour, 350 millilitres milk, 120 grams Cheddar, half teaspoon mustard, optional, salt and black pepper to taste. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-d793466e-16ab-4164-a26b-538292a34552.png"
+  },
+  "Margherita Pizza": {
+    "slug": "margherita-pizza",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-margherita-pizza-detail.webp",
+    "card_image": "/static/recipes/stovetop-margherita-pizza-card.webp",
+    "thumbnail": "/static/recipes/stovetop-margherita-pizza-thumb.webp",
+    "image_alt": "Margherita Pizza served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Margherita Pizza. The dish uses: 1 ready-to-bake pizza dough ball, about 250 grams, 100 grams tomato passata, 125 grams mozzarella, 1 teaspoon olive oil, 6 fresh basil leaves, 1 tablespoon plain flour for dusting, quarter teaspoon salt. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-8fd015f8-6d02-4ac5-9128-d44d18959df6.png"
+  },
+  "Fluffy Pancakes": {
+    "slug": "fluffy-pancakes",
+    "category": "Breakfast",
+    "image": "/static/recipes/stovetop-fluffy-pancakes-detail.webp",
+    "card_image": "/static/recipes/stovetop-fluffy-pancakes-card.webp",
+    "thumbnail": "/static/recipes/stovetop-fluffy-pancakes-thumb.webp",
+    "image_alt": "Fluffy Pancakes served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Fluffy Pancakes. The dish uses: 150 grams plain flour, 2 teaspoons baking powder, 1 tablespoon sugar, quarter teaspoon salt, 1 egg, 180 millilitres milk, 1 tablespoon butter, 2 teaspoons neutral oil for the pan. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-b03fa96d-b4ae-45b7-ad4d-d10a94126d24.png"
+  },
+  "French Toast": {
+    "slug": "french-toast",
+    "category": "Breakfast",
+    "image": "/static/recipes/stovetop-french-toast-detail.webp",
+    "card_image": "/static/recipes/stovetop-french-toast-card.webp",
+    "thumbnail": "/static/recipes/stovetop-french-toast-thumb.webp",
+    "image_alt": "French Toast served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of French Toast. The dish uses: 4 slices bread, 2 eggs, 80 millilitres milk, 1 teaspoon sugar, quarter teaspoon ground cinnamon, 1 tablespoon butter. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-0c751dc5-20ee-4530-9414-ae082f10ba9c.png"
+  },
+  "Scrambled Eggs": {
+    "slug": "scrambled-eggs",
+    "category": "Breakfast",
+    "image": "/static/recipes/stovetop-scrambled-eggs-detail.webp",
+    "card_image": "/static/recipes/stovetop-scrambled-eggs-card.webp",
+    "thumbnail": "/static/recipes/stovetop-scrambled-eggs-thumb.webp",
+    "image_alt": "Scrambled Eggs served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Scrambled Eggs. The dish uses: 4 eggs, 1 tablespoon butter, 2 tablespoons milk, optional, quarter teaspoon salt, black pepper to taste. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-77f9ce6e-1061-4fe1-acf7-5f6f84dd616e.png"
+  },
+  "Cheese Omelette": {
+    "slug": "cheese-omelette",
+    "category": "Breakfast",
+    "image": "/static/recipes/stovetop-cheese-omelette-detail.webp",
+    "card_image": "/static/recipes/stovetop-cheese-omelette-card.webp",
+    "thumbnail": "/static/recipes/stovetop-cheese-omelette-thumb.webp",
+    "image_alt": "Cheese Omelette served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Cheese Omelette. The dish uses: 2 eggs, 1 teaspoon butter, 25 grams Cheddar, a pinch of salt, black pepper to taste. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-5ca3f552-9927-4156-868a-871f042f2507.png"
+  },
+  "Grilled Cheese Sandwich": {
+    "slug": "grilled-cheese-sandwich",
+    "category": "Snacks & sides",
+    "image": "/static/recipes/stovetop-grilled-cheese-sandwich-detail.webp",
+    "card_image": "/static/recipes/stovetop-grilled-cheese-sandwich-card.webp",
+    "thumbnail": "/static/recipes/stovetop-grilled-cheese-sandwich-thumb.webp",
+    "image_alt": "Grilled Cheese Sandwich served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Grilled Cheese Sandwich. The dish uses: 2 slices bread, 50 grams Cheddar, 2 teaspoons butter. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-a3c24001-fc1d-4255-960c-b126ddcaf83d.png"
+  },
+  "Shakshuka": {
+    "slug": "shakshuka",
+    "category": "Breakfast",
+    "image": "/static/recipes/stovetop-shakshuka-detail.webp",
+    "card_image": "/static/recipes/stovetop-shakshuka-card.webp",
+    "thumbnail": "/static/recipes/stovetop-shakshuka-thumb.webp",
+    "image_alt": "Shakshuka served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Shakshuka. The dish uses: 4 eggs, 1 tablespoon olive oil, 1 small onion, 1 red pepper, 2 garlic cloves, 400 grams canned chopped tomatoes, 1 teaspoon ground cumin, 1 teaspoon paprika, quarter teaspoon salt, or to taste. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-872b2caf-b71a-43cc-bd7f-82c1f5c7f640.png"
+  },
+  "Chicken Curry": {
+    "slug": "chicken-curry",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-chicken-curry-detail.webp",
+    "card_image": "/static/recipes/stovetop-chicken-curry-card.webp",
+    "thumbnail": "/static/recipes/stovetop-chicken-curry-thumb.webp",
+    "image_alt": "Chicken Curry served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Chicken Curry. The dish uses: 300 grams boneless chicken thighs, 1 tablespoon neutral oil, 1 onion, 2 garlic cloves, 2 teaspoons ginger (measure after grating), 1 tablespoon curry powder, 200 grams canned chopped tomatoes, 200 millilitres coconut milk, half teaspoon salt, or to taste. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-64872b84-1686-48f5-84f9-25246c355608.png"
+  },
+  "Butter Chicken": {
+    "slug": "butter-chicken",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-butter-chicken-detail.webp",
+    "card_image": "/static/recipes/stovetop-butter-chicken-card.webp",
+    "thumbnail": "/static/recipes/stovetop-butter-chicken-thumb.webp",
+    "image_alt": "Butter Chicken served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Butter Chicken. The dish uses: 300 grams boneless chicken thighs, 2 tablespoons plain yogurt, 2 teaspoons garam masala, divided, 2 tablespoons butter, divided, 2 garlic cloves, 2 teaspoons ginger (measure after grating), 250 millilitres tomato passata, 100 millilitres cream, half teaspoon paprika, half teaspoon salt, or to taste. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-1fe5b7ae-491e-4d30-89b1-4c10da686058.png"
+  },
+  "Chickpea Curry": {
+    "slug": "chickpea-curry",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-chickpea-curry-detail.webp",
+    "card_image": "/static/recipes/stovetop-chickpea-curry-card.webp",
+    "thumbnail": "/static/recipes/stovetop-chickpea-curry-thumb.webp",
+    "image_alt": "Chickpea Curry served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Chickpea Curry. The dish uses: 400 gram can chickpeas, 1 tablespoon neutral oil, 1 onion, 2 garlic cloves, 2 teaspoons ginger (measure after grating), 1 teaspoon ground cumin, 1 teaspoon garam masala, 400 grams canned chopped tomatoes, 100 millilitres water, 1 teaspoon lemon juice, half teaspoon salt, or to taste. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-6af5c583-804d-4815-b297-e2bf4d92769c.png"
+  },
+  "Red Lentil Dal": {
+    "slug": "red-lentil-dal",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-red-lentil-dal-detail.webp",
+    "card_image": "/static/recipes/stovetop-red-lentil-dal-card.webp",
+    "thumbnail": "/static/recipes/stovetop-red-lentil-dal-thumb.webp",
+    "image_alt": "Red Lentil Dal served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Red Lentil Dal. The dish uses: 150 grams dried split red lentils, 600 millilitres water, 1 tablespoon neutral oil, 1 small onion, 2 garlic cloves, 1 teaspoon ginger (measure after grating), 1 teaspoon ground cumin, half teaspoon ground turmeric, 1 tomato, half teaspoon salt, or to taste, 1 teaspoon lemon juice. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-3a2384ef-853d-4f6b-919c-ab89cf3b4900.png"
+  },
+  "Mapo Tofu": {
+    "slug": "mapo-tofu",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-mapo-tofu-detail.webp",
+    "card_image": "/static/recipes/stovetop-mapo-tofu-card.webp",
+    "thumbnail": "/static/recipes/stovetop-mapo-tofu-thumb.webp",
+    "image_alt": "Mapo Tofu served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Mapo Tofu. The dish uses: 400 grams firm tofu, 150 grams minced pork, 1 tablespoon neutral oil, 2 garlic cloves, 1 teaspoon ginger (measure after grating), 1 tablespoon doubanjiang chilli bean paste, 200 millilitres water, 1 teaspoon light soy sauce, 1 teaspoon cornflour, 1 spring onion, quarter teaspoon ground Sichuan pepper, optional, 1 tablespoon cold water for the cornflour slurry. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-6745bb5b-9eef-45f1-b7d2-343cb072cd2d.png"
+  },
+  "Kung Pao Chicken": {
+    "slug": "kung-pao-chicken",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-kung-pao-chicken-detail.webp",
+    "card_image": "/static/recipes/stovetop-kung-pao-chicken-card.webp",
+    "thumbnail": "/static/recipes/stovetop-kung-pao-chicken-thumb.webp",
+    "image_alt": "Kung Pao Chicken served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Kung Pao Chicken. The dish uses: 300 grams boneless chicken thighs, 2 tablespoons light soy sauce, divided, 2 teaspoons cornflour, divided, 1 tablespoon rice vinegar, 2 teaspoons sugar, 3 tablespoons water, 1 tablespoon neutral oil, 1 red pepper, 2 garlic cloves, 1 teaspoon ginger (measure after grating), 2 dried chillies, optional, 30 grams roasted unsalted peanuts, 2 spring onions. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-b674d1b4-db14-453a-bc12-a5ddcb57f52f.png"
+  },
+  "Sweet and Sour Chicken": {
+    "slug": "sweet-and-sour-chicken",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-sweet-and-sour-chicken-detail.webp",
+    "card_image": "/static/recipes/stovetop-sweet-and-sour-chicken-card.webp",
+    "thumbnail": "/static/recipes/stovetop-sweet-and-sour-chicken-thumb.webp",
+    "image_alt": "Sweet and Sour Chicken served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Sweet and Sour Chicken. The dish uses: 300 grams boneless chicken breast, 1 tablespoon neutral oil, 1 red pepper, 1 small onion, 150 grams pineapple chunks, 3 tablespoons ketchup, 2 tablespoons rice vinegar, 1 tablespoon light soy sauce, 1 tablespoon sugar, 80 millilitres water, 2 teaspoons cornflour, 1 tablespoon cold water for the cornflour slurry. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-ec040edc-2517-48bd-938f-86062dee8b3d.png"
+  },
+  "Beef and Broccoli": {
+    "slug": "beef-and-broccoli",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-beef-and-broccoli-detail.webp",
+    "card_image": "/static/recipes/stovetop-beef-and-broccoli-card.webp",
+    "thumbnail": "/static/recipes/stovetop-beef-and-broccoli-thumb.webp",
+    "image_alt": "Beef and Broccoli served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Beef and Broccoli. The dish uses: 250 grams beef steak, 300 grams broccoli, 1 tablespoon neutral oil, 2 garlic cloves, 1 teaspoon ginger (measure after grating), 1 tablespoon light soy sauce, 1 tablespoon oyster sauce, 1 teaspoon sugar, 80 millilitres water, 1 teaspoon cornflour, 1 tablespoon cold water for the cornflour slurry. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-4c12665b-e1e8-4b96-9c79-8f7f4140ec46.png"
+  },
+  "Chicken Chow Mein": {
+    "slug": "chicken-chow-mein",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-chicken-chow-mein-detail.webp",
+    "card_image": "/static/recipes/stovetop-chicken-chow-mein-card.webp",
+    "thumbnail": "/static/recipes/stovetop-chicken-chow-mein-thumb.webp",
+    "image_alt": "Chicken Chow Mein served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Chicken Chow Mein. The dish uses: 200 grams dried egg noodles, 250 grams boneless chicken breast, 2 tablespoons neutral oil, divided, 2 garlic cloves, 1 carrot, 150 grams cabbage, 2 spring onions, 1 tablespoon light soy sauce, 1 tablespoon oyster sauce, 2 tablespoons water. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-9d912d2e-14ae-4c93-a794-0a8ad2ee435d.png"
+  },
+  "Shrimp Pad Thai": {
+    "slug": "shrimp-pad-thai",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-shrimp-pad-thai-detail.webp",
+    "card_image": "/static/recipes/stovetop-shrimp-pad-thai-card.webp",
+    "thumbnail": "/static/recipes/stovetop-shrimp-pad-thai-thumb.webp",
+    "image_alt": "Shrimp Pad Thai served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Shrimp Pad Thai. The dish uses: 150 grams dried flat rice noodles, 200 grams raw shrimp (weight after peeling), 2 eggs, 2 tablespoons neutral oil, divided, 2 garlic cloves, 2 tablespoons tamarind puree, ready-to-use, not concentrate, 1 tablespoon fish sauce, 1 tablespoon sugar, 3 tablespoons water, 100 grams bean sprouts, 2 spring onions, 20 grams roasted peanuts, half a lime. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-2d314689-718a-49e7-b0a2-731e636d761a.png"
+  },
+  "Teriyaki Salmon": {
+    "slug": "teriyaki-salmon",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-teriyaki-salmon-detail.webp",
+    "card_image": "/static/recipes/stovetop-teriyaki-salmon-card.webp",
+    "thumbnail": "/static/recipes/stovetop-teriyaki-salmon-thumb.webp",
+    "image_alt": "Teriyaki Salmon served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Teriyaki Salmon. The dish uses: 2 salmon fillets, about 150 grams each, 1 teaspoon neutral oil, 2 tablespoons light soy sauce, 1 tablespoon honey, 1 tablespoon rice vinegar, 2 tablespoons water, 1 teaspoon ginger (measure after grating), 1 spring onion. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-d43ec02e-ebcd-4340-86c7-cdd2b36dc5d7.png"
+  },
+  "Vegetable Bibimbap": {
+    "slug": "vegetable-bibimbap",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-vegetable-bibimbap-detail.webp",
+    "card_image": "/static/recipes/stovetop-vegetable-bibimbap-card.webp",
+    "thumbnail": "/static/recipes/stovetop-vegetable-bibimbap-thumb.webp",
+    "image_alt": "Vegetable Bibimbap served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Vegetable Bibimbap. The dish uses: 150 grams uncooked rice, water for rice, following packet directions, 2 eggs, 1 carrot, 1 courgette, 100 grams spinach, 100 grams mushrooms, 1 tablespoon neutral oil, divided, 2 teaspoons sesame oil, 1 tablespoon light soy sauce, 1 tablespoon gochujang, 2 teaspoons rice vinegar, 1 teaspoon sugar, 2 teaspoons water for sauce. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-a2e882e4-3641-434f-b288-5f6025f14205.png"
+  },
+  "Beef Tacos": {
+    "slug": "beef-tacos",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-beef-tacos-detail.webp",
+    "card_image": "/static/recipes/stovetop-beef-tacos-card.webp",
+    "thumbnail": "/static/recipes/stovetop-beef-tacos-thumb.webp",
+    "image_alt": "Beef Tacos served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Beef Tacos. The dish uses: 250 grams minced beef, 1 teaspoon neutral oil, 1 small onion, 1 teaspoon ground cumin, 1 teaspoon paprika, 1 tablespoon tomato paste, 80 millilitres water, quarter teaspoon salt, 6 small tortillas, 1 tomato, 50 grams lettuce, 40 grams Cheddar. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-d9afa02e-5403-4fd6-9b61-a409f359e519.png"
+  },
+  "Bean and Rice Burritos": {
+    "slug": "bean-and-rice-burritos",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-bean-and-rice-burritos-detail.webp",
+    "card_image": "/static/recipes/stovetop-bean-and-rice-burritos-card.webp",
+    "thumbnail": "/static/recipes/stovetop-bean-and-rice-burritos-thumb.webp",
+    "image_alt": "Bean and Rice Burritos served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Bean and Rice Burritos. The dish uses: 100 grams uncooked rice, water for rice, following packet directions, 400 gram can black beans, 1 teaspoon neutral oil, 1 small onion, 1 teaspoon ground cumin, 100 grams tomato salsa, 2 large flour tortillas, 50 grams Cheddar, 1 avocado. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-ed2064ea-a0e1-4511-926a-7ed025de4c1e.png"
+  },
+  "Chilli con Carne": {
+    "slug": "chilli-con-carne",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-chilli-con-carne-detail.webp",
+    "card_image": "/static/recipes/stovetop-chilli-con-carne-card.webp",
+    "thumbnail": "/static/recipes/stovetop-chilli-con-carne-thumb.webp",
+    "image_alt": "Chilli con Carne served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Chilli con Carne. The dish uses: 250 grams minced beef, 1 tablespoon neutral oil, 1 onion, 2 garlic cloves, 1 teaspoon ground cumin, 1 teaspoon paprika, half teaspoon chilli powder, or to taste, 400 grams canned chopped tomatoes, 400 gram can kidney beans, 100 millilitres water, half teaspoon salt, or to taste. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-d1a7a81a-e864-494c-8352-6c4d8e964333.png"
+  },
+  "Chicken Noodle Soup": {
+    "slug": "chicken-noodle-soup",
+    "category": "Soup",
+    "image": "/static/recipes/stovetop-chicken-noodle-soup-detail.webp",
+    "card_image": "/static/recipes/stovetop-chicken-noodle-soup-card.webp",
+    "thumbnail": "/static/recipes/stovetop-chicken-noodle-soup-thumb.webp",
+    "image_alt": "Chicken Noodle Soup served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Chicken Noodle Soup. The dish uses: 250 grams boneless chicken breast, 1 litre chicken stock, 1 carrot, 1 celery stalk, 1 small onion, 100 grams dried egg noodles, black pepper to taste, salt to taste, if needed. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-c2200138-7168-4d82-964a-521bb557d8f4.png"
+  },
+  "Tomato Soup": {
+    "slug": "tomato-soup",
+    "category": "Soup",
+    "image": "/static/recipes/stovetop-tomato-soup-detail.webp",
+    "card_image": "/static/recipes/stovetop-tomato-soup-card.webp",
+    "thumbnail": "/static/recipes/stovetop-tomato-soup-thumb.webp",
+    "image_alt": "Tomato Soup served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Tomato Soup. The dish uses: 1 tablespoon olive oil, 1 small onion, 2 garlic cloves, 400 grams canned chopped tomatoes, 300 millilitres vegetable stock, half teaspoon sugar, optional, 2 tablespoons cream, optional, salt and black pepper to taste. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-0899d8d1-9b5e-4126-8ac5-20947627415c.png"
+  },
+  "Vegetable Stir-fry": {
+    "slug": "vegetable-stir-fry",
+    "category": "Main course",
+    "image": "/static/recipes/stovetop-vegetable-stir-fry-detail.webp",
+    "card_image": "/static/recipes/stovetop-vegetable-stir-fry-card.webp",
+    "thumbnail": "/static/recipes/stovetop-vegetable-stir-fry-thumb.webp",
+    "image_alt": "Vegetable Stir-fry served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Vegetable Stir-fry. The dish uses: 150 grams broccoli, 1 carrot, 1 red pepper, 100 grams mushrooms, 2 garlic cloves, 1 tablespoon neutral oil, 1 tablespoon light soy sauce, 1 teaspoon sesame oil, 3 tablespoons water, 1 teaspoon cornflour, 1 tablespoon cold water for the cornflour slurry. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-09b2289b-94fe-4ac4-9741-f15869387cee.png"
+  },
+  "Crispy Roast Potatoes": {
+    "slug": "crispy-roast-potatoes",
+    "category": "Snacks & sides",
+    "image": "/static/recipes/stovetop-crispy-roast-potatoes-detail.webp",
+    "card_image": "/static/recipes/stovetop-crispy-roast-potatoes-card.webp",
+    "thumbnail": "/static/recipes/stovetop-crispy-roast-potatoes-thumb.webp",
+    "image_alt": "Crispy Roast Potatoes served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Crispy Roast Potatoes. The dish uses: 500 grams potatoes, 2 tablespoons neutral oil, half teaspoon salt, divided, black pepper to taste, half teaspoon dried rosemary, optional. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-94a4d0e9-6199-410b-898b-2d71755618ab.png"
+  },
+  "Banana Bread": {
+    "slug": "banana-bread",
+    "category": "Dessert",
+    "image": "/static/recipes/stovetop-banana-bread-detail.webp",
+    "card_image": "/static/recipes/stovetop-banana-bread-card.webp",
+    "thumbnail": "/static/recipes/stovetop-banana-bread-thumb.webp",
+    "image_alt": "Banana Bread served in neutral tableware",
+    "illustrative": true,
+    "prompt": "Editorial food photography for a cohesive home-cooking app. Soft natural window light from the upper left; warm neutral ceramic tableware on a muted stone table, sage green accents (#dce3d4), warm ivory (#faf9f5), charcoal (#242821). Close overhead three-quarter view with the entire main dish centred in the middle of the frame, generous background around it for portrait, square and landscape crops. Realistic home-cooked textures, gently warm natural colour grade. No people, no hands, no text, no labels, no logos, no watermarks. Photograph one finished dish of Banana Bread. The dish uses: 3 medium ripe bananas, 200 grams plain flour, 1 teaspoon baking powder, half teaspoon bicarbonate of soda, quarter teaspoon salt, 100 grams sugar, 2 eggs, 80 grams butter, 1 teaspoon vanilla extract, 1 teaspoon neutral oil for greasing the tin. Serve it ready to eat, with all components appropriate for this recipe. Portrait composition, no montage or multiple recipe panels.",
+    "dimensions": {
+      "card": [
+        600,
+        800
+      ],
+      "thumbnail": [
+        400,
+        400
+      ],
+      "detail": [
+        1000,
+        750
+      ]
+    },
+    "generation_file": "exec-f7e452d9-0dc8-4ab1-b589-d52d5b40b926.png"
+  }
+}

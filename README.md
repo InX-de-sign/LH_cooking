@@ -70,10 +70,33 @@ Already working, tested locally:
   Changing dishes opens the new ingredient preview first. You can also switch
   recipes mid-cook (for example “change the dish to stir-fry shrimp”); the left
   panel updates and shows the new ingredient preview. Ask for ideas and the
-  coach suggests two dishes that fit your profile; the recipe book search shows
-  up to six matches for dish names, aliases and ingredients. These are curated familiar
+  coach suggests two dishes that fit your profile; recipe search matches dish
+  names, aliases and ingredients. These are curated familiar
   dishes, not a measured ranking of search popularity; new recipes are house
   drafts and have not been kitchen-tested.
+- **Recipe discovery**: the home screen shows recipes immediately with local
+  food photographs, a recipe count, and category filters for Main course,
+  Breakfast, Soup, Salad, Dessert, Snacks & sides, and Personal. Search and
+  category filters work together. Switch between photographic cards and a
+  compact grid; the app remembers your category and layout choices locally.
+  Desktop uses a three-column grid; mobile cards scroll horizontally.
+- **My recipes and Favourites**: personal recipes have a **star badge** that
+  identifies ownership. **Hearts** add or remove favourites from either the
+  built-in book or your personal collection, without selecting or starting a
+  recipe. Both collections use cards grouped into expandable categories.
+  Existing personal favourites remain favourited; built-in favourites use stable
+  recipe slugs and the same browser identity as your profile.
+- **Recipe presentation**: preparation screens show a large illustrative food
+  photograph, servings and the existing total time, plus sage Ingredients and
+  Directions sections. Cooking hides the large photograph and keeps the progress
+  bar, instructions, camera, timers and voice controls prominent. Manrope
+  typography and rounded surfaces apply throughout the app, following the
+  device theme by default while retaining saved themes and high-contrast mode.
+  Fifty AI-generated dish photographs supply 150 local WebP assets (portrait
+  cards, square thumbnails, landscape details); they illustrate the recipe and
+  are not photographs of the cook's result. Personal recipes with a matching
+  catalog name reuse its illustration; other personal recipes get a designed
+  text-and-colour placeholder. No images are generated during chat requests.
 - Ingredient lists show ingredients before kitchen preparation. Cutting,
   washing, peeling, draining, thawing, mixing and similar preparation appear in
   guided steps before use, for both bundled and imported/generated recipes.
@@ -90,7 +113,7 @@ Already working, tested locally:
 - **Upload recipe**: paste a recipe or a link, photograph a cookbook page, or
   choose a screenshot/text file; the coach breaks it into steps and guides you
   through it like a built-in recipe. Uploads are kept under **My recipes**
-  (star favourites, cook again). Installed as an app on Android, the coach also
+  (heart favourites, cook again). Installed as an app on Android, the coach also
   appears in the share sheet for web pages and screenshots.
 - **Mobile flow in four stages**, one card at a time with the coach's latest
   reply underneath (the full conversation is one tap away): Choose (two idea
@@ -108,6 +131,7 @@ Already working, tested locally:
   large instructions, and keep it visible through the reply. Next/Back work
   through buttons, spoken commands and swipes. Other prompts resume scrolling
   to the bottom; explicitly opening the recipe starts at the top.
+  The initial welcome greeting leaves the discovery screen at the top.
 - **Short answers**: replies are capped at about two short sentences (25
   words); the screen shows the lists, so the coach doesn't read them out.
 - **Timers**: several named timers at once, started from the step or by voice
@@ -319,7 +343,23 @@ node tests/test_browser.cjs
 These offline checks cover working recipe revisions and saves, save/leave
 reminders, substitutions across messages, ingredient preparation, process names
 for every bundled timer, timer persistence and alarms, and session scrolling.
+They also check catalog image coverage and dimensions, favourites persistence
+and user isolation, discovery filters, layout preferences, and recipe cards.
 They use simulated model responses and do not verify live model decisions.
+
+For an isolated UI preview with disposable saved recipes and model calls
+disabled, run `.\.venv\Scripts\python.exe scripts/preview_redesign.py`, then open
+http://127.0.0.1:8001. The normal app's saved data is unaffected.
+
+Recipe presentation metadata and image prompts are in
+`chatbot/recipe_presentation.json`. The browser consumes only the public image,
+category and slug fields. To rebuild the WebP variants from an original image,
+run `python scripts/build_recipe_images.py RECIPE_SLUG PATH_TO_ORIGINAL.png`.
+The image build script requires Pillow (included in `requirements-desktop.txt`)
+and creates 600 x 800 card, 400 x 400 thumbnail, and 1000 x 750 detail images
+under `chatbot/static/recipes/`. Commit the manifest and generated WebP files
+together so every catalog recipe keeps its local illustrations.
+Category changes belong in the presentation manifest, not in cooking instructions.
 
 JPEG/PNG/WebP photos must be smaller than 1.5 MB. A 401 usually indicates a key
 problem; a 403 can indicate deployment access; for 404 check endpoint, deployment

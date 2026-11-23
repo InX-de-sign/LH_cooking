@@ -43,6 +43,7 @@ from conversation_state import ConversationStore, Episode, Visit
 from scaling import factor_for, scale_ingredient, scale_step
 from web_search import explicit_search
 from timer_labels import timer_label_for_step
+from recipe_presentation import presentation_for
 
 logger = logging.getLogger(__name__)
 
@@ -580,6 +581,8 @@ def cooking_state(recipe: Optional[ActiveRecipe], step: Optional[int]) -> Dict[s
     steps = recipe.steps if recipe else []
     current = steps[step] if step is not None and 0 <= step < len(steps) else {}
     return {
+        **presentation_for(recipe.name if recipe else ""),
+        "personal": bool(recipe and (recipe.custom or recipe.kind == "draft" or recipe.saved_recipe_id)),
         "recipe": recipe.name if recipe else None,
         "custom": bool(recipe and recipe.custom),
         "temporary": bool(recipe and recipe.kind == "draft"),

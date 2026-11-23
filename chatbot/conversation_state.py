@@ -153,6 +153,14 @@ CREATE TABLE IF NOT EXISTS custom_recipes (
 );
 CREATE INDEX IF NOT EXISTS idx_custom_recipes_user ON custom_recipes(user_id, created_at DESC);
 
+-- Catalog favourites use stable presentation slugs, not rebuilt index IDs.
+CREATE TABLE IF NOT EXISTS catalog_favorites (
+    user_id TEXT NOT NULL,
+    recipe_slug TEXT NOT NULL,
+    created_at REAL NOT NULL,
+    PRIMARY KEY (user_id, recipe_slug)
+);
+
 -- "How did it go?" at the end of a recipe.
 CREATE TABLE IF NOT EXISTS feedback (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -536,6 +544,23 @@ class ConversationStore:
                             "time_minutes": data.get("time_minutes"),
                             "created_at": row["created_at"], "last_used": row["last_used"]})
         return recipes
+
+    def catalog_favorites(self, user_id: str) -> List[str]:
+        with self._lock:
+            return [row[0] for row in self._conn.execute(
+                "SELECT recipe_slug FROM catalog_favorites WHERE user_id = ? ORDER BY created_at DESC", (user_id,))]
+
+    def set_catalog_favorite(self, user_id: str, slug: Any, favorite: bool) -> bool:
+        from recipe_presentation import catalog_name
+        catalog_name(slug)
+        with self._lock:
+            if favorite:
+                self._conn.execute("INSERT OR IGNORE INTO catalog_favorites VALUES (?, ?, ?)",
+                                   (user_id, slug, time.time()))
+            else:
+                self._conn.execute("DELETE FROM catalog_favorites WHERE user_id = ? AND recipe_slug = ?", (user_id, slug))
+            self._conn.commit()
+        return bool(favorite)
 
     def set_custom_favorite(self, user_id: str, custom_id: Any, favorite: bool) -> bool:
         if type(custom_id) is not int:

@@ -14,7 +14,7 @@
 <title>Stovetop Coach</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap">
 <style>
 /* Phone first. The page is one column that scrolls like any web page, with
    the header and the talk bar pinned. One card per stage (Choose -> Prep ->
@@ -73,6 +73,7 @@ button { cursor: pointer; touch-action: manipulation; }
 .conn { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
 .conn[data-state="open"] { background: var(--basil); }
 .conn[data-state="closed"] { background: var(--flame); }
+.unsaved-status { color: var(--flame); font-size: 0.72rem; font-weight: 600; line-height: 1.2; max-width: 6.5em; }
 .icon-button {
   width: 44px; height: 44px; flex: none; padding: 0; border-radius: 50%;
   border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center;
@@ -361,11 +362,16 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
   .talk[data-state="listening"], .typing i, .alarm, .watch-dot::before { animation: none; }
 }
 </style>
+<link rel="stylesheet" href="/static/redesign.css">
 </head>
 <body data-stage="choose" data-view="recipe">
 <div class="top">
   <header class="topbar">
+    <button class="icon-button" id="backToRecipes" type="button" aria-label="Back to recipes" title="Back to recipes" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 5-7 7 7 7M5 12h14"></path></svg>
+    </button>
     <span class="brand">Stovetop Coach</span>
+    <span class="unsaved-status" id="unsavedRecipeStatus" role="status" hidden>Changes unsaved</span>
     <span class="conn" id="conn" data-state="connecting" role="status" aria-label="Connecting"></span>
     <button class="icon-button" id="camToggle" type="button" aria-pressed="false" aria-label="Turn on camera" title="Camera">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
@@ -394,6 +400,8 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     </div>
     <div class="step-meta">
       <span class="recipe-name" id="recipeName">Let's cook</span>
+      <span class="personal-badge" id="recipePersonalBadge" role="img" aria-label="Personal recipe" hidden>★</span>
+      <button class="heart-button detail-heart" id="detailFavorite" type="button" aria-label="Favourite this recipe" aria-pressed="false" hidden></button>
       <span class="step-count" id="stepCount"></span>
     </div>
     <div class="progress" id="progress" aria-hidden="true"></div>
@@ -401,22 +409,37 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
 
     <!-- Choose -->
     <div class="stage-section" id="choosePanel">
-      <p class="lead">What are we cooking?</p>
+      <p class="eyebrow">YOUR EVERYDAY KITCHEN</p>
+      <h1 class="lead">Get cooking today!</h1>
+      <p class="discovery-intro">A little inspiration. Something delicious.</p>
       <div class="idea-cards" id="ideaCards" hidden></div>
       <button class="btn primary big" id="ideasButton" type="button">Give me 2 ideas</button>
       <div class="row-actions" id="emptyActions">
         <button class="btn" id="uploadRecipeInline" type="button">Upload a recipe</button>
         <button class="btn" id="myRecipesInline" type="button">My recipes</button>
+        <button class="btn" id="favoritesInline" type="button">Favourites</button>
       </div>
       <label class="recipe-search" id="recipeSearchLabel"><span class="sr-only">Search the recipe book</span>
         <input id="recipeSearch" type="search" placeholder="Search dishes or ingredients" autocomplete="off" enterkeyhint="search">
       </label>
+      <div class="category-tabs" id="recipeCategories" role="group" aria-label="Recipe category"></div>
+      <div class="recipe-toolbar">
+        <span id="recipeCount" aria-live="polite"></span>
+        <div class="view-switch" role="group" aria-label="Recipe layout">
+          <button class="icon-button" id="cardView" type="button" aria-label="Card layout" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="4" y="3" width="9" height="18" rx="2"/><rect x="17" y="6" width="3" height="15" rx="1"/></svg></button>
+          <button class="icon-button" id="gridView" type="button" aria-label="Grid layout" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button>
+        </div>
+      </div>
       <p id="recipeSearchStatus" class="muted" role="status" hidden></p>
       <div class="recipe-picks" id="recipePicks" hidden></div>
     </div>
 
     <!-- Prep -->
     <div class="stage-section" id="prepPanel" hidden>
+      <figure class="recipe-hero" id="recipeHero" hidden>
+        <img id="recipeHeroImage" width="1000" height="750" alt="">
+        <figcaption>Illustrative food photography</figcaption>
+      </figure>
       <p class="muted" id="recipeDetails" hidden></p>
       <div class="servings" id="servingsRow" hidden>
         <span>Servings</span>
@@ -431,7 +454,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
       <ul class="checklist" id="ingredientsList"></ul>
     </details>
     <details class="panel" id="stepsPanel" hidden>
-      <summary>All steps</summary>
+      <summary>Directions</summary>
       <ol id="stepsList"></ol>
     </details>
     <div class="row-actions">
@@ -539,6 +562,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     <button id="newChatButton" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>New chat</button>
     <button id="uploadRecipeButton" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6M12 18v-6M9 15l3-3 3 3"></path></svg>Upload a recipe</button>
     <button id="myRecipesButton" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"></path></svg>My recipes</button>
+    <button id="favoritesButton" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg>Favourites</button>
     <button id="historyButton" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.7 7M3 4v7h7M12 7v5l3 2"></path></svg>History</button>
     <button id="profileButton" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21v-2a8 8 0 0 1 16 0v2"></path></svg>Profile and notes</button>
     <button id="introButton" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6M12 17h.01"></path></svg>How it works</button>
@@ -657,8 +681,8 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
 </dialog>
 
 <dialog id="myRecipesDialog" aria-labelledby="myRecipesTitle">
-  <div class="dialog-heading"><h2 id="myRecipesTitle">My recipes</h2><button class="btn" id="closeMyRecipes" type="button">Close</button></div>
-  <p class="dialog-help">Recipes you uploaded on this phone. Star the ones you cook often.</p>
+  <div class="dialog-heading"><h2 id="myRecipesTitle">My recipes</h2><button class="btn" id="closeMyRecipes" type="button">Back</button></div>
+  <p class="dialog-help" id="libraryHelp">Your personal recipes, saved for another day. Hearts keep your favourites close.</p>
   <p class="dialog-status" id="myRecipesStatus" role="status" aria-live="polite"></p>
   <div class="saved-list" id="myRecipesList"></div>
 </dialog>
@@ -694,20 +718,21 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
 (() => {
   const $ = (id) => document.getElementById(id);
   const ids = [
-    "conn", "menuButton", "offlineBanner", "offlineText", "retryNow", "timerStrip", "stage", "log", "jumpNewest",
+    "conn", "backToRecipes", "unsavedRecipeStatus", "menuButton", "offlineBanner", "offlineText", "retryNow", "timerStrip", "stage", "log", "jumpNewest",
     "camToggle", "camera", "video", "camOff", "camBadge", "watchDot", "watchStatus",
     "coach", "youSaid", "coachLine", "coachActions", "chatView", "closeChat", "keyboardToggle", "chatButton", "toast",
     "introDialog", "introNext", "introSkip", "introDots", "introButton",
     "stepCard", "recipeName", "stepCount", "progress",
     "choosePanel", "ideaCards", "emptyActions", "ideasButton", "uploadRecipeInline", "myRecipesInline",
-    "recipeSearchLabel", "recipeSearch", "recipeSearchStatus", "recipePicks",
+    "recipeSearchLabel", "recipeSearch", "recipeSearchStatus", "recipePicks", "recipeCategories", "recipeCount", "cardView", "gridView", "favoritesInline",
+    "recipeHero", "recipeHeroImage", "recipePersonalBadge", "detailFavorite", "myRecipesTitle", "libraryHelp",
     "prepPanel", "recipeDetails", "servingsRow", "servingsDown", "servingsValue", "servingsUp", "prepFooter", "placementTip", "startCooking",
     "ingredientsPanel", "ingredientsCount", "ingredientsList", "stepsPanel", "stepsList",
     "cookPanel", "stepText", "doneWhen", "timerBtn", "navBack", "navRepeat", "navNext",
     "donePanel", "ratingRow", "doneNote", "sendFeedback", "feedbackDone", "cookAgain", "cookSomethingElse",
     "chips", "attachment", "photoPreview", "photoName", "photoStatus", "removePhoto",
     "textForm", "uploadPhoto", "photoInput", "textInput", "talk", "hint",
-    "menuDialog", "closeMenu", "newChatButton", "uploadRecipeButton", "myRecipesButton", "historyButton", "profileButton",
+    "menuDialog", "closeMenu", "newChatButton", "uploadRecipeButton", "myRecipesButton", "favoritesButton", "historyButton", "profileButton",
     "languageSelect", "rateSelect", "textSize", "themeSelect", "voiceOut", "handsFree", "autoVoice", "watch", "watchToggle",
     "profileDialog", "closeProfile", "profileForm", "profileName", "profileSkill", "profileDietary", "profileNotes", "saveProfile", "profileStatus",
     "historyDialog", "closeHistory", "historyStatus", "historyOverview", "historyList", "moreHistory",
@@ -762,7 +787,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
 
   const state = {
     ws: null, queue: [], retry: 0, retryTimer: null,
-    cooking: {}, stage: "choose", visionAvailable: false, watchAvailable: false, watchInterval: 20,
+    cooking: {}, stage: "choose", hasPrompt: false, visionAvailable: false, watchAvailable: false, watchInterval: 20,
     stream: null, listening: false, recognition: null, typingEl: null, pendingLabel: null,
     frames: [], frameTimer: null, watchTimer: null, recipeImage: null, lastSentFrame: null, lastWatchFrame: null,
     timers: [], timerTick: null, alarm: null, alarmLoop: null, wakeLock: null, audioUnlocked: false,
@@ -843,6 +868,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     clearPhoto(); hideTyping();
     state.queue = []; state.retry = 0;
     state.awaitingReply = false; state.replyBubble = null; state.replyText = "";
+    state.hasPrompt = false;
     state.speechBuffer = ""; state.speechList = []; state.streamed = false; state.muteReply = false;
     state.suggestions = []; state.rating = null; state.unclearChecks = 0;
     state.savePrompt = null; state.saveBusy = false; state.saveReminded.clear();
@@ -900,6 +926,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
       return;
     }
     if (data.type === "pong") return;
+    if (data.type === "system") refreshDiscovery();
     if (data.type === "alert") return showAlert(data);
     if (data.type === "watch_status") return showWatchStatus(data);
     hideTyping();
@@ -911,6 +938,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     }
     if (data.suggestions?.length) state.suggestions = data.suggestions;
     if (data.cooking) renderCooking(data.cooking);
+    if (data.type === "response" && !data.cooking?.pending_leave) state.openingRecipe = false;
     for (const timer of data.timers || []) addTimer(timer.label, timer.seconds);
     if (data.message) {
       const streamed = data.type === "response" && state.streamed;
@@ -1023,6 +1051,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
   }
   function syncRecipeSaving(c, stage) {
     const dirty = Boolean(c.unsaved_changes);
+    els.unsavedRecipeStatus.hidden = !dirty;
     els.saveRecipeChanges.hidden = !dirty;
     if (dirty !== state.leaveWarning) {
       state.leaveWarning = dirty;
@@ -1044,6 +1073,14 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     const result = await settingsRequest("recipe_save", { expected_revision: revision });
     await renderCooking(result.cooking);
     els.recipeSaveStatus.textContent = "Saved to My recipes.";
+    const id = result.recipe_id || result.cooking.saved_recipe_id;
+    if (id) {
+      const row = { ...result.cooking, id, name: result.cooking.recipe, source: "personal", personal: true,
+                    favorite: favoriteKeys.has(`personal:${id}`) };
+      personalRecipes = [...personalRecipes.filter(r => r.id !== id), row];
+      renderRecipePicks();
+    }
+    toast("Changes saved.", 2000);
     return result;
   }
   async function decideRecipeSave(choice) {
@@ -1060,6 +1097,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
         if (result.message) addNote(result.message);
       } else if (choice === "save") await saveCurrentRecipe(prompt.revision);
       state.savePrompt = null; els.recipeSaveDialog.close();
+      if (prompt.pending && choice === "save") toast("Changes saved.", 2000);
       state.saveBusy = false;
       if (choice !== "cancel" && prompt.continueWith) prompt.continueWith();
       return true;
@@ -1090,8 +1128,10 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
   els.closeMenu.addEventListener("click", () => els.menuDialog.close());
   const fromMenu = (open) => () => { els.menuDialog.close(); open(); };
   els.newChatButton.addEventListener("click", fromMenu(newChat));
+  els.backToRecipes.addEventListener("click", () => newChat());
   els.uploadRecipeButton.addEventListener("click", fromMenu(() => openRecipeDialog()));
   els.myRecipesButton.addEventListener("click", fromMenu(() => openMyRecipes()));
+  els.favoritesButton.addEventListener("click", fromMenu(() => openMyRecipes("favorites")));
   els.historyButton.addEventListener("click", fromMenu(() => openHistory()));
   els.profileButton.addEventListener("click", fromMenu(() => openProfile()));
   for (const dialog of allDialogs()) {
@@ -1247,6 +1287,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
       return false;
     }
     if (!text) text = "What can you see in this photo?";
+    state.openingRecipe = Boolean(options.openRecipe);
     // Button, swipe and speech all arrive here. Keep the step visible for the
     // whole reply, including streamed text and subsequent layout changes.
     const nextStep = Boolean(state.cooking.recipe) && /^(?:(?:ok(?:ay)?|yes)[,\s]+)?(?:please\s+)?(?:next(?:\s+step)?|(?:go|move)(?:\s+on)?\s+to\s+(?:the\s+)?next(?:\s+step)?|what['’]?s\s+next)(?:\s+please)?[.!?]*$/i.test(text);
@@ -1391,6 +1432,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return dialogStatus(els.recipeStatus, "Not connected. Try again when the coach is connected.", true);
     unlockAudio(); stopSpeaking(); state.muteReply = false;
     state.awaitingReply = true; state.pendingLabel = "Reading your recipe...";
+    state.openingRecipe = true;
     const summary = text ? `${text.slice(0, 160)}${text.length > 160 ? "..." : ""}` : url || "";
     const bubble = addMsg("cook", summary ? `Here's my recipe:\n${summary}` : "Here's my recipe.");
     if (image) {
@@ -1434,49 +1476,136 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
   }
 
   // --- my recipes -----------------------------------------------------------------
-  async function openMyRecipes() {
-    pauseForDialog();
-    if (!els.myRecipesDialog.open) els.myRecipesDialog.showModal();
-    els.myRecipesList.replaceChildren();
-    dialogStatus(els.myRecipesStatus, "Loading your recipes...");
+  const CATEGORIES = ["All", "Main course", "Breakfast", "Soup", "Salad", "Dessert", "Snacks & sides", "Personal"];
+  let libraryMode = "personal", libraryRecipes = [], personalRecipes = [];
+  let libraryOpen = new Set();
+  const favoriteKeys = new Set();
+  const HEART = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg>';
+  const recipeSource = r => r.source || "personal";
+  const favoriteKey = r => `${recipeSource(r)}:${recipeSource(r) === "catalog" ? r.slug : r.id}`;
+  const isFavorite = r => favoriteKeys.has(favoriteKey(r));
+  function placeholder(name) {
+    const el = document.createElement("div"); el.className = "photo-placeholder";
+    const initials = document.createElement("span");
+    initials.textContent = (name || "Your recipe").split(/\s+/).slice(0, 2).map(w => w[0]).join("");
+    el.append(initials); return el;
+  }
+  function heartButton(recipe) {
+    const heart = document.createElement("button"); heart.type = "button"; heart.className = "heart-button";
+    heart.innerHTML = HEART;
+    heart.setAttribute("aria-pressed", String(isFavorite(recipe)));
+    heart.setAttribute("aria-label", `${isFavorite(recipe) ? "Remove from" : "Add to"} favourites: ${recipe.name}`);
+    heart.addEventListener("click", async (event) => {
+      event.preventDefault(); event.stopPropagation?.(); heart.disabled = true;
+      try { await toggleFavorite(recipe); } catch (error) { toast(error.message || "Could not update favourites."); }
+      finally { heart.disabled = false; }
+    });
+    return heart;
+  }
+  async function toggleFavorite(recipe) {
+    const result = await settingsRequest("recipe_favorite", { source: recipeSource(recipe), recipe_id: recipe.id,
+      slug: recipe.slug, favorite: !isFavorite(recipe) });
+    if (result.favorite) favoriteKeys.add(favoriteKey(recipe)); else favoriteKeys.delete(favoriteKey(recipe));
+    recipe.favorite = result.favorite;
+    for (const row of personalRecipes) if (favoriteKey(row) === favoriteKey(recipe)) row.favorite = result.favorite;
+    if (libraryMode === "favorites" && !result.favorite) libraryRecipes = libraryRecipes.filter(r => favoriteKey(r) !== favoriteKey(recipe));
+    renderRecipePicks(); syncRecipePresentation(state.cooking);
+    if (els.myRecipesDialog.open) renderMyRecipes(libraryRecipes);
+  }
+  function recipeCard(recipe) {
+    const card = document.createElement("article"); card.className = "recipe-card"; card.dataset.recipe = recipe.name;
+    const open = document.createElement("button"); open.type = "button"; open.className = "recipe-open";
+    open.setAttribute("aria-label", `Open ${recipe.name}`);
+    const photo = document.createElement("div"); photo.className = "recipe-photo";
+    if (recipe.card_image || recipe.image) {
+      const img = document.createElement("img"); img.src = recipe.card_image || recipe.image;
+      img.alt = recipe.image_alt || recipe.name; img.loading = "lazy"; img.decoding = "async";
+      img.width = 600; img.height = 800;
+      img.addEventListener("error", () => { img.hidden = true; if (!photo.dataset.failed) { photo.dataset.failed = "true"; photo.append(placeholder(recipe.name)); } });
+      photo.append(img);
+    } else photo.append(placeholder(recipe.name));
+    const copy = document.createElement("div"); copy.className = "recipe-card-copy";
+    const title = document.createElement("strong"); title.textContent = recipe.name;
+    const meta = document.createElement("div"); meta.className = "recipe-meta";
+    for (const text of [recipe.time_minutes ? `${recipe.time_minutes} mins` : "", recipe.serves ? `Serves ${recipe.serves}` : ""].filter(Boolean)) {
+      const chip = document.createElement("span"); chip.textContent = text; meta.append(chip);
+    }
+    copy.append(title, meta); open.append(photo, copy);
+    open.addEventListener("click", () => recipeSource(recipe) === "catalog"
+      ? ask(`Let's make ${recipe.name}`, { noFrames: true, openRecipe: true }) : cookSaved(recipe));
+    card.append(open, heartButton(recipe));
+    if (recipe.personal || recipeSource(recipe) === "personal") {
+      const badge = document.createElement("span"); badge.className = "personal-badge";
+      badge.textContent = "\u2605"; badge.setAttribute("role", "img"); badge.setAttribute("aria-label", "Personal recipe"); badge.title = "Personal recipe"; card.append(badge);
+    }
+    return card;
+  }
+  async function refreshDiscovery() {
+    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
     try {
-      const { recipes } = await settingsRequest("recipes_list");
-      renderMyRecipes(recipes || []);
-      dialogStatus(els.myRecipesStatus, recipes?.length ? "" : "Nothing saved yet. Upload a recipe and it will appear here.");
+      const [saved, favorites] = await Promise.all([settingsRequest("recipes_list"), settingsRequest("favorites_list")]);
+      personalRecipes = (saved.recipes || []).map(r => ({ ...r, source: "personal", personal: true }));
+      favoriteKeys.clear();
+      for (const row of favorites.recipes || []) favoriteKeys.add(favoriteKey(row));
+      for (const row of personalRecipes) if (row.favorite) favoriteKeys.add(favoriteKey(row));
+      renderRecipePicks(); syncRecipePresentation(state.cooking);
+    } catch (error) { /* Public browsing is available while private data reconnects. */ }
+  }
+  async function openMyRecipes(mode = "personal") {
+    libraryMode = mode; libraryOpen = new Set(); pauseForDialog();
+    els.myRecipesTitle.textContent = mode === "favorites" ? "Favourite recipes" : "My recipes";
+    els.libraryHelp.textContent = mode === "favorites" ? "The dishes you love, all in one place. \u2605 marks your personal recipes."
+      : "Your personal recipes, saved for another day. Tap a heart to keep a favourite close.";
+    if (!els.myRecipesDialog.open) els.myRecipesDialog.showModal();
+    els.myRecipesList.replaceChildren(); dialogStatus(els.myRecipesStatus, "Loading recipes...");
+    try {
+      const { recipes } = await settingsRequest(mode === "favorites" ? "favorites_list" : "recipes_list");
+      libraryRecipes = (recipes || []).map(r => ({ ...r, source: r.source || "personal", personal: r.source !== "catalog" }));
+      for (const row of libraryRecipes) if (mode === "favorites" || row.favorite) favoriteKeys.add(favoriteKey(row));
+      if (mode === "personal") personalRecipes = libraryRecipes;
+      renderMyRecipes(libraryRecipes); renderRecipePicks();
     } catch (error) { dialogStatus(els.myRecipesStatus, error.message, true); }
   }
   function renderMyRecipes(recipes) {
-    els.myRecipesList.replaceChildren(...recipes.map((recipe) => {
-      const row = document.createElement("div"); row.className = "saved";
-      const star = document.createElement("button"); star.type = "button"; star.className = "star";
-      const showStar = () => {
-        star.textContent = recipe.favorite ? "★" : "☆";
-        star.setAttribute("aria-pressed", String(Boolean(recipe.favorite)));
-        star.setAttribute("aria-label", `${recipe.favorite ? "Unstar" : "Star"} ${recipe.name}`);
-      };
-      showStar();
-      star.addEventListener("click", async () => {
-        try {
-          const result = await settingsRequest("recipe_favorite", { recipe_id: recipe.id, favorite: !recipe.favorite });
-          recipe.favorite = result.favorite; showStar();
-        } catch (error) { dialogStatus(els.myRecipesStatus, error.message, true); }
-      });
-      const info = document.createElement("div"); info.className = "saved-info";
-      const name = document.createElement("strong"); name.textContent = recipe.name;
-      const meta = document.createElement("span");
-      meta.textContent = [`${recipe.steps} steps`, recipe.serves ? `serves ${recipe.serves}` : "", recipe.time_minutes ? `${recipe.time_minutes} min` : ""].filter(Boolean).join(" · ");
-      info.append(name, meta);
-      const cook = document.createElement("button"); cook.type = "button"; cook.className = "btn primary"; cook.textContent = "Cook";
-      cook.addEventListener("click", () => cookSaved(recipe));
-      row.append(star, info, cook);
-      return row;
-    }));
+    const groups = [];
+    for (const category of CATEGORIES.slice(1)) {
+      const rows = recipes.filter(r => (r.category || "Personal") === category);
+      if (!rows.length) continue;
+      const group = document.createElement("details"); group.className = "library-group";
+      group.open = libraryOpen.has(category) || (!libraryOpen.size && !groups.length);
+      const heading = document.createElement("summary"); heading.textContent = category;
+      const count = document.createElement("span"); count.textContent = String(rows.length); heading.append(count);
+      const grid = document.createElement("div"); grid.className = "library-grid"; grid.append(...rows.map(recipeCard));
+      group.append(heading, grid); group.addEventListener("toggle", () => { if (group.open) libraryOpen.add(category); else libraryOpen.delete(category); });
+      groups.push(group);
+    }
+    els.myRecipesList.replaceChildren(...groups);
+    dialogStatus(els.myRecipesStatus, recipes.length ? "" : libraryMode === "favorites"
+      ? "No favourites yet. Tap a heart on any recipe to add it here." : "Nothing saved yet. Upload a recipe or save your changes to start your collection.");
   }
+  function syncRecipePresentation(c) {
+    const personal = Boolean(c.personal || c.custom || c.temporary || c.saved_recipe_id);
+    els.recipePersonalBadge.hidden = !personal;
+    els.recipeHero.hidden = !(c.image && state.stage === "prep");
+    if (c.image) { if (els.recipeHeroImage.src !== c.image) els.recipeHeroImage.src = c.image; els.recipeHeroImage.alt = c.image_alt || c.recipe || ""; }
+    const row = c.saved_recipe_id ? { id: c.saved_recipe_id, source: "personal", name: c.recipe }
+      : !personal && c.slug ? { slug: c.slug, source: "catalog", name: c.recipe } : null;
+    els.detailFavorite.hidden = !row;
+    els.detailFavorite.innerHTML = HEART;
+    els.detailFavorite.setAttribute("aria-pressed", String(Boolean(row && isFavorite(row))));
+    els.detailFavorite.setAttribute("aria-label", row ? `${isFavorite(row) ? "Remove from" : "Add to"} favourites: ${row.name}` : "Favourite recipe");
+    els.detailFavorite.onclick = row ? async () => { els.detailFavorite.disabled = true;
+      try { await toggleFavorite(row); } catch (error) { toast(error.message); } finally { els.detailFavorite.disabled = false; }
+    } : null;
+  }
+  els.recipeHeroImage.addEventListener("error", () => { els.recipeHero.hidden = true; });
+  els.favoritesInline.addEventListener("click", () => openMyRecipes("favorites"));
   function cookSaved(recipe) {
     if (state.awaitingReply) { dialogStatus(els.myRecipesStatus, "Wait for the current reply to finish.", true); return false; }
     if (!state.ws || state.ws.readyState !== WebSocket.OPEN) { dialogStatus(els.myRecipesStatus, "Not connected. Try again when the coach is connected.", true); return false; }
     unlockAudio(); stopSpeaking(); state.muteReply = false;
     state.awaitingReply = true; state.pendingLabel = "Opening your recipe...";
+    state.openingRecipe = true;
     addMsg("cook", `Cook again: ${recipe.name}`);
     state.ws.send(JSON.stringify({ type: "recipe_open", recipe_id: recipe.id }));
     els.myRecipesDialog.close();
@@ -1487,6 +1616,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
 
   // --- conversation log ----------------------------------------------------------
   function addMsg(who, text) {
+    if (who === "cook") state.hasPrompt = true;
     const div = document.createElement("div");
     div.className = `msg ${who}`;
     if (who === "coach") renderRich(div, text);
@@ -1501,10 +1631,10 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     toast(text);
     return note;
   }
-  function toast(text) {
+  function toast(text, duration = 4000) {
     els.toast.textContent = text; els.toast.hidden = false;
     clearTimeout(state.toastTimer);
-    state.toastTimer = setTimeout(() => { els.toast.hidden = true; }, 4000);
+    state.toastTimer = setTimeout(() => { els.toast.hidden = true; }, duration);
   }
   // The page is the scroll container. Coalesce streamed updates until layout.
   let logScrollPending = false;
@@ -1534,6 +1664,9 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
   }
   function scrollLog(force = false) {
     const view = document.body.dataset.view;
+    // A new visit's greeting should leave discovery at the top. User prompts
+    // and their replies still follow the established session scrolling rules.
+    if (view === "recipe" && state.stage === "choose" && !state.hasPrompt) return;
     // Keep following late layout changes in the cooking view after a prompt or
     // answer, too. Switching views clears this so opening a recipe stays at top.
     if (force === true) logFollowView = view;
@@ -1768,7 +1901,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
   }
   els.ideaCards.addEventListener("click", (e) => {
     const name = e.target.closest?.("button")?.dataset.recipe;
-    if (name) ask(`Let's make ${name}`, { noFrames: true });
+    if (name) ask(`Let's make ${name}`, { noFrames: true, openRecipe: true });
   });
   els.ideasButton.addEventListener("click", () => ask(state.suggestions?.length
     ? "Give me 2 different ideas" : "Give me 2 ideas for what to cook", { noFrames: true }));
@@ -1781,45 +1914,57 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     }
     return recipesLoaded;
   }
-  // The recipe book stays out of the way until the cook searches it.
-  const MAX_PICKS = 6;
+  let browseCategory = CATEGORIES.includes(storeGet("lh_recipe_category")) ? storeGet("lh_recipe_category") : "All";
+  let browseLayout = ["cards", "grid"].includes(storeGet("lh_recipe_layout")) ? storeGet("lh_recipe_layout")
+    : window.matchMedia?.("(min-width: 700px)").matches ? "grid" : "cards";
+  function setBrowseLayout(layout) { browseLayout = layout; storeSet("lh_recipe_layout", layout); renderRecipePicks(); }
   function renderRecipePicks() {
-    const terms = els.recipeSearch.value.toLowerCase().trim().split(/\s+/).filter(Boolean);
-    if (!terms.length) {
-      els.recipePicks.replaceChildren(); els.recipePicks.hidden = true;
-      els.recipeSearchStatus.hidden = true;
-      return;
-    }
-    const matches = recipeOptions.filter((r) => {
-      const text = [r.name, ...(r.aliases || []), ...(r.ingredients || [])].join(" ").toLowerCase();
-      return terms.every((term) => text.includes(term));
-    });
-    const recipes = matches.slice(0, MAX_PICKS);
-    els.recipePicks.replaceChildren(...recipes.map((r) => {
-      const b = document.createElement("button");
-      b.type = "button"; b.className = "btn"; b.dataset.recipe = r.name;
-      b.textContent = r.time_minutes ? `${r.name} · ${r.time_minutes} min` : r.name;
+    els.recipeCategories.replaceChildren(...CATEGORIES.map(category => {
+      const b = document.createElement("button"); b.type = "button"; b.textContent = category;
+      b.setAttribute("aria-pressed", String(browseCategory === category));
+      b.addEventListener("click", () => { browseCategory = category; storeSet("lh_recipe_category", category); renderRecipePicks(); });
       return b;
     }));
-    els.recipePicks.hidden = recipes.length === 0;
-    els.recipeSearchStatus.textContent = !matches.length ? "No recipes found. Try another dish or ingredient, or upload your own."
-      : matches.length > MAX_PICKS ? `Top ${MAX_PICKS} of ${matches.length}. Add a word to narrow it down.` : "";
-    els.recipeSearchStatus.hidden = !els.recipeSearchStatus.textContent;
+    const terms = els.recipeSearch.value.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    const all = [...recipeOptions.map(r => ({ ...r, source: "catalog" })), ...personalRecipes];
+    const matches = all.filter(r => {
+      const categoryMatch = browseCategory === "All" || (browseCategory === "Personal" ? recipeSource(r) === "personal" : r.category === browseCategory);
+      const text = [r.name, ...(r.aliases || []), ...(r.ingredients || [])].join(" ").toLowerCase();
+      return categoryMatch && terms.every(term => text.includes(term));
+    });
+    els.recipePicks.dataset.layout = browseLayout;
+    els.cardView.setAttribute("aria-pressed", String(browseLayout === "cards"));
+    els.gridView.setAttribute("aria-pressed", String(browseLayout === "grid"));
+    els.recipePicks.replaceChildren(...matches.map(recipeCard)); els.recipePicks.hidden = !matches.length;
+    els.recipeCount.textContent = `${matches.length} ${matches.length === 1 ? "recipe" : "recipes"}`;
+    els.recipeSearchStatus.textContent = !matches.length ? browseCategory === "Personal" && !terms.length
+      ? "Save or upload a recipe to build your personal collection." : "No recipes found. Try another dish, ingredient or category." : "";
+    els.recipeSearchStatus.hidden = Boolean(matches.length);
   }
   els.recipeSearch.addEventListener("input", () => renderRecipePicks());
-  els.recipePicks.addEventListener("click", (e) => {
-    const name = e.target.closest?.("button")?.dataset.recipe;
-    if (name) ask(`Let's make ${name}`, { noFrames: true });
-  });
+  els.cardView.addEventListener("click", () => setBrowseLayout("cards"));
+  els.gridView.addEventListener("click", () => setBrowseLayout("grid"));
 
   async function renderCooking(c) {
     const previous = state.cooking;
     const previousStage = state.stage;
     const stage = stageOf(c);
     state.cooking = c; state.stage = stage;
+    // Opening details takes priority over reply scrolling, including late layouts.
+    // Revisions alone also change for substitutions, servings and saves.
+    const openedRecipe = stage === "prep" && !c.pending_leave && (
+      previousStage !== "prep" || previous.recipe !== c.recipe ||
+      previous.saved_recipe_id !== c.saved_recipe_id ||
+      (state.openingRecipe && previous.recipe_revision !== c.recipe_revision));
+    if (openedRecipe) {
+      setView("recipe");
+      logScrollTop = true;
+      scrollLog(true);
+    }
     syncRecipeSaving(c, stage);
     if (previous.recipe_revision !== c.recipe_revision) els.recipeSaveStatus.textContent = "";
     document.body.dataset.stage = stage;
+    syncRecipePresentation(c);
     const total = c.total_steps || 0;
     els.progress.replaceChildren(...Array.from({ length: total }, (_, i) => {
       const seg = document.createElement("span");
@@ -1829,6 +1974,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     }));
     els.progress.hidden = total === 0;
     els.choosePanel.hidden = stage !== "choose";
+    els.backToRecipes.hidden = stage === "choose";
     els.prepPanel.hidden = stage !== "prep";
     els.prepFooter.hidden = stage !== "prep";
     els.cookPanel.hidden = stage !== "cook";
