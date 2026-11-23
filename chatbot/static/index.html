@@ -330,10 +330,10 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
 .intro-dots span.on { background: var(--basil); }
 
 /* the timer alarm: impossible to miss from across the kitchen */
-.alarm { position: fixed; inset: 0; z-index: 50; display: grid; place-content: center; gap: 18px; padding: 24px; text-align: center; background: var(--flame); color: #fff; animation: flash 1s steps(2) infinite; }
+.alarm { position: fixed; inset: 0; z-index: 50; display: grid; place-content: center; gap: 18px; padding: 24px; text-align: center; background: var(--flame); color: #fff; animation: flash 1s steps(2) infinite; cursor: pointer; }
 .alarm p { margin: 0; font-size: 1.2rem; }
 .alarm .alarm-label { font: 800 clamp(2rem, 11vw, 3.6rem)/1.1 var(--display); }
-.alarm button { justify-self: center; min-height: 76px; min-width: 240px; border: 0; border-radius: 999px; background: #fff; color: #9e2412; font: 700 1.35rem/1 var(--body); }
+.alarm button { justify-self: center; min-height: 76px; padding: 16px; border: 0; background: transparent; color: inherit; font: 700 1.35rem/1.3 var(--body); }
 @keyframes flash { 50% { background: #8f1f10; } }
 
 /* small phones */
@@ -369,6 +369,9 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     <span class="conn" id="conn" data-state="connecting" role="status" aria-label="Connecting"></span>
     <button class="icon-button" id="camToggle" type="button" aria-pressed="false" aria-label="Turn on camera" title="Camera">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+    </button>
+    <button class="icon-button" id="saveRecipeChanges" type="button" aria-label="Save changes" title="Save changes" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12l4 4v12a2 2 0 0 1-2 2Z"></path><path d="M7 3v6h10V3M7 21v-8h10v8"></path></svg>
     </button>
     <button class="icon-button" id="menuButton" type="button" aria-haspopup="dialog" aria-controls="menuDialog" aria-label="Menu and settings">
       <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle></svg>
@@ -431,6 +434,9 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
       <summary>All steps</summary>
       <ol id="stepsList"></ol>
     </details>
+    <div class="row-actions">
+      <span id="recipeSaveStatus" class="muted" role="status"></span>
+    </div>
     <div class="stage-section" id="prepFooter" hidden>
       <p class="tip" id="placementTip">Tip: prop the phone up facing the pan and tap the camera button. The coach checks on you once a minute.</p>
       <button class="btn primary big" id="startCooking" type="button">Start cooking</button>
@@ -667,10 +673,21 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
   </div>
 </dialog>
 
+<dialog id="recipeSaveDialog" aria-labelledby="recipeSaveTitle" aria-describedby="recipeSaveText">
+  <div class="dialog-heading"><h2 id="recipeSaveTitle">Save your recipe?</h2></div>
+  <p id="recipeSaveText"></p>
+  <p class="dialog-status" id="recipeSaveError" role="status" aria-live="polite"></p>
+  <div class="row-actions">
+    <button class="btn primary" id="recipeSaveConfirm" type="button">Save recipe</button>
+    <button class="btn" id="recipeSaveSkip" type="button">Not now</button>
+    <button class="btn" id="recipeSaveCancel" type="button">Cancel</button>
+  </div>
+</dialog>
+
 <div class="alarm" id="alarm" role="alertdialog" aria-labelledby="alarmLabel" hidden>
   <p class="alarm-label" id="alarmLabel"></p>
   <p>Time's up</p>
-  <button id="alarmDismiss" type="button">Stop alarm</button>
+  <button id="alarmDismiss" type="button">Press anywhere on the screen to stop alarm</button>
 </div>
 
 <script>
@@ -698,6 +715,8 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     "recipeDialog", "closeRecipe", "recipeForm", "recipeUrl", "recipeText", "takeRecipePhoto", "chooseRecipeFile",
     "recipeCamera", "recipeFile", "recipeImagePreview", "recipeFileName", "submitRecipe", "recipeStatus",
     "myRecipesDialog", "closeMyRecipes", "myRecipesStatus", "myRecipesList",
+    "saveRecipeChanges", "recipeSaveStatus", "recipeSaveDialog", "recipeSaveTitle", "recipeSaveText",
+    "recipeSaveError", "recipeSaveConfirm", "recipeSaveSkip", "recipeSaveCancel",
     "primerDialog", "primerTitle", "primerText", "primerContinue", "primerCancel",
     "alarm", "alarmLabel", "alarmDismiss",
   ];
@@ -754,6 +773,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     historyLoading: false, historyOffset: null, historySession: null, historyTurnOffset: null,
     suggestions: [], checked: new Set(), checkedRecipe: null, rating: null, autoVoiceOn: false,
     swipedAt: 0, primerProceed: null, exiting: false,
+    savePrompt: null, saveBusy: false, saveReminded: new Set(), leaveWarning: false,
     unclearChecks: 0, cameraTicked: new Set(), introSlide: 0, burstTimer: null, firstCheck: null, toastTimer: null,
   };
 
@@ -812,7 +832,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     state.requests.clear();
   }
   const allDialogs = () => [els.menuDialog, els.profileDialog, els.historyDialog, els.recipeDialog,
-                            els.myRecipesDialog, els.primerDialog, els.introDialog];
+                            els.myRecipesDialog, els.primerDialog, els.introDialog, els.recipeSaveDialog];
   function clearChat() {
     // Detach the socket first: late replies and retry timers belong to the old dish.
     const previous = state.ws; state.ws = null; previous?.close();
@@ -825,6 +845,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     state.awaitingReply = false; state.replyBubble = null; state.replyText = "";
     state.speechBuffer = ""; state.speechList = []; state.streamed = false; state.muteReply = false;
     state.suggestions = []; state.rating = null; state.unclearChecks = 0;
+    state.savePrompt = null; state.saveBusy = false; state.saveReminded.clear();
     if (state.autoVoiceOn) { els.handsFree.checked = settings.handsFree; state.autoVoiceOn = false; }
     els.textInput.value = ""; els.log.replaceChildren(); els.doneNote.value = "";
     els.hint.textContent = Recognition ? "" : els.hint.textContent;
@@ -835,7 +856,13 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     // Timers keep running: the oven doesn't know you started a new chat.
     renderCooking({ recipe: null, step: null, total_steps: 0 });
   }
-  function newChat() {
+  function newChat(allowLeave = false) {
+    if (state.saveBusy || (state.awaitingReply && state.cooking.unsaved_changes)) { addNote("Wait for the current reply or save to finish."); return false; }
+    if (state.cooking.unsaved_changes && allowLeave !== true) {
+      showRecipeSavePrompt({ mode: "leave", revision: state.cooking.recipe_revision,
+                             continueWith: () => newChat(true) });
+      return false;
+    }
     clearChat(); state.exiting = false; chatId = randomId();
     connect();
   }
@@ -973,6 +1000,91 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     if (state.recognition) { state.recognition.onend = null; state.recognition.abort(); state.recognition = null; state.listening = false; setTalk("idle"); }
   }
 
+  // One save path for the card, finish reminder and guarded leave actions.
+  function warnUnsavedRecipe(event) {
+    if (!state.cooking.unsaved_changes) return;
+    event.preventDefault(); event.returnValue = "";
+  }
+  function showRecipeSavePrompt(prompt) {
+    if (state.saveBusy) return;
+    pauseForDialog();
+    allDialogs().filter(d => d !== els.recipeSaveDialog).forEach(d => d.close());
+    state.savePrompt = prompt;
+    const leaving = prompt.mode === "leave";
+    els.recipeSaveTitle.textContent = leaving ? "Save changes before leaving?" : "Save this recipe for next time?";
+    els.recipeSaveText.textContent = state.cooking.saved_recipe_id
+      ? "Saving replaces this recipe in My recipes with the version on screen."
+      : "Save the version on screen to My recipes for future use.";
+    els.recipeSaveConfirm.textContent = leaving ? "Save and continue" : "Save recipe";
+    els.recipeSaveSkip.textContent = leaving ? "Continue without saving" : "Not now";
+    els.recipeSaveCancel.hidden = !leaving;
+    dialogStatus(els.recipeSaveError, "");
+    if (!els.recipeSaveDialog.open) els.recipeSaveDialog.showModal();
+  }
+  function syncRecipeSaving(c, stage) {
+    const dirty = Boolean(c.unsaved_changes);
+    els.saveRecipeChanges.hidden = !dirty;
+    if (dirty !== state.leaveWarning) {
+      state.leaveWarning = dirty;
+      if (dirty) window.addEventListener("beforeunload", warnUnsavedRecipe);
+      else window.removeEventListener("beforeunload", warnUnsavedRecipe);
+    }
+    if (state.saveBusy) return;
+    if (c.pending_leave && !state.savePrompt) {
+      showRecipeSavePrompt({ mode: "leave", revision: c.pending_leave.revision, pending: c.pending_leave });
+    } else if (dirty && stage === "done" && !state.savePrompt) {
+      const key = JSON.stringify([c.recipe, c.recipe_revision, c.draft_revision, c.serves]);
+      if (!state.saveReminded.has(key)) {
+        state.saveReminded.add(key);
+        showRecipeSavePrompt({ mode: "finish", revision: c.recipe_revision });
+      }
+    }
+  }
+  async function saveCurrentRecipe(revision = state.cooking.recipe_revision) {
+    const result = await settingsRequest("recipe_save", { expected_revision: revision });
+    await renderCooking(result.cooking);
+    els.recipeSaveStatus.textContent = "Saved to My recipes.";
+    return result;
+  }
+  async function decideRecipeSave(choice) {
+    const prompt = state.savePrompt;
+    if (!prompt || state.saveBusy) return false;
+    state.saveBusy = true;
+    for (const b of [els.recipeSaveConfirm, els.recipeSaveSkip, els.recipeSaveCancel]) b.disabled = true;
+    dialogStatus(els.recipeSaveError, "");
+    try {
+      if (prompt.pending) {
+        const result = await settingsRequest("recipe_leave", {
+          token: prompt.pending.token, expected_revision: prompt.revision, choice });
+        if (result.cooking) await renderCooking(result.cooking);
+        if (result.message) addNote(result.message);
+      } else if (choice === "save") await saveCurrentRecipe(prompt.revision);
+      state.savePrompt = null; els.recipeSaveDialog.close();
+      state.saveBusy = false;
+      if (choice !== "cancel" && prompt.continueWith) prompt.continueWith();
+      return true;
+    } catch (error) {
+      dialogStatus(els.recipeSaveError, error.message, true);
+      return false;
+    } finally {
+      state.saveBusy = false;
+      for (const b of [els.recipeSaveConfirm, els.recipeSaveSkip, els.recipeSaveCancel]) b.disabled = false;
+    }
+  }
+  els.saveRecipeChanges.addEventListener("click", async () => {
+    if (state.saveBusy || state.awaitingReply) return addNote("Wait for the current reply or save to finish.");
+    state.saveBusy = true; els.saveRecipeChanges.disabled = true;
+    try { await saveCurrentRecipe(); }
+    catch (error) { els.recipeSaveStatus.textContent = error.message; }
+    finally { state.saveBusy = false; els.saveRecipeChanges.disabled = false; }
+  });
+  els.recipeSaveConfirm.addEventListener("click", () => decideRecipeSave("save"));
+  els.recipeSaveSkip.addEventListener("click", () => decideRecipeSave("discard"));
+  els.recipeSaveCancel.addEventListener("click", () => decideRecipeSave("cancel"));
+  els.recipeSaveDialog.addEventListener("cancel", (event) => {
+    event.preventDefault(); decideRecipeSave("cancel");
+  });
+
   // --- menu and settings ------------------------------------------------------
   els.menuButton.addEventListener("click", () => els.menuDialog.showModal());
   els.closeMenu.addEventListener("click", () => els.menuDialog.close());
@@ -984,7 +1096,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
   els.profileButton.addEventListener("click", fromMenu(() => openProfile()));
   for (const dialog of allDialogs()) {
     // Tapping the dimmed backdrop closes a dialog (except the permission primer).
-    if (dialog !== els.primerDialog) dialog.addEventListener("click", (e) => { if (e.target === dialog) dialog.close(); });
+    if (dialog !== els.primerDialog && dialog !== els.recipeSaveDialog) dialog.addEventListener("click", (e) => { if (e.target === dialog) dialog.close(); });
   }
   els.languageSelect.addEventListener("change", () => {
     settings.language = LANGS[els.languageSelect.value] ? els.languageSelect.value : "en";
@@ -1135,6 +1247,13 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
       return false;
     }
     if (!text) text = "What can you see in this photo?";
+    // Button, swipe and speech all arrive here. Keep the step visible for the
+    // whole reply, including streamed text and subsequent layout changes.
+    const nextStep = Boolean(state.cooking.recipe) && /^(?:(?:ok(?:ay)?|yes)[,\s]+)?(?:please\s+)?(?:next(?:\s+step)?|(?:go|move)(?:\s+on)?\s+to\s+(?:the\s+)?next(?:\s+step)?|what['’]?s\s+next)(?:\s+please)?[.!?]*$/i.test(text);
+    const previousStep = Boolean(state.cooking.recipe) && /^(?:(?:ok(?:ay)?|yes)[,\s]+)?(?:please\s+)?(?:(?:go\s+)?back(?:\s+(?:a|one)\s+step)?|previous(?:\s+step)?|step\s+before|before\s+that)(?:\s+please)?[.!?]*$/i.test(text);
+    const startStep = Boolean(state.cooking.recipe) && /^start(?:\s+cooking)?[.!?]*$/i.test(text);
+    if (nextStep || previousStep || startStep) setView("recipe");
+    logScrollTop = nextStep || previousStep || startStep;
     unlockAudio(); stopSpeaking(); state.muteReply = false;
     state.awaitingReply = true;
     const bubble = addMsg("cook", text);
@@ -1373,7 +1492,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     if (who === "coach") renderRich(div, text);
     else div.textContent = text;
     els.log.appendChild(div);
-    scrollLog();
+    scrollLog(true);
     return div;
   }
   // Notes go in the conversation and pop up briefly, so they are never missed.
@@ -1390,6 +1509,8 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
   // The page is the scroll container. Coalesce streamed updates until layout.
   let logScrollPending = false;
   let logScrollView = null;
+  let logFollowView = null;
+  let logScrollTop = false;
   function updateJumpNewest() {
     const root = document.scrollingElement || document.documentElement;
     const remaining = root.scrollHeight - root.clientHeight - root.scrollTop;
@@ -1405,19 +1526,28 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     window.scrollTo({ top: height, behavior: "instant" });
     updateJumpNewest();
   }
+  function scrollSessionTarget() {
+    if (logScrollTop && document.body.dataset.view === "recipe") {
+      window.scrollTo({ top: 0, behavior: "instant" });
+      updateJumpNewest();
+    } else scrollPageToBottom();
+  }
   function scrollLog(force = false) {
     const view = document.body.dataset.view;
-    if (view !== "chat" && force !== true) return;
+    // Keep following late layout changes in the cooking view after a prompt or
+    // answer, too. Switching views clears this so opening a recipe stays at top.
+    if (force === true) logFollowView = view;
+    if (view !== "chat" && logFollowView !== view) return;
     logScrollView = view;
     if (logScrollPending) return;
     logScrollPending = true;
     requestAnimationFrame(() => {
-      if (document.body.dataset.view === logScrollView) scrollPageToBottom();
+      if (document.body.dataset.view === logScrollView) scrollSessionTarget();
       // The composer, keyboard and response can change layout in the same frame.
       // Re-read the height on the next frame instead of keeping a stale target.
       requestAnimationFrame(() => {
         logScrollPending = false;
-        if (document.body.dataset.view === logScrollView) scrollPageToBottom();
+        if (document.body.dataset.view === logScrollView) scrollSessionTarget();
       });
     });
   }
@@ -1426,9 +1556,11 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
   window.addEventListener("resize", () => { updateJumpNewest(); scrollLog(); });
   // Images can finish loading after the message's initial layout.
   els.log.addEventListener("load", scrollLog, true);
+  els.coach.addEventListener("load", scrollLog, true);
   if (window.ResizeObserver) {
     const chatResize = new ResizeObserver(scrollLog);
-    chatResize.observe(els.log);
+    // The visible cooking card/coach line can grow while the log is hidden.
+    chatResize.observe(els.stage);
     chatResize.observe(els.jumpNewest.parentElement);
   }
   // The coach line under the card: only the newest reply, as large readable text.
@@ -1530,6 +1662,8 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
 
   // Two views: the recipe (card + coach line) and the whole conversation.
   function setView(view) {
+    logFollowView = null;
+    logScrollTop = false;
     document.body.dataset.view = view;
     els.chatView.hidden = view !== "chat";
     els.chatButton.setAttribute("aria-pressed", String(view === "chat"));
@@ -1683,6 +1817,8 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     const previousStage = state.stage;
     const stage = stageOf(c);
     state.cooking = c; state.stage = stage;
+    syncRecipeSaving(c, stage);
+    if (previous.recipe_revision !== c.recipe_revision) els.recipeSaveStatus.textContent = "";
     document.body.dataset.stage = stage;
     const total = c.total_steps || 0;
     els.progress.replaceChildren(...Array.from({ length: total }, (_, i) => {
@@ -1719,8 +1855,8 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
       return;
     }
     state.suggestions = [];
-    const recipeChanged = previous.recipe !== c.recipe;
-    els.recipeName.textContent = c.custom ? `${c.recipe} (your recipe)` : c.recipe;
+    const recipeChanged = previous.recipe !== c.recipe || previous.recipe_revision !== c.recipe_revision;
+    els.recipeName.textContent = c.saved_recipe_id || c.custom ? `${c.recipe} (your recipe)` : c.temporary ? `${c.recipe} (session recipe)` : c.recipe;
     els.recipeDetails.textContent = [c.serves ? `Serves ${c.serves}` : "", c.time_minutes ? `About ${c.time_minutes} min` : ""].filter(Boolean).join(" · ");
     els.recipeDetails.hidden = !els.recipeDetails.textContent;
     els.servingsRow.hidden = !c.base_serves;
@@ -1753,8 +1889,9 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
 
   // Ingredients as a checklist: tick off what's on the counter, ask about the rest.
   function renderChecklist(c) {
-    if (state.checkedRecipe !== c.recipe) {
-      state.checked = new Set(); state.cameraTicked = new Set(); state.checkedRecipe = c.recipe;
+    const checklistKey = JSON.stringify([c.recipe, c.temporary ? (c.draft_revision ?? c.recipe_revision ?? 0) : 0]);
+    if (state.checkedRecipe !== checklistKey) {
+      state.checked = new Set(); state.cameraTicked = new Set(); state.checkedRecipe = checklistKey;
     }
     const items = c.ingredients || [];
     els.ingredientsList.replaceChildren(...items.map((text, i) => {
@@ -1811,7 +1948,8 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
 
   // Cooking mode: voice on, screen awake, chat out of the way.
   function enterCooking() {
-    setView("recipe"); keepAwake();
+    const showStep = logScrollTop;
+    setView("recipe"); logScrollTop = showStep; keepAwake();
     if (settings.autoVoice && !state.autoVoiceOn) {
       state.autoVoiceOn = true;
       els.voiceOut.checked = true;
@@ -1884,12 +2022,12 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     if (state.timers.some((t) => !t.done && t.pausedLeft == null)) ensureTick();
     renderTimers();
   }
-  function addTimer(label, seconds) {
+  function addTimer(label, seconds, recipeKey = null) {
     seconds = Math.round(Number(seconds));
     if (!Number.isFinite(seconds) || seconds < 1) return null;
     unlockAudio();
     const timer = { id: `t${Date.now()}${Math.random().toString(36).slice(2, 6)}`, label: String(label || "Timer").slice(0, 40),
-                    total: seconds, endAt: Date.now() + seconds * 1000, pausedLeft: null, done: false };
+                    total: seconds, endAt: Date.now() + seconds * 1000, pausedLeft: null, done: false, recipeKey };
     state.timers.push(timer);
     if (state.timers.length > 8) state.timers.shift();
     saveTimers(); ensureTick(); renderTimers();
@@ -1940,15 +2078,17 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     const seconds = c?.timer_seconds;
     els.timerBtn.hidden = !(seconds && state.stage === "cook");
     if (els.timerBtn.hidden) return;
-    const label = `Step ${c.step + 1}`;
-    const running = state.timers.find((t) => t.label === label && !t.done);
+    const label = c.timer_label || c.step_text?.split(/[.!?]/)[0]?.slice(0, 40) || `Cooking ${c.recipe}`.slice(0, 40);
+    const recipeKey = JSON.stringify([c.recipe, c.recipe_revision || 0, c.step, c.step_text, seconds]);
+    const running = state.timers.find((t) => t.recipeKey === recipeKey && !t.done);
+    els.timerBtn.dataset.recipeKey = recipeKey;
     els.timerBtn.dataset.label = label; els.timerBtn.dataset.seconds = String(seconds);
     els.timerBtn.disabled = Boolean(running);
-    els.timerBtn.textContent = running ? `${label} timer: ${fmt(timeLeft(running))} left` : `Start ${fmt(seconds)} timer`;
+    els.timerBtn.textContent = running ? `${running.label} timer: ${fmt(timeLeft(running))} left` : `Start ${label} timer (${fmt(seconds)})`;
   }
   els.timerBtn.addEventListener("click", () => {
     const seconds = Number(els.timerBtn.dataset.seconds);
-    if (seconds) addTimer(els.timerBtn.dataset.label, seconds);
+    if (seconds) addTimer(els.timerBtn.dataset.label, seconds, els.timerBtn.dataset.recipeKey);
   });
   // Loud, repeating and full-screen: it has to reach someone across the kitchen.
   function ringAlarm(timer) {
@@ -1969,7 +2109,8 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     if (state.alarm) removeTimer(state.alarm.id);
     state.alarm = null;
   }
-  els.alarmDismiss.addEventListener("click", stopAlarm);
+  // Button clicks bubble here too, keeping keyboard activation available.
+  els.alarm.addEventListener("click", stopAlarm);
 
   // --- permission primer: explain before the browser asks ---------------------------
   const PRIMERS = {

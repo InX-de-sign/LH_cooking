@@ -19,6 +19,60 @@ class ProfileHistoryTests(unittest.TestCase):
         self.store.close()
         self.folder.cleanup()
 
+    def test_working_recipe_survives_reconnect_but_is_scoped_to_chat_and_user(self):
+        recipe = {"name": "Soup", "serves": 1, "ingredients": ["1 cup stock"],
+                  "steps": [{"text": "Heat the stock."}]}
+        token = self.store.bind_chat("chat-a")
+        visit = self.store.current_visit("sam")
+        self.store.set_recipe_draft(visit, recipe, "A quick soup", 0)
+        self.store.reset_chat_binding(token)
+        self.store.close()
+        self.store = ConversationStore(self.path)
+        token = self.store.bind_chat("chat-a")
+        resumed = self.store.current_visit("sam")
+        self.assertEqual(resumed.recipe_draft["recipe"], recipe)
+        self.assertEqual(resumed.recipe_revision, 1)
+        self.assertTrue(resumed.has_recipe)
+        self.assertIsNone(self.store.current_visit("alex").recipe_draft)
+        self.store.reset_chat_binding(token)
+        token = self.store.bind_chat("chat-b")
+        self.assertIsNone(self.store.current_visit("sam").recipe_draft)
+        self.store.reset_chat_binding(token)
+
+    def test_saved_working_copy_survives_restart_and_cannot_overwrite_another_cook(self):
+        visit = self.store.current_visit("sam")
+        recipe = {"name": "Soup", "serves": 1, "ingredients": ["1 cup stock"], "steps": [{"text": "Heat the stock."}]}
+        self.store.set_recipe_draft(visit, recipe, "Quick soup", 0)
+        custom_id = self.store.save_working_recipe(visit, recipe, 1)
+        self.store.close()
+        self.store = ConversationStore(self.path)
+        resumed = self.store.current_visit("sam")
+        self.assertEqual(resumed.recipe_saved_snapshot, recipe)
+        self.assertEqual(resumed.recipe_custom_id, custom_id)
+        self.assertEqual(self.store.custom_recipe(custom_id, "sam")["ingredients"], recipe["ingredients"])
+        intruder = self.store.current_visit("alex")
+        self.store.set_recipe(intruder, None, "Soup", custom_id)
+        self.store.set_recipe_draft(intruder, recipe, "Change soup", intruder.recipe_revision)
+        with self.assertRaisesRegex(ValueError, "does not belong"):
+            self.store.save_working_recipe(intruder, {**recipe, "name": "Changed soup"}, intruder.recipe_revision)
+        self.assertEqual(self.store.custom_recipe(custom_id, "sam")["name"], "Soup")
+        self.assertIsNone(self.store.current_visit("alex").recipe_saved_snapshot)
+
+    def test_failed_save_rolls_back_insert_and_saved_baseline(self):
+        import sqlite3
+        visit = self.store.current_visit("sam")
+        recipe = {"name": "Soup", "ingredients": ["1 cup stock"], "steps": [{"text": "Heat the stock."}]}
+        self.store.set_recipe_draft(visit, recipe, "Quick soup", 0)
+        self.store._conn.execute("CREATE TEMP TRIGGER reject_recipe_save BEFORE UPDATE OF recipe_saved_snapshot ON visits "
+                                 "BEGIN SELECT RAISE(ABORT, 'test save failure'); END")
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.store.save_working_recipe(visit, recipe, 1)
+        self.assertEqual(self.store.list_custom_recipes("sam"), [])
+        current = self.store.current_visit("sam")
+        self.assertIsNone(current.recipe_custom_id)
+        self.assertIsNone(current.recipe_saved_snapshot)
+        self.assertEqual(current.recipe_draft["recipe"], recipe)
+
     def test_profile_changes_reach_active_visit_and_new_sessions_without_changing_recipe(self):
         with patch("conversation_state.time.time", return_value=2_000_000_000):
             visit = self.store.current_visit("sam")

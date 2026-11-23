@@ -360,7 +360,7 @@ class AppTests(unittest.TestCase):
                 ask(ws, "garlic pasta")
                 response = ask(ws, "Let's start")
                 self.assertEqual(response["cooking"]["step"], 0)
-                self.assertIn("boil", response["message"].lower())
+                self.assertIn("slice the garlic", response["message"].lower())
 
                 async def fake_reply(query, context, user_id, on_delta=None):
                     await on_delta("One. ")
@@ -431,7 +431,7 @@ class AppTests(unittest.TestCase):
     def test_recipe_upload_becomes_the_active_recipe(self):
         parsed = {"name": "Grandma's Noodles", "serves": 2, "time_minutes": 10,
                   "ingredients": ["200 g egg noodles", "2 tbsp butter"],
-                  "steps": [{"text": "Boil the noodles for 3 minutes.", "done_when": None, "timer_seconds": 180},
+                  "steps": [{"text": "Boil the noodles for 3 minutes.", "done_when": None, "timer_seconds": 180, "timer_label": "Boiling noodles"},
                             {"text": "Toss with butter.", "done_when": "noodles are glossy", "timer_seconds": None}]}
         model = cook_api.assistant.model
         with patch.object(model, "openai_client", object()), \
@@ -473,12 +473,19 @@ class AppTests(unittest.TestCase):
                     self.assertGreater(recipe["steps"], 0)
                     self.assertGreater(recipe["serves"], 0)
                     self.assertGreater(recipe["time_minutes"], 0)
+                    stored_steps = cook_api.assistant.knowledge.steps(recipe["id"])
+                    self.assertEqual(len(stored_steps), len(source["steps"]))
+                    for stored, expected in zip(stored_steps, source["steps"]):
+                        self.assertEqual(stored["text"], expected["text"])
+                        self.assertEqual(stored["done_when"], expected.get("done_when"))
+                        self.assertEqual(stored["timer_seconds"], expected.get("timer_seconds"))
+                        self.assertEqual(stored["timer_label"], expected.get("timer_label"))
                     for alias in [source["name"], *source.get("aliases", [])]:
                         resolved = cook_api.assistant.knowledge.resolve_recipe(alias)
                         self.assertIsNotNone(resolved, alias)
                         self.assertEqual(resolved.id, recipe["id"], alias)
             shrimp = next(r for r in recipes if r["name"] == "Spicy Shrimp Glass Noodles")
-            self.assertEqual(shrimp["steps"], 5)
+            self.assertEqual(shrimp["steps"], 6)
             self.assertEqual(cook_api.assistant.knowledge.resolve_recipe("chinese fried spicy rice noodle and shrimp").id, shrimp["id"])
             ingredients = cook_api.assistant.knowledge.ingredients_text(shrimp["id"])
             self.assertIn("glass noodles", ingredients)
@@ -535,6 +542,322 @@ class AssistantTests(unittest.IsolatedAsyncioTestCase):
 
     def visit(self):
         return self.assistant.store.current_visit(self.user)
+
+    def working_recipe(self):
+        return {"name": "Flexible Noodles", "serves": 2, "time_minutes": 15,
+                "ingredients": ["200 grams noodles", "2 tablespoons soy sauce"],
+                "steps": [{"text": "Cook noodles following the packet and drain.",
+                           "done_when": "The noodles are tender.", "timer_seconds": None},
+                          {"text": "Toss with soy sauce over low heat.",
+                           "done_when": "The noodles are coated.", "timer_seconds": 60, "timer_label": "Tossing noodles in sauce"}]}
+
+    def revise(self, recipe, revision=None):
+        return self.assistant.run_tool(self.user, "update_recipe", {
+            "expected_revision": self.visit().recipe_revision if revision is None else revision,
+            "reason": "Use the ingredients available to the cook.", "recipe": recipe})
+
+    async def test_saving_generated_recipe_preserves_progress_scaling_and_reuses_entry(self):
+        self.assertTrue(self.revise(self.working_recipe())["ok"])
+        self.assistant.set_servings(self.user, 4)
+        self.assistant.run_tool(self.user, "go_to_step", {"step": 2})
+        before = self.assistant.cooking_state(self.user)
+        saved = self.assistant.save_recipe(self.user, before["recipe_revision"])
+        custom_id = saved["recipe_id"]
+        self.assertFalse(saved["cooking"]["unsaved_changes"])
+        for field in ("step", "steps", "ingredients", "serves", "timer_seconds", "timer_label"):
+            self.assertEqual(saved["cooking"][field], before[field])
+        stored = self.assistant.store.custom_recipe(custom_id, self.user)
+        self.assertEqual(stored["serves"], 4)
+        self.assertIn("400 grams noodles", stored["ingredients"])
+        self.assertEqual(stored["steps"][1]["timer_label"], "Tossing noodles in sauce")
+        self.assertEqual(self.assistant.save_recipe(self.user, self.visit().recipe_revision)["recipe_id"], custom_id)
+        self.assertEqual(len(self.assistant.store.list_custom_recipes(self.user)), 1)
+        reopened = await self.assistant.open_saved_recipe(self.user, custom_id)
+        self.assertEqual(reopened["cooking"]["ingredients"], before["ingredients"])
+        self.assertIsNone(reopened["cooking"]["step"])
+        self.assertFalse(reopened["cooking"]["unsaved_changes"])
+
+    def test_saving_catalog_adaptation_copies_then_overwrites_personal_entry(self):
+        yaml_before = (ROOT / "chatbot" / "recipes.yaml").read_bytes()
+        self.assistant.run_tool(self.user, "choose_recipe", {"recipe_name": "Garlic Soy Noodles"})
+        catalog_id = self.visit().recipe_id
+        original = self.assistant.knowledge.ingredients(catalog_id)
+        recipe = self.assistant.context.active_recipe(self.visit()).snapshot()
+        recipe["ingredients"] = [i.replace("light soy sauce", "tamari") for i in recipe["ingredients"]]
+        self.assertTrue(self.revise(recipe)["ok"])
+        result = self.assistant.run_tool(self.user, "save_recipe", {"expected_revision": self.visit().recipe_revision})
+        self.assertTrue(result["ok"])
+        custom_id = result["recipe_id"]
+        self.assistant.store.set_custom_favorite(self.user, custom_id, True)
+        recipe["ingredients"].append("1 teaspoon sesame oil")
+        self.assertTrue(self.revise(recipe)["ok"])
+        self.assertTrue(self.assistant.cooking_state(self.user)["unsaved_changes"])
+        self.assertEqual(self.assistant.save_recipe(self.user, self.visit().recipe_revision)["recipe_id"], custom_id)
+        entries = self.assistant.store.list_custom_recipes(self.user)
+        self.assertEqual(len(entries), 1)
+        self.assertTrue(entries[0]["favorite"])
+        self.assertEqual(self.assistant.knowledge.ingredients(catalog_id), original)
+        self.assertEqual((ROOT / "chatbot" / "recipes.yaml").read_bytes(), yaml_before)
+
+    async def test_overwriting_uploaded_recipe_is_visible_on_reopen(self):
+        source = self.working_recipe()
+        custom_id = self.assistant.store.save_custom_recipe(self.visit(), source)
+        await self.assistant.open_saved_recipe(self.user, custom_id)
+        source["ingredients"][1] = "2 tablespoons tamari"
+        source["steps"][1]["text"] = "Toss with tamari over low heat."
+        self.assertTrue(self.revise(source)["ok"])
+        self.assertIn("2 tablespoons soy sauce", self.assistant.store.custom_recipe(custom_id, self.user)["ingredients"])
+        self.assistant.save_recipe(self.user, self.visit().recipe_revision)
+        reopened = await self.assistant.open_saved_recipe(self.user, custom_id)
+        self.assertIn("2 tablespoons tamari", reopened["cooking"]["ingredients"])
+        self.assertEqual(len(self.assistant.store.list_custom_recipes(self.user)), 1)
+
+    async def test_leave_guard_keeps_action_after_save_failure_and_supports_cancel_and_discard(self):
+        import sqlite3
+        self.assertTrue(self.revise(self.working_recipe())["ok"])
+        blocked = self.assistant.run_tool(self.user, "choose_recipe", {"recipe_name": "Mapo Tofu"})
+        self.assertTrue(blocked["save_required"])
+        current = self.assistant.cooking_state(self.user)
+        pending = current["pending_leave"]
+        with patch.object(self.assistant.store, "save_working_recipe", side_effect=sqlite3.OperationalError("disk full")):
+            with self.assertRaisesRegex(ValueError, "still here"):
+                await self.assistant.resolve_recipe_leave(self.user, pending["token"], pending["revision"], "save")
+        self.assertEqual(self.assistant.cooking_state(self.user), current)
+        canceled = await self.assistant.resolve_recipe_leave(self.user, pending["token"], pending["revision"], "cancel")
+        self.assertEqual(canceled["cooking"]["recipe"], "Flexible Noodles")
+        self.assertTrue(canceled["cooking"]["unsaved_changes"])
+        self.assertIsNone(canceled["cooking"]["pending_leave"])
+        self.assistant.run_tool(self.user, "choose_recipe", {"recipe_name": "Mapo Tofu"})
+        pending = self.assistant.cooking_state(self.user)["pending_leave"]
+        changed = await self.assistant.resolve_recipe_leave(self.user, pending["token"], pending["revision"], "discard")
+        self.assertEqual(changed["cooking"]["recipe"], "Mapo Tofu")
+        self.assertEqual(self.assistant.store.list_custom_recipes(self.user), [])
+
+    async def test_save_and_stop_and_guard_other_entrypoints(self):
+        self.assertTrue(self.revise(self.working_recipe())["ok"])
+        other = self.assistant.store.save_custom_recipe(self.visit(), {**self.working_recipe(), "name": "Other noodles"})
+        opened = await self.assistant.open_saved_recipe(self.user, other)
+        self.assertEqual(opened["cooking"]["recipe"], "Flexible Noodles")
+        self.assertIsNotNone(opened["cooking"]["pending_leave"])
+        imported = await self.assistant.import_recipe(self.user, "A new recipe")
+        self.assertEqual(imported["cooking"]["recipe"], "Flexible Noodles")
+        self.assertIsNotNone(imported["cooking"]["pending_leave"])
+        self.assertTrue(self.assistant.run_tool(self.user, "stop_recipe", {})["save_required"])
+        pending = self.assistant.cooking_state(self.user)["pending_leave"]
+        stopped = await self.assistant.resolve_recipe_leave(self.user, pending["token"], pending["revision"], "save")
+        self.assertIsNone(stopped["cooking"]["recipe"])
+        self.assertEqual(len(self.assistant.store.list_custom_recipes(self.user)), 2)
+
+    def test_stale_save_leaves_working_recipe_unsaved(self):
+        self.assertTrue(self.revise(self.working_recipe())["ok"])
+        revision = self.visit().recipe_revision
+        self.assistant.set_servings(self.user, 4)
+        with self.assertRaisesRegex(ValueError, "changed"):
+            self.assistant.save_recipe(self.user, revision)
+        self.assertTrue(self.assistant.cooking_state(self.user)["unsaved_changes"])
+        self.assertEqual(self.assistant.store.list_custom_recipes(self.user), [])
+
+    def test_save_and_leave_websocket_requests_return_current_state(self):
+        self.user = "assistant-save-websocket"
+        self.assertTrue(self.revise(self.working_recipe())["ok"])
+        with TestClient(cook_api.app) as client:
+            with client.websocket_connect(f"/ws?client_id={self.user}") as ws:
+                open_chat(ws)
+                ws.send_json({"type": "recipe_save", "request_id": "save1", "expected_revision": self.visit().recipe_revision})
+                saved = ws.receive_json()
+                self.assertEqual(saved["type"], "settings_result")
+                self.assertFalse(saved["cooking"]["unsaved_changes"])
+                self.assertIsNotNone(saved["recipe_id"])
+                ws.send_json({"type": "recipe_save", "request_id": "save-stale", "expected_revision": 0})
+                self.assertIn("error", ws.receive_json())
+                recipe = self.working_recipe()
+                recipe["ingredients"].append("1 teaspoon sesame oil")
+                self.assertTrue(self.revise(recipe)["ok"])
+                self.assistant.run_tool(self.user, "stop_recipe", {})
+                pending = self.assistant.cooking_state(self.user)["pending_leave"]
+                ws.send_json({"type": "recipe_leave", "request_id": "leave1", "choice": "discard",
+                              "token": pending["token"], "expected_revision": pending["revision"]})
+                left = ws.receive_json()
+                self.assertEqual(left["type"], "settings_result")
+                self.assertIsNone(left["cooking"]["recipe"])
+
+    async def test_cancel_reminder_still_works_after_recipe_changes(self):
+        self.assertTrue(self.revise(self.working_recipe())["ok"])
+        self.assistant.run_tool(self.user, "stop_recipe", {})
+        pending = self.assistant.cooking_state(self.user)["pending_leave"]
+        self.assistant.set_servings(self.user, 4)
+        canceled = await self.assistant.resolve_recipe_leave(self.user, pending["token"], pending["revision"], "cancel")
+        self.assertTrue(canceled["cooking"]["unsaved_changes"])
+        self.assertEqual(canceled["cooking"]["serves"], 4)
+        self.assertIsNone(canceled["cooking"]["pending_leave"])
+
+    async def test_new_generated_dish_uses_leave_guard_and_its_own_saved_entry(self):
+        self.assertTrue(self.revise(self.working_recipe())["ok"])
+        soup = {"name": "Quick soup", "serves": 1, "ingredients": ["1 cup stock"],
+                "steps": [{"text": "Heat the stock."}]}
+        result = self.assistant.run_tool(self.user, "update_recipe", {
+            "expected_revision": self.visit().recipe_revision, "reason": "A different dish", "new_recipe": True, "recipe": soup})
+        self.assertTrue(result["save_required"])
+        pending = self.assistant.cooking_state(self.user)["pending_leave"]
+        response = await self.assistant.resolve_recipe_leave(self.user, pending["token"], pending["revision"], "save")
+        self.assertEqual(response["cooking"]["recipe"], "Quick soup")
+        self.assertTrue(response["cooking"]["unsaved_changes"])
+        self.assertIsNone(response["cooking"]["saved_recipe_id"])
+        self.assistant.save_recipe(self.user, self.visit().recipe_revision)
+        self.assertEqual(len(self.assistant.store.list_custom_recipes(self.user)), 2)
+
+    async def test_generated_recipe_iterates_and_reaches_later_turns(self):
+        recipe = self.working_recipe()
+        self.assertTrue(self.revise(recipe)["ok"])
+        first_revision = self.visit().recipe_revision
+        recipe["ingredients"][1] = "2 tablespoons tamari"
+        recipe["steps"][1]["text"] = "Toss with tamari over low heat."
+        self.assertTrue(self.revise(recipe)["ok"])
+        recipe["ingredients"].append("1 teaspoon sesame oil")
+        recipe["steps"][1]["text"] = "Toss with tamari and sesame oil over low heat."
+        self.assertTrue(self.revise(recipe)["ok"])
+        state = self.assistant.cooking_state(self.user)
+        self.assertTrue(state["temporary"])
+        self.assertEqual(state["recipe_revision"], first_revision + 2)
+        self.assertIn("2 tablespoons tamari", state["ingredients"])
+        self.assertIn("sesame oil", state["steps"][1])
+        prompt = self.assistant.context.build(self.user, "What do I need?").text
+        self.assertIn("tamari", prompt)
+        self.assertNotIn("2 tablespoons soy sauce", prompt)
+        self.assertEqual(self.assistant.store.list_custom_recipes(self.user), [])
+        reply = await self.assistant.process_message("start", self.user)
+        self.assertEqual(reply["cooking"]["step_text"], recipe["steps"][0]["text"])
+        self.assertEqual(self.assistant.run_tool(self.user, "scale_recipe", {"servings": 4})["serves"], 4)
+        self.assertIn("4 tablespoons tamari", self.assistant.cooking_state(self.user)["ingredients"])
+
+    def test_catalog_and_saved_upload_remain_unchanged_when_adapted(self):
+        self.assistant.run_tool(self.user, "choose_recipe", {"recipe_name": "Garlic Soy Noodles", "servings": 4})
+        original_id = self.visit().recipe_id
+        original = self.assistant.knowledge.ingredients(original_id)
+        active = self.assistant.context.active_recipe(self.visit())
+        recipe = {"name": active.name, "serves": active.serves, "time_minutes": active.time_minutes,
+                  "ingredients": [s.replace("light soy sauce", "tamari") for s in active.ingredients],
+                  "steps": [{k: s.get(k) for k in ("text", "done_when", "timer_seconds", "timer_label")} for s in active.steps]}
+        for step in recipe["steps"]:
+            step["text"] = step["text"].replace("soy sauce", "tamari")
+        self.assertTrue(self.revise(recipe)["ok"])
+        self.assertIn("4 tablespoons tamari", self.assistant.cooking_state(self.user)["ingredients"])
+        self.assertEqual(self.assistant.knowledge.ingredients(original_id), original)
+        self.assertIsNone(self.visit().servings, "working copy already contains scaled quantities")
+        source = self.working_recipe()
+        custom_id = self.assistant.store.save_custom_recipe(self.visit(), source)
+        self.assistant.store.set_recipe(self.visit(), None, source["name"], custom_id)
+        source["ingredients"][1] = "2 tablespoons tamari"
+        self.assertTrue(self.revise(source)["ok"])
+        self.assertIn("2 tablespoons soy sauce", self.assistant.store.custom_recipe(custom_id, self.user)["ingredients"])
+        self.assistant.save_recipe(self.user, self.visit().recipe_revision)
+        self.assistant.run_tool(self.user, "stop_recipe", {})
+        self.assertFalse(self.visit().has_recipe)
+        self.assertIsNone(self.visit().recipe_draft)
+
+    def test_revision_validation_and_completed_steps_protect_work_in_progress(self):
+        recipe = self.working_recipe()
+        self.assertTrue(self.revise(recipe)["ok"])
+        revision = self.visit().recipe_revision
+        self.assistant.run_tool(self.user, "go_to_step", {"step": 2})
+        recipe["steps"][0]["text"] = "Skip cooking the noodles."
+        self.assertFalse(self.revise(recipe)["ok"])
+        recipe = self.working_recipe()
+        recipe["steps"][1]["text"] = "Toss with tamari over low heat."
+        recipe["ingredients"][1] = "2 tablespoons tamari"
+        self.assertTrue(self.revise(recipe)["ok"])
+        self.assertEqual(self.visit().step, 1)
+        self.assertFalse(self.revise(recipe, revision=revision)["ok"])
+        before = self.assistant.cooking_state(self.user)
+        recipe["steps"][1]["text"] = "x" * 601
+        self.assertFalse(self.revise(recipe)["ok"], "never truncate a cooking instruction")
+        self.assertEqual(self.assistant.cooking_state(self.user), before)
+        recipe = self.working_recipe()
+        recipe["serves"] = 4
+        self.assertFalse(self.revise(recipe)["ok"], "serving changes use scaling")
+        self.assistant.save_recipe(self.user, self.visit().recipe_revision)
+        self.assistant.run_tool(self.user, "choose_recipe", {"recipe_name": "Mapo Tofu"})
+        self.assertIsNone(self.visit().recipe_draft)
+        self.assertFalse(self.revise(self.working_recipe(), revision=revision)["ok"])
+
+    async def test_available_substitute_updates_recipe_across_conversation_turns(self):
+        from streaming_openai import StreamingOpenAI, SYSTEM_PROMPT
+        streamer = StreamingOpenAI.__new__(StreamingOpenAI)
+        streamer.system_prompt = SYSTEM_PROMPT
+        for separate_turns in (False, True):
+            with self.subTest(separate_turns=separate_turns):
+                self.user = f"substitution-{self._testMethodName}-{separate_turns}"
+                self.assistant.run_tool(self.user, "choose_recipe", {"recipe_name": "Garlic Soy Noodles"})
+                original = self.assistant.context.active_recipe(self.visit())
+                original_steps = [dict(s) for s in original.steps]
+                adapted = {"name": original.name, "serves": original.serves, "time_minutes": original.time_minutes,
+                    "ingredients": ["half a teaspoon garlic powder" if "garlic cloves" in i else i
+                                    for i in original.ingredients],
+                    "steps": [{k: s.get(k) for k in ("text", "done_when", "timer_seconds", "timer_label")}
+                              for s in original.steps]}
+                adapted["steps"][0]["text"] = "Rinse and slice the spring onions."
+                adapted["steps"][2] = {"text": "Mix soy sauce, sugar and half a teaspoon garlic powder. Warm oil in a pan over medium heat.",
+                                       "done_when": "The garlic powder is mixed into the sauce.",
+                                       "timer_seconds": None, "timer_label": None}
+
+                async def respond(query, context, user_id, on_delta=None):
+                    if query == "I don't have garlic":
+                        return "Do you have garlic powder?"
+                    if query == "How would it taste? Don't change the recipe.":
+                        return "The garlic flavour will be milder."
+                    if query == "What do I do now?":
+                        self.assertIn("half a teaspoon garlic powder", context["prompt_context"])
+                        self.assertNotIn("Peel and mince the garlic", context["prompt_context"])
+                        return "Mix the garlic powder into the sauce."
+                    messages = streamer.build_messages(query, context)
+                    if separate_turns:
+                        self.assertIn({"role": "user", "content": "I don't have garlic"}, messages)
+                        self.assertIn({"role": "assistant", "content": "Do you have garlic powder?"}, messages)
+                    # Keep the implicit request examples in the instructions sent
+                    # to the real model, alongside the full recipe and history.
+                    self.assertIn('"I have garlic powder" means adapt', messages[0]["content"])
+                    self.assertIn("without asking them", messages[0]["content"])
+                    result = await context["tool_handler"]("update_recipe", {
+                        "expected_revision": self.visit().recipe_revision,
+                        "reason": "Use the garlic powder the cook has instead of missing fresh garlic.",
+                        "recipe": adapted})
+                    self.assertTrue(result["ok"])
+                    return "I've replaced the fresh garlic with garlic powder and mixed it into the sauce."
+
+                with patch.object(self.assistant.model, "process_query_with_openai", respond):
+                    if separate_turns:
+                        missing = await self.assistant.process_message("I don't have garlic", self.user)
+                        self.assertFalse(missing["cooking"]["temporary"], "missing alone needs a replacement first")
+                    prompt = "I have garlic powder" if separate_turns else "I don't have garlic, but I have garlic powder"
+                    reply = await self.assistant.process_message(prompt, self.user)
+                    state = reply["cooking"]
+                    self.assertTrue(state["temporary"])
+                    self.assertTrue(state["unsaved_changes"])
+                    self.assertIn("half a teaspoon garlic powder", state["ingredients"])
+                    self.assertNotIn("4 garlic cloves", state["ingredients"])
+                    self.assertNotIn("Peel and mince the garlic", " ".join(state["steps"]))
+                    self.assertNotIn("stir the garlic for 30 seconds", " ".join(state["steps"]))
+                    self.assertIsNone(self.assistant.context.active_recipe(self.visit()).steps[2]["timer_label"])
+                    before_revision = state["recipe_revision"]
+                    advice = await self.assistant.process_message("How would it taste? Don't change the recipe.", self.user)
+                    self.assertEqual(advice["cooking"]["recipe_revision"], before_revision)
+                    await self.assistant.process_message("What do I do now?", self.user)
+                self.assertEqual(self.assistant.knowledge.steps(original.id), original_steps)
+                self.assertEqual(self.assistant.store.list_custom_recipes(self.user), [], "adaptation does not auto-save")
+
+    async def test_conversation_tool_updates_recipe_and_returns_new_state(self):
+        async def adapt(query, context, user_id, on_delta=None):
+            self.assertIn("No recipe chosen yet", context["prompt_context"])
+            tool_result = await context["tool_handler"]("update_recipe", {
+                "expected_revision": 0, "reason": "A quick noodle dish for this cook.",
+                "recipe": self.working_recipe()})
+            self.assertTrue(tool_result["ok"])
+            return "I've made a quick noodle recipe for you."
+        with patch.object(self.assistant.model, "process_query_with_openai", adapt):
+            result = await self.assistant.process_message("Make me a noodle recipe", self.user)
+        self.assertEqual(result["cooking"]["recipe"], "Flexible Noodles")
+        self.assertTrue(result["cooking"]["temporary"])
+        self.assertIsNone(result["cooking"]["step"])
 
     def test_tools_choose_move_stop_and_remember(self):
         run = lambda tool, **args: self.assistant.run_tool(self.user, tool, args)
@@ -662,6 +985,19 @@ class StageFeatureTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(run("start_timer", label="x", seconds="soon")["ok"])
         self.assertEqual(actions["timers"], [{"label": "Noodles", "seconds": 180}])
         self.assertIsNone(self.visit().recipe_id, "suggesting is not choosing")
+
+    def test_timer_process_names_and_explicit_names_reach_phone(self):
+        actions = {"suggestions": [], "timers": []}
+        run = lambda tool, **args: self.assistant.run_tool(self.user, tool, args, actions)
+        self.assertFalse(run("start_timer", label=" ", seconds=180)["ok"])
+        run("choose_recipe", recipe_name="Garlic Soy Noodles")
+        run("go_to_step", step=3)
+        state = self.assistant.cooking_state(self.user)
+        self.assertEqual(state["timer_label"], "Frying garlic")
+        self.assertTrue(run("start_timer", label=" ", seconds=30)["ok"])
+        self.assertTrue(run("start_timer", label="My noodle timer", seconds=60)["ok"])
+        self.assertEqual(actions["timers"], [{"label": "Frying garlic", "seconds": 30},
+                                            {"label": "My noodle timer", "seconds": 60}])
 
     def test_servings_scale_ingredients_steps_and_prompt(self):
         run = lambda tool, **args: self.assistant.run_tool(self.user, tool, args)

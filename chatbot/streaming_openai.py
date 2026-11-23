@@ -26,6 +26,8 @@ logger = logging.getLogger(__name__)
 # the budget also pays for reasoning, and a recipe overview with ingredients
 # and numbered steps needs room.
 REPLY_TOKEN_BUDGET = 900
+# Full working recipes need more output than the short spoken reply.
+RECIPE_TOOL_TOKEN_BUDGET = 6000
 # One round of tool calls (possibly several in parallel), then a final reply
 # without tools: a second round let the model "helpfully" start step 1 right
 # after loading a recipe, before the cook said they were ready.
@@ -65,19 +67,67 @@ write a function name, "called", or JSON in your reply; talk like a person. If
 an action is needed, call the function itself; describing it does nothing.
 - choose_recipe: as soon as the cook picks a catalog dish, including "the first
   one" or "that one" after your suggestions, or asks to switch dish. If the dish
-  is not in the catalog, say so and offer the 2 closest catalog options or
-  uploading their own recipe.
+  is not in the catalog and they want to make it, create a working recipe with
+  update_recipe. You can also offer uploading their own recipe.
+- update_recipe: create a temporary recipe when the cook requests a new dish,
+  or revise the active recipe when substitutions, missing ingredients, dietary
+  needs, available equipment, time or experience require it. When the cook lacks
+  an ingredient and has a suitable replacement, treat that as a request to adapt
+  the active recipe: call update_recipe in that same turn, without asking them
+  to say "change the recipe" or confirm the substitution again. Connect recent
+  turns: "I don't have garlic" followed by "I have garlic powder" means adapt
+  the garlic to garlic powder, not just describe a substitution ratio. Likewise,
+  "I don't have soy sauce, but I have tamari" requests an adaptation. Evaluate
+  whether the replacement works for this dish and the cook's dietary needs;
+  mentioning an available ingredient alone does not make it a suitable substitute.
+  Update the ingredient list AND every affected current/future step, including
+  quantities, preparation, when to add the replacement, cues and timer labels.
+  For garlic powder, remove fresh-garlic peeling/chopping/frying instructions
+  and place the powder at the appropriate point instead of only changing a name.
+  If only the missing ingredient is known, suggest a substitute or ask what they
+  have. If the replacement, suitability or what is already in the pan is unclear,
+  ask one short question before changing the recipe. Respect explicit requests
+  for advice only and hypothetical substitution questions; those do not authorize
+  an edit. Apply relevant known preferences without another confirmation.
+  Send the FULL updated recipe, not a patch, with expected_revision from [RECIPE]
+  and a short reason. Set new_recipe to true only when starting a different dish,
+  including a newly generated dish while another recipe is active. This uses the
+  same unsaved-changes reminder as switching catalog dishes and creates its own
+  personal entry on save. Leave it false for substitutions or adaptations of the
+  current dish, even if you rename that adaptation.
+  Build on the latest working recipe so earlier substitutions
+  persist. Keep the displayed serving count (quantities are already scaled).
+  Preserve completed steps exactly, including cues and timers; change only the
+  current and future steps. Never pretend an ingredient already added can be
+  removed. Update every affected quantity, preparation, cooking instruction,
+  cue and timer consistently, including safe cooking checks for new proteins.
+  Every timed step must include a timer_label of at most 40 characters naming
+  the timed action and food, e.g. "Boiling spaghetti". Preserve completed labels.
+  Ingredients start before kitchen preparation; put cutting, washing, draining,
+  grating, melting, mixing and cooking in steps before use. Keep cooked rice and
+  purchased products as ingredients, and preserve measured yields.
+  Do not combine update_recipe with choose_recipe, scale_recipe, stop_recipe or
+  go_to_step in the same turn. Revised recipes stay in this chat and do not edit
+  catalog or saved uploads. Explain the resulting change briefly after success.
 - go_to_step: when they say they finished a step, want to skip ahead, go back or
   jump to a step. Steps are numbered from 1; 0 means back to the ingredients.
   If the recipe has not started (Status: not started) and they say start, ready,
   let's go, or that they have everything, call go_to_step with step 1 and then
   give step 1. Don't show the overview again.
 - stop_recipe: when they want to stop or cook something else without naming it.
+- save_recipe: only when the cook explicitly asks to save or overwrite their
+  recipe for future use. It saves the displayed version to My recipes, replacing
+  its personal original or creating a personal copy of a catalog/generated dish.
+  Pass the current recipe revision. Never save automatically after adapting.
+  If choosing or stopping returns save_required, the recipe has NOT changed:
+  tell the cook to use the on-screen save reminder. Do not try to bypass it.
 - update_cook_profile: whenever the cook reveals their name, experience
   ("not confident at all" -> beginner), allergies or diet ("no allergies" ->
   none), even in passing, call it in that same turn.
 - start_timer: when they ask for a timer, or say they are starting a step that
-  has a fixed time in [RECIPE] ("timer for the noodles"). Use a short label.
+  has a fixed time in [RECIPE] ("timer for the noodles"). Use the step's timer_label,
+  or a short action-and-food name such as "Boiling spaghetti" or "Stir-frying noodles".
+  Preserve a different timer name explicitly requested by the cook.
 - scale_recipe: when they want more or fewer servings ("make it for 4"). When
   they choose a dish and give a number of people in the same message, pass
   servings to choose_recipe instead.
@@ -89,7 +139,11 @@ an action is needed, call the function itself; describing it does nothing.
 
 GROUNDING
 - Quantities, times and temperatures for the recipe come only from [RECIPE] and
-  [FACTS]. Never invent them. For anything else you may give general advice.
+  [FACTS]. Do not silently invent changes in chat. When explicitly generating or
+  adapting a recipe with update_recipe, you may propose sensible quantities and
+  estimated cooking times; make the full updated recipe the new working source.
+  These recipes are untested drafts. Keep established food safety checks; never
+  infer internal doneness from elapsed time or camera images.
 - Respect [COOK] allergies and diet: warn when a recipe or idea conflicts.
 
 CAMERA
@@ -109,6 +163,39 @@ CAMERA
   instruction."""
 
 TOOLS = [
+    {"type": "function", "function": {
+        "name": "save_recipe",
+        "description": "Save the current displayed recipe to My recipes only on explicit user request. "
+                       "Replaces its personal original; never changes default catalog recipes.",
+        "parameters": {"type": "object", "properties": {
+            "expected_revision": {"type": "integer", "minimum": 0}},
+            "required": ["expected_revision"]}}},
+    {"type": "function", "function": {
+        "name": "update_recipe",
+        "description": "Create or replace this chat's temporary working recipe. Adapt it when the cook "
+                       "lacks an ingredient and has a suitable substitute, including across recent turns. "
+                       "Use the latest "
+                       "recipe revision and full recipe at the displayed servings. Preserve completed steps.",
+        "parameters": {"type": "object", "properties": {
+            "expected_revision": {"type": "integer", "minimum": 0},
+            "reason": {"type": "string", "maxLength": 500},
+            "new_recipe": {"type": "boolean", "description": "True only to start a different dish; false for adapting the current dish."},
+            "recipe": {"type": "object", "properties": {
+                "name": {"type": "string", "maxLength": 120},
+                "serves": {"type": ["integer", "null"], "minimum": 1, "maximum": 24},
+                "time_minutes": {"type": ["integer", "null"], "minimum": 1},
+                "ingredients": {"type": "array", "minItems": 1, "maxItems": 60,
+                                "items": {"type": "string", "maxLength": 200}},
+                "steps": {"type": "array", "minItems": 1, "maxItems": 40, "items": {
+                    "type": "object", "properties": {
+                        "text": {"type": "string", "maxLength": 600},
+                        "done_when": {"type": ["string", "null"], "maxLength": 200},
+                        "timer_seconds": {"type": ["integer", "null"], "minimum": 1, "maximum": 21600},
+                        "timer_label": {"type": ["string", "null"], "maxLength": 40,
+                                        "description": "Required for a timed step: action and food, e.g. Boiling spaghetti. Preserve completed steps' labels."}},
+                    "required": ["text"]}}},
+                "required": ["name", "ingredients", "steps"]}},
+            "required": ["expected_revision", "reason", "recipe"]}}},
     {"type": "function", "function": {
         "name": "choose_recipe",
         "description": "Load a recipe from the catalog as the dish being cooked "
@@ -153,7 +240,8 @@ TOOLS = [
         "name": "start_timer",
         "description": "Start a named countdown timer on the cook's phone.",
         "parameters": {"type": "object", "properties": {
-            "label": {"type": "string", "description": "Short name, e.g. 'Noodles'."},
+            "label": {"type": "string", "minLength": 1, "maxLength": 40,
+                      "description": "Action and food, e.g. 'Boiling spaghetti'; use the recipe's timer_label. Preserve any name explicitly requested by the cook."},
             "seconds": {"type": "integer", "minimum": 5, "maximum": 21600}},
             "required": ["label", "seconds"]}}},
     {"type": "function", "function": {
@@ -222,7 +310,7 @@ class StreamingOpenAI:
                 messages=messages,
                 stream=True,
                 **({"tools": tools} if offer_tools else {}),
-                **self.config.completion_kwargs(REPLY_TOKEN_BUDGET),
+                **self.config.completion_kwargs(RECIPE_TOOL_TOKEN_BUDGET if offer_tools else REPLY_TOKEN_BUDGET),
             )
             text, calls = "", {}
             try:

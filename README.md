@@ -28,7 +28,8 @@ Already working, tested locally:
   Leaving and reopening or refreshing the page also starts a fresh chat.
   Your saved profile and past conversations in History are kept. Temporary
   connection drops within the open page resume the same chat.
-- First-run questions (name, experience, allergies, what are you cooking)
+- Conversational profile learning: the coach picks up name, experience and
+  dietary needs while helping you cook, without a required setup questionnaire.
 - **Profile** (top right): edit your name, cooking experience, and allergies or
   dietary needs. Changes apply to the next cooking reply and are remembered in
   future sessions in the same browser. A new session asks what you are cooking.
@@ -37,6 +38,27 @@ Already working, tested locally:
   Opening history leaves the current recipe, step and unsent message in place.
 - Step navigation by voice or buttons: start, next, back, repeat, "step 4"
 - Recipe questions answered from the notes (ingredients, substitutions, safety...)
+- Temporary working recipes stay with the current chat, including across reconnects.
+  Ask the AI to generate a dish or adapt ingredients, equipment or preferences;
+  substitutions update the checklist and remaining steps together. Later changes
+  build on the latest version, and completed steps are preserved. Saying that
+  you lack an ingredient and have a suitable substitute requests an adaptation,
+  including across messages: "I don't have garlic" then "I have garlic powder".
+  The coach updates quantities, preparation, when to add the replacement, and
+  affected timers. Unclear replacements prompt a question; hypothetical or
+  explicitly advice-only questions leave the recipe unchanged. Catalog recipes
+  and saved uploads keep their originals until you tap the **save icon beside
+  the camera** (labelled **Save changes**, shown when there are unsaved changes) or
+  ask the AI to save. Saving replaces the personal entry in **My recipes**, or
+  creates a personal copy for a catalog/generated dish; default YAML is unchanged.
+  A reminder appears when cooking finishes with unsaved changes and before
+  leaving the recipe. Save and continue, continue without saving, or cancel.
+  Browsers may also warn before closing or refreshing an unsaved recipe.
+  A new chat starts fresh; stopping or choosing another dish clears the working
+  copy after the reminder is resolved. Generating a different dish follows the
+  same reminder and saves as its own personal recipe. AI-generated versions are
+  untested drafts and require a configured chat model. Stale edits and saves are
+  rejected so they cannot overwrite a newer version or cooking progress.
 - 50 saved recipes with ingredient quantities and guided steps, including
   curries, pasta, breakfasts, stir-fries, soups and vegetarian dishes, plus a photo-inspired
   spicy shrimp glass-noodle dish. The photo does not reveal the exact seasoning;
@@ -52,6 +74,11 @@ Already working, tested locally:
   up to six matches for dish names, aliases and ingredients. These are curated familiar
   dishes, not a measured ranking of search popularity; new recipes are house
   drafts and have not been kitchen-tested.
+- Ingredient lists show ingredients before kitchen preparation. Cutting,
+  washing, peeling, draining, thawing, mixing and similar preparation appear in
+  guided steps before use, for both bundled and imported/generated recipes.
+  Measured yields are retained (for example, onion measured after chopping);
+  ready-made products and ingredients such as cooked rice stay as ingredients.
 - Built-in API web search integration for recipes and ingredients, with source
   links. **The HKUST GenAI API does not support online search**, so this only
   works with other providers that expose Responses + `web_search` (see below).
@@ -74,11 +101,24 @@ Already working, tested locally:
   did it go?" plus a note the coach remembers next time). The page scrolls
   like a normal web page, fits small phones and landscape, keeps the bottom
   bar above the iPhone keyboard, and is voice-first (keyboard on demand).
+- **Session scrolling**: sending a prompt or receiving an answer scrolls to the
+  bottom in both the cooking and conversation views, including streamed replies,
+  images loading later and keyboard/layout changes. **Start**, **Next** and
+  **Back** instead show the top of the cooking page with the progress bar and
+  large instructions, and keep it visible through the reply. Next/Back work
+  through buttons, spoken commands and swipes. Other prompts resume scrolling
+  to the bottom; explicitly opening the recipe starts at the top.
 - **Short answers**: replies are capped at about two short sentences (25
   words); the screen shows the lists, so the coach doesn't read them out.
 - **Timers**: several named timers at once, started from the step or by voice
-  ("set a timer for the noodles"), kept across reloads, with a full-screen,
-  repeating, vibrating alarm.
+  ("set a timer for the noodles"). All 47 timed steps in `chatbot/recipes.yaml`
+  have explicit process names, such as "Stir-frying noodles". Imported/generated
+  timed steps require names too; older saved recipes get a name from the step.
+  The same name appears on timer controls, countdowns, alarms and spoken alerts;
+  explicitly requested custom names are preserved. Timers keep their names and
+  remaining time across navigation, recipe revisions, pause/resume and reloads.
+  The full-screen alarm repeats and vibrates: **press anywhere on the alarm
+  screen to stop it**. Keyboard activation of the dismiss control also works.
 - **Settings menu (⋯)**: English, Cantonese or Mandarin (speech and replies),
   speech speed, text size, light/dark/high-contrast theme, hands-free, Coach
   watches. Camera and microphone get a one-line explanation before the browser
@@ -152,7 +192,10 @@ Leave `VLM_PROVIDER=none` to run without vision.
 Open **Recipe search** in the Python launcher, enter a recipe or ingredient
 question, then click **Search online**. In the browser coach, ask, for example, **"Search online for a tofu recipe"** or **"Look up cumin
 substitutes online"**. Unsupported cooking questions can also trigger search
-when local notes are missing. Step commands keep using the saved recipes.
+when local notes are missing and recipe-editing tools are unavailable. With a
+configured chat model, ordinary recipe creation and adaptation requests reach
+the chat tools so they can update the page; explicit requests to search online
+still use search. Step commands keep using the current working recipe.
 
 Search uses the provider's Responses API with its built-in `web_search` tool,
 reusing `OPENAI_API_KEY` and `AZURE_DEPLOYMENT_NAME`. It requires a completed
@@ -269,7 +312,14 @@ From the repository root using the prepared environment:
 .\.venv\Scripts\python.exe scripts/check_setup.py --live --image C:\path\to\food.jpg
 # Offline checks, with fake model responses; no API quota needed.
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
+# Browser behavior checks (requires Node.js).
+node tests/test_browser.cjs
 ```
+
+These offline checks cover working recipe revisions and saves, save/leave
+reminders, substitutions across messages, ingredient preparation, process names
+for every bundled timer, timer persistence and alarms, and session scrolling.
+They use simulated model responses and do not verify live model decisions.
 
 JPEG/PNG/WebP photos must be smaller than 1.5 MB. A 401 usually indicates a key
 problem; a 403 can indicate deployment access; for 404 check endpoint, deployment
@@ -283,6 +333,13 @@ and always requests vision analysis for that prompt. A configured vision model
 is required. If preparation or sending is blocked, the draft remains available.
 
 ## Good to know
+
+- After changing server code or model instructions, restart the browser service.
+  Reload the page after changing the browser UI. The recipe index rebuilds from
+  the YAML sources when they change; it is a generated file, not a place to edit
+  recipes. Every YAML step with `timer_seconds` must also have a non-empty
+  `timer_label` describing its process in at most 40 characters. The same limit
+  applies to imported and generated recipe timer names.
 
 - An `OPENAI_API_KEY` set in your computer's environment variables overrides
   `chatbot/.env`. If the server uses the wrong key, check there.

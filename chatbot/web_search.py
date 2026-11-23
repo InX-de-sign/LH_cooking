@@ -38,6 +38,10 @@ def should_search(query, context):
         return False
     if explicit_search(query):
         return True
+    # Recipe creation and substitutions must reach the chat tools, which update
+    # the working recipe. A search-only answer cannot update the app state.
+    if context.get("recipe_tools"):
+        return False
     if context.get("query_type") == "safety" or IDEA_REQUEST.search(query or ""):
         return False
     return bool(context.get("missing_notes") and re.search(

@@ -36,6 +36,9 @@ setup questionnaire: the model learns profile details from the conversation
 
 The active recipe is either a catalog recipe (recipe_id, from knowledge.db) or
 a recipe the cook uploaded (recipe_custom_id, stored here in custom_recipes).
+An optional visit-level working copy overrides either source and also holds
+new AI-generated recipes. It survives reconnects to this chat without becoming
+a saved upload; selecting or stopping a dish clears it.
 """
 
 import json
@@ -170,7 +173,7 @@ class Visit:
         "session_id", "user_id", "started_at", "last_active", "language", "turn_count",
         "cook_name", "skill_level", "dietary", "dish", "recipe_id", "recipe_name", "step",
         "onboarding_step", "onboarding_started_at", "onboarding_completed_at",
-        "recipe_custom_id", "servings", "suggestions",
+        "recipe_custom_id", "servings", "suggestions", "recipe_draft", "recipe_revision", "recipe_saved_snapshot",
     )
 
     def __init__(self, session_id, user_id, started_at, last_active, language, turn_count,
@@ -178,7 +181,7 @@ class Visit:
                  recipe_id=None, recipe_name=None, step=None,
                  onboarding_step="complete", onboarding_started_at=None,
                  onboarding_completed_at=None, recipe_custom_id=None, servings=None,
-                 suggestions=None):
+                 suggestions=None, recipe_draft=None, recipe_revision=0, recipe_saved_snapshot=None):
         self.session_id = session_id
         self.user_id = user_id
         self.started_at = started_at
@@ -199,6 +202,9 @@ class Visit:
         self.servings = servings     # None = as written; else scaled to this many
         # The dishes the coach last offered, in order, so "the first one" is clear.
         self.suggestions = json.loads(suggestions) if suggestions else []
+        self.recipe_draft = json.loads(recipe_draft) if recipe_draft else None
+        self.recipe_revision = recipe_revision
+        self.recipe_saved_snapshot = json.loads(recipe_saved_snapshot) if recipe_saved_snapshot else None
 
     @property
     def minutes_so_far(self) -> int:
@@ -206,10 +212,10 @@ class Visit:
 
     @property
     def has_recipe(self) -> bool:
-        return self.recipe_id is not None or self.recipe_custom_id is not None
+        return bool(self.recipe_draft) or self.recipe_id is not None or self.recipe_custom_id is not None
 
     def __repr__(self):
-        kind = "custom" if self.recipe_custom_id is not None else "catalog"
+        kind = "draft" if self.recipe_draft else "custom" if self.recipe_custom_id is not None else "catalog"
         return (f"Visit({self.session_id} user={self.user_id} turns={self.turn_count} "
                 f"recipe={self.recipe_name!r} ({kind}) step={self.step})")
 
@@ -282,6 +288,8 @@ class ConversationStore:
                 "onboarding_step": "TEXT NOT NULL DEFAULT 'name'",
                 "onboarding_started_at": "REAL", "onboarding_completed_at": "REAL",
                 "recipe_custom_id": "INTEGER", "servings": "INTEGER", "suggestions": "TEXT",
+                "recipe_draft": "TEXT", "recipe_revision": "INTEGER NOT NULL DEFAULT 0",
+                "recipe_saved_snapshot": "TEXT",
             }),
             ("turns", {"vision": "TEXT"}),
             ("profiles", {"notes": "TEXT", "language": "TEXT"}),
@@ -309,7 +317,7 @@ class ConversationStore:
             row["dietary"], row["dish"], row["recipe_id"], row["recipe_name"], row["step"],
             row["onboarding_step"], row["onboarding_started_at"],
             row["onboarding_completed_at"], row["recipe_custom_id"], row["servings"],
-            row["suggestions"],
+            row["suggestions"], row["recipe_draft"], row["recipe_revision"], row["recipe_saved_snapshot"],
         )
 
     def bind_chat(self, chat_id):
@@ -366,6 +374,36 @@ class ConversationStore:
             self._conn.commit()
 
     # -- the recipe being cooked -------------------------------------------
+    def _update_recipe_visit(self, visit: Visit, **columns):
+        """Change recipe identity/scale and invalidate outstanding draft edits."""
+        assignments = ", ".join(f"{column} = ?" for column in columns)
+        with self._lock:
+            self._conn.execute(
+                f"UPDATE visits SET {assignments}, recipe_revision = recipe_revision + 1 WHERE session_id = ?",
+                [*columns.values(), visit.session_id])
+            visit.recipe_revision = self._conn.execute(
+                "SELECT recipe_revision FROM visits WHERE session_id = ?", (visit.session_id,)).fetchone()[0]
+            self._conn.commit()
+
+    def set_recipe_draft(self, visit: Visit, recipe: Dict[str, Any], reason: str,
+                         expected_revision: int):
+        """Replace only this chat's working copy; reject stale edits atomically."""
+        draft = {"recipe": recipe, "reason": reason, "revision": expected_revision + 1}
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE visits SET recipe_draft = ?, recipe_name = ?, servings = NULL, "
+                "suggestions = NULL, recipe_revision = recipe_revision + 1 "
+                "WHERE session_id = ? AND user_id = ? AND recipe_revision = ? "
+                "AND step IS ? AND servings IS ?",
+                (json.dumps(draft), recipe["name"], visit.session_id, visit.user_id,
+                 expected_revision, visit.step, visit.servings))
+            self._conn.commit()
+        if not cur.rowcount:
+            raise ValueError("The recipe or cooking progress changed. Read the current recipe before trying again.")
+        visit.recipe_draft = draft
+        visit.recipe_name, visit.servings, visit.suggestions = recipe["name"], None, []
+        visit.recipe_revision = expected_revision + 1
+
     def set_recipe(self, visit: Visit, recipe_id: Optional[int], recipe_name: Optional[str],
                    custom_id: Optional[int] = None):
         """Start (or clear, with None) the recipe for this session, at no step.
@@ -375,11 +413,14 @@ class ConversationStore:
         """
         if recipe_id is not None and custom_id is not None:
             raise ValueError("A visit cooks either a catalog or an uploaded recipe, not both.")
-        self._update_visit(visit.session_id, recipe_id=recipe_id, recipe_custom_id=custom_id,
-                           recipe_name=recipe_name, step=None, servings=None, suggestions=None)
+        self._update_recipe_visit(visit, recipe_id=recipe_id, recipe_custom_id=custom_id,
+                                  recipe_name=recipe_name, step=None, servings=None,
+                                  suggestions=None, recipe_draft=None, recipe_saved_snapshot=None)
         visit.recipe_id, visit.recipe_custom_id = recipe_id, custom_id
         visit.recipe_name, visit.step, visit.servings = recipe_name, None, None
         visit.suggestions = []
+        visit.recipe_draft = None
+        visit.recipe_saved_snapshot = None
         if custom_id is not None:
             with self._lock:
                 self._conn.execute("UPDATE custom_recipes SET last_used = ? WHERE id = ?",
@@ -401,7 +442,7 @@ class ConversationStore:
         """Scale the active recipe to this many servings (None = as written)."""
         if servings is not None and (type(servings) is not int or not 1 <= servings <= MAX_SERVINGS):
             raise ValueError(f"Servings must be a whole number from 1 to {MAX_SERVINGS}.")
-        self._update_visit(visit.session_id, servings=servings)
+        self._update_recipe_visit(visit, servings=servings)
         visit.servings = servings
 
     def set_language(self, user_id: str, language: str) -> str:
@@ -421,6 +462,44 @@ class ConversationStore:
         return language
 
     # -- uploaded recipes ---------------------------------------------------
+    def save_working_recipe(self, visit: Visit, recipe: Dict[str, Any], expected_revision: int) -> int:
+        """Atomically upsert a personal copy and its saved baseline, never the catalog."""
+        if type(expected_revision) is not int:
+            raise ValueError("Provide the current recipe revision.")
+        body = json.dumps({k: v for k, v in recipe.items() if k != "name"})
+        with self._lock:
+            try:
+                self._conn.execute("BEGIN IMMEDIATE")
+                row = self._conn.execute("SELECT * FROM visits WHERE session_id = ? AND user_id = ?",
+                                         (visit.session_id, visit.user_id)).fetchone()
+                if (not row or row["recipe_revision"] != expected_revision or
+                        row["step"] != visit.step or row["servings"] != visit.servings):
+                    raise ValueError("The recipe changed. Review the latest version and save again.")
+                custom_id = row["recipe_custom_id"]
+                if custom_id is None:
+                    cur = self._conn.execute(
+                        "INSERT INTO custom_recipes (user_id, session_id, name, data, created_at, last_used) "
+                        "VALUES (?, ?, ?, ?, ?, ?)",
+                        (visit.user_id, visit.session_id, recipe["name"], body, time.time(), time.time()))
+                    custom_id = cur.lastrowid
+                else:
+                    cur = self._conn.execute(
+                        "UPDATE custom_recipes SET name = ?, data = ? WHERE id = ? AND user_id = ?",
+                        (recipe["name"], body, custom_id, visit.user_id))
+                    if not cur.rowcount:
+                        raise ValueError("That saved recipe does not belong to this cook or no longer exists.")
+                self._conn.execute(
+                    "UPDATE visits SET recipe_custom_id = ?, recipe_id = NULL, recipe_saved_snapshot = ? "
+                    "WHERE session_id = ? AND user_id = ?",
+                    (custom_id, json.dumps(recipe), visit.session_id, visit.user_id))
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
+        visit.recipe_custom_id, visit.recipe_id = custom_id, None
+        visit.recipe_saved_snapshot = recipe
+        return custom_id
+
     def save_custom_recipe(self, visit: Visit, recipe: Dict[str, Any]) -> int:
         """Store a parsed upload and return its id. ``recipe`` has a ``name``."""
         data = {key: value for key, value in recipe.items() if key != "name"}

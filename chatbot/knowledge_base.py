@@ -172,6 +172,7 @@ CREATE TABLE IF NOT EXISTS recipe_steps (
     text          TEXT NOT NULL,
     done_when     TEXT,
     timer_seconds INTEGER,
+    timer_label   TEXT,
     PRIMARY KEY (recipe_id, n)
 );
 
@@ -351,11 +352,11 @@ class _Builder:
             steps = [s for s in entry.get("steps") or [] if (s or {}).get("text")]
             for n, step in enumerate(steps):
                 self.conn.execute(
-                    "INSERT INTO recipe_steps (recipe_id, n, text, done_when, timer_seconds)"
-                    " VALUES (?, ?, ?, ?, ?)",
+                    "INSERT INTO recipe_steps (recipe_id, n, text, done_when, timer_seconds, timer_label)"
+                    " VALUES (?, ?, ?, ?, ?, ?)",
                     (recipe_id, n, " ".join(step["text"].split()),
                      " ".join((step.get("done_when") or "").split()) or None,
-                     step.get("timer_seconds")),
+                     step.get("timer_seconds"), step.get("timer_label")),
                 )
 
             # The two generated facts. Everything else is written by hand.
@@ -602,7 +603,7 @@ class KnowledgeBase:
     # -- recipes ----------------------------------------------------------
     def steps(self, recipe_id: int) -> List[Dict[str, Any]]:
         return [dict(row) for row in self._conn.execute(
-            "SELECT n, text, done_when, timer_seconds FROM recipe_steps"
+            "SELECT n, text, done_when, timer_seconds, timer_label FROM recipe_steps"
             " WHERE recipe_id = ? ORDER BY n", (recipe_id,))]
 
     def recipes(self) -> List[Dict[str, Any]]:

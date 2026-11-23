@@ -6,9 +6,9 @@ image attached when there is one) and returns the same shape as a catalog
 recipe, so the step card, navigation, timers and camera checks all work on it
 unchanged.
 
-The model is told to keep the recipe's own quantities and wording, split
-compound instructions into one action per step, and only add a "done when"
-cue or timer where the recipe implies one.
+The model keeps the recipe's quantities, moves ingredient preparation into
+ordered steps, splits compound instructions into one action per step, and
+only adds a "done when" cue or timer where the recipe implies one.
 """
 
 import asyncio
@@ -21,6 +21,7 @@ import re
 import socket
 from typing import Any, Dict, List, Optional
 from urllib.parse import urljoin, urlparse
+from timer_labels import timer_label_for_step
 
 logger = logging.getLogger(__name__)
 
@@ -38,18 +39,47 @@ Return JSON only:
 {"name": "<dish name>",
  "serves": <integer or null>,
  "time_minutes": <total minutes as an integer, or null>,
- "ingredients": ["<quantity + ingredient, exactly as written>", ...],
+ "ingredients": ["<original quantity + ingredient before kitchen preparation>", ...],
  "steps": [{"text": "<one clear action, keeping quantities, heat levels and times>",
             "done_when": "<visible cue that this step is finished, or null>",
-            "timer_seconds": <integer if the step has a fixed wait, else null>}, ...],
+            "timer_seconds": <integer if the step has a fixed wait, else null>,
+            "timer_label": "<short action and food name for the timed process, or null>"}, ...],
  "error": null}
 
 Rules:
 - Keep the recipe's own quantities, temperatures and times. Never invent them.
+- List ingredients before kitchen preparation. Move cutting, washing, peeling,
+  grating, draining, thawing, beating, melting, mixing and cooking (including
+  sauteing) from ingredient descriptions into explicit steps before first use.
+  Preserve all preparation details and optional status; do not duplicate an
+  action already present in the method. Keep cooked rice and purchased products
+  such as canned chopped tomatoes, minced meat, stock, dried pasta, roasted
+  peanuts and ready-made dough as ingredients; do not add making them from scratch.
+- Preserve measured yields: for "1 cup chopped onion", list "1 cup onion
+  (measure after chopping)" and add "Chop and measure 1 cup onion" before use.
+  Do not guess whole-ingredient equivalents. List components of a mixture
+  separately (including slurry water) and put mixing in the steps. Do not add
+  quantities or preparation times not supplied by the source.
 - One action per step. Split long paragraphs into separate steps, in order.
+- Every timed step needs a timer_label of at most 40 characters, such as
+  "Boiling spaghetti" or "Stir-frying noodles". Name the action being timed.
 - "done_when" only when the recipe states or clearly implies a cue
   (e.g. "until golden", "until the onions are soft").
 - If there is no recipe in the input, return {"error": "<short reason>"} instead."""
+
+
+def recipe_snapshot(data: Dict[str, Any]) -> Dict[str, Any]:
+    """The complete, comparable recipe body saved in My recipes."""
+    return {
+        "name": data["name"], "serves": data.get("serves"),
+        "time_minutes": data.get("time_minutes"),
+        "ingredients": list(data.get("ingredients") or []),
+        "steps": [{"text": step["text"], "done_when": step.get("done_when"),
+                   "timer_seconds": step.get("timer_seconds"),
+                   "timer_label": timer_label_for_step(step, data["name"])
+                                  if step.get("timer_seconds") else None}
+                  for step in data.get("steps") or []],
+    }
 
 
 class RecipeImportError(ValueError):
@@ -84,10 +114,16 @@ def validate_recipe(data: Any) -> Dict[str, Any]:
         text = _clean_text(raw.get("text"), 600)
         if not text:
             continue
+        seconds = _positive_int(raw.get("timer_seconds"), 6 * 60 * 60)
+        label = raw.get("timer_label")
+        if seconds and (not isinstance(label, str) or not label.strip() or len(label) > 40):
+            raise RecipeImportError("Every timed step needs a process name of at most 40 characters, such as Boiling spaghetti.")
         steps.append({
             "text": text,
             "done_when": _clean_text(raw.get("done_when"), 200) or None,
-            "timer_seconds": _positive_int(raw.get("timer_seconds"), 6 * 60 * 60),
+            "timer_seconds": seconds,
+            "timer_label": timer_label_for_step({**raw, "text": text}, name)
+                           if seconds else None,
         })
     ingredients = [_clean_text(i, 200) for i in (data.get("ingredients") or [])[:MAX_INGREDIENTS]]
     ingredients = [i for i in ingredients if i]
@@ -101,6 +137,38 @@ def validate_recipe(data: Any) -> Dict[str, Any]:
         "ingredients": ingredients,
         "steps": steps,
     }
+
+
+def validate_working_recipe(data: Any) -> Dict[str, Any]:
+    """Validate a full AI revision without silently truncating cooking instructions."""
+    if not isinstance(data, dict):
+        raise RecipeImportError("Provide a complete recipe object.")
+    name = data.get("name")
+    if not isinstance(name, str) or not name.strip() or len(name) > 120:
+        raise RecipeImportError("Provide a recipe name of at most 120 characters.")
+    for key, maximum in (("serves", 24), ("time_minutes", 7 * 24 * 60)):
+        value = data.get(key)
+        if value is not None and (type(value) is not int or not 1 <= value <= maximum):
+            raise RecipeImportError(f"{key} must be a positive whole number up to {maximum}, or null.")
+    ingredients, steps = data.get("ingredients"), data.get("steps")
+    if not isinstance(ingredients, list) or not 1 <= len(ingredients) <= MAX_INGREDIENTS:
+        raise RecipeImportError(f"Provide 1 to {MAX_INGREDIENTS} ingredients.")
+    if any(not isinstance(i, str) or not i.strip() or len(i) > 200 for i in ingredients):
+        raise RecipeImportError("Each ingredient must be non-empty text of at most 200 characters.")
+    if not isinstance(steps, list) or not 1 <= len(steps) <= MAX_STEPS:
+        raise RecipeImportError(f"Provide 1 to {MAX_STEPS} steps.")
+    for step in steps:
+        if not isinstance(step, dict) or not isinstance(step.get("text"), str) or not step["text"].strip() or len(step["text"]) > 600:
+            raise RecipeImportError("Each step needs non-empty text of at most 600 characters.")
+        cue, timer = step.get("done_when"), step.get("timer_seconds")
+        label = step.get("timer_label")
+        if label is not None and (not isinstance(label, str) or not label.strip() or len(label) > 40):
+            raise RecipeImportError("Timer labels must be non-empty text of at most 40 characters, or null.")
+        if cue is not None and (not isinstance(cue, str) or len(cue) > 200):
+            raise RecipeImportError("Completion cues must be text of at most 200 characters, or null.")
+        if timer is not None and (type(timer) is not int or not 1 <= timer <= 6 * 60 * 60):
+            raise RecipeImportError("Step timers must be 1 to 21600 seconds, or null.")
+    return validate_recipe(data)
 
 
 # -- recipe links ------------------------------------------------------------------

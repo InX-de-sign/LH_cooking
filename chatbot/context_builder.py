@@ -42,6 +42,7 @@ from knowledge_base import KnowledgeBase, Subject, classify_facet
 from conversation_state import ConversationStore, Episode, Visit
 from scaling import factor_for, scale_ingredient, scale_step
 from web_search import explicit_search
+from timer_labels import timer_label_for_step
 
 logger = logging.getLogger(__name__)
 
@@ -170,8 +171,8 @@ def detect_language(text: str) -> str:
 # --- The active recipe ----------------------------------------------------------
 @dataclass
 class ActiveRecipe:
-    """A catalog or uploaded recipe in one shape, for prompts and the phone."""
-    kind: str                       # "catalog" | "custom"
+    """A catalog, uploaded or working recipe, for prompts and the phone."""
+    kind: str                       # "catalog" | "custom" | "draft"
     id: int
     name: str
     steps: List[Dict[str, Any]]     # {"n", "text", "done_when", "timer_seconds"}
@@ -180,6 +181,16 @@ class ActiveRecipe:
     time_minutes: Optional[int] = None
     subject: Optional[Subject] = None   # knowledge-base subject, catalog only
     base_serves: Optional[int] = None   # as written, before scaling
+    revision: int = 0
+    draft_revision: int = 0
+    unsaved_changes: bool = False
+    saved_recipe_id: Optional[int] = None
+
+    def snapshot(self) -> Dict[str, Any]:
+        from recipe_import import recipe_snapshot
+        return recipe_snapshot({"name": self.name, "serves": self.serves,
+                                "time_minutes": self.time_minutes,
+                                "ingredients": self.ingredients, "steps": self.steps})
 
     @property
     def custom(self) -> bool:
@@ -192,6 +203,8 @@ class ActiveRecipe:
     def scaled_to(self, servings: Optional[int]) -> "ActiveRecipe":
         """This recipe with quantities rescaled for ``servings`` (no-op if None)."""
         self.base_serves = self.serves
+        self.steps = [{**s, "timer_label": timer_label_for_step(s, self.name) if s.get("timer_seconds") else None}
+                      for s in self.steps]
         factor = factor_for(self.serves, servings)
         if factor is None:
             return self
@@ -261,31 +274,51 @@ class ContextBuilder:
         self.store = store
 
     # -- recipe and step ---------------------------------------------------
+    def _save_state(self, visit: Visit, recipe: ActiveRecipe) -> ActiveRecipe:
+        from recipe_import import recipe_snapshot
+        recipe.scaled_to(visit.servings)
+        recipe.saved_recipe_id = visit.recipe_custom_id
+        baseline = visit.recipe_saved_snapshot
+        if baseline is None and visit.recipe_custom_id is not None:
+            source = self.store.custom_recipe(visit.recipe_custom_id, visit.user_id)
+            baseline = recipe_snapshot(source) if source else None
+        recipe.unsaved_changes = (bool(visit.recipe_draft) or recipe.custom) and recipe.snapshot() != baseline
+        return recipe
+
     def active_recipe(self, visit: Visit) -> Optional[ActiveRecipe]:
+        if visit.recipe_draft:
+            data = visit.recipe_draft["recipe"]
+            return self._save_state(visit, ActiveRecipe(
+                kind="draft", id=0, name=data["name"], revision=visit.recipe_revision,
+                draft_revision=visit.recipe_draft["revision"],
+                steps=[{"n": i + 1, **s} for i, s in enumerate(data["steps"])],
+                ingredients=list(data["ingredients"]), serves=data.get("serves"),
+                time_minutes=data.get("time_minutes")
+            ))
         if visit.recipe_custom_id is not None:
             data = self.store.custom_recipe(visit.recipe_custom_id, visit.user_id)
             if data is None:
                 return None
-            return ActiveRecipe(
-                kind="custom", id=data["id"], name=data["name"],
+            return self._save_state(visit, ActiveRecipe(
+                kind="custom", id=data["id"], name=data["name"], revision=visit.recipe_revision,
                 steps=[{"n": i + 1, "text": s.get("text", ""), "done_when": s.get("done_when"),
-                        "timer_seconds": s.get("timer_seconds")}
+                        "timer_seconds": s.get("timer_seconds"), "timer_label": s.get("timer_label")}
                        for i, s in enumerate(data.get("steps") or [])],
                 ingredients=list(data.get("ingredients") or []),
                 serves=data.get("serves"), time_minutes=data.get("time_minutes")
-            ).scaled_to(visit.servings)
+            ))
         if visit.recipe_id is None:
             return None
         subject = self.knowledge.subject_by_id(visit.recipe_id, source="recipe")
         if subject is None:
             return None
         details = self.knowledge.recipe_details(visit.recipe_id)
-        return ActiveRecipe(
-            kind="catalog", id=visit.recipe_id, name=subject.name,
+        return self._save_state(visit, ActiveRecipe(
+            kind="catalog", id=visit.recipe_id, name=subject.name, revision=visit.recipe_revision,
             steps=self.knowledge.steps(visit.recipe_id),
             ingredients=details.get("ingredients", []),
             serves=details.get("serves"), time_minutes=details.get("time_minutes"),
-            subject=subject).scaled_to(visit.servings)
+            subject=subject))
 
     def navigate(self, visit: Visit, nav: tuple, steps: List[Dict[str, Any]]) -> Optional[int]:
         """Move the step pointer. Returns the new 0-based step."""
@@ -368,6 +401,12 @@ class ContextBuilder:
                 facts = self.knowledge.retrieve(subject, facet, query=message,
                                                 limit=MAX_FACTS, recipe=kb_recipe)
 
+        if recipe and recipe.kind == "draft":
+            # Catalog ingredient/overview facts must not resurrect a substituted item,
+            # including in notes-only fallback replies.
+            catalog_names = {r["name"] for r in self.knowledge.recipes()}
+            facts = [f for f in facts if f["subject_name"] not in catalog_names]
+
         turn = TurnContext(
             visit=visit, episode=episode, subject=subject, subject_source=subject_source,
             facet=facet, language=language, facts=facts, message=message,
@@ -387,12 +426,16 @@ class ContextBuilder:
         lines += ["[NOW]", *self._now_lines(turn), ""]
 
         lines.append("[FACTS]")
+        if turn.recipe and turn.recipe.kind == "draft":
+            lines.append("The current [RECIPE] is the working version. Original catalog facts "
+                         "may describe replaced ingredients; never use them to undo this version.")
         if turn.social:
             lines.append("Small talk, not a question. Reply warmly in one short sentence.")
         elif turn.nav:
             lines.append("Step navigation: the current step in [RECIPE] is the content.")
         elif turn.facts:
-            lines.append("Use these for anything specific to this recipe. Do not invent "
+            lines.append("Use these for recipe questions. Except when explicitly creating or "
+                         "adapting a working recipe with update_recipe, do not invent "
                          "quantities, times or temperatures.")
             for fact in turn.facts:
                 lines.append(f"- ({fact['facet']}) {fact['subject_name']}: {fact['text']}")
@@ -400,8 +443,9 @@ class ContextBuilder:
             # The grounding guard. Left implicit, the model invents recipe
             # numbers with total confidence.
             lines.append("The recipe notes do not cover this question. You may give "
-                         "general cooking advice. Do NOT invent quantities, times or "
-                         "temperatures for this recipe. On food safety, if unsure, "
+                         "general cooking advice. Except when explicitly creating or adapting "
+                         "a working recipe with update_recipe, do NOT invent quantities, times "
+                         "or temperatures for this recipe. On food safety, if unsure, "
                          "recommend the cautious option.")
         lines.append("")
         lines += ["[QUESTION]", turn.message]
@@ -422,17 +466,24 @@ class ContextBuilder:
     @staticmethod
     def recipe_lines(visit: Visit, recipe: Optional[ActiveRecipe]) -> List[str]:
         if recipe is None:
-            lines = ["No recipe chosen yet."]
+            lines = ["No recipe chosen yet.", f"Recipe revision: {visit.recipe_revision}."]
             if visit.suggestions:
                 offered = ", ".join(f"{i}. {name}" for i, name in enumerate(visit.suggestions, 1))
                 lines.append(f"You just suggested, in this order: {offered}. \"The first one\" means "
                              f"{visit.suggestions[0]}, not the first recipe in [CATALOG].")
             return lines
         steps, total = recipe.steps, len(recipe.steps)
-        origin = "uploaded by the cook" if recipe.custom else "from the catalog"
+        origin = ("temporary working recipe for this chat" if recipe.kind == "draft" else
+                  "uploaded by the cook" if recipe.custom else "from the catalog")
         about = ", ".join(filter(None, [f"serves {recipe.serves}" if recipe.serves else "",
                                         f"about {recipe.time_minutes} min" if recipe.time_minutes else ""]))
         lines = [f"Cooking: {recipe.name} ({origin}{', ' + about if about else ''}, {total} steps)."]
+        lines.append(f"Recipe revision: {visit.recipe_revision}.")
+        lines.append(f"Unsaved recipe changes: {'yes' if recipe.unsaved_changes else 'no'}.")
+        if visit.recipe_draft:
+            lines.append(f"Latest change: {visit.recipe_draft['reason']}")
+        lines.append("For update_recipe, use the displayed serving quantities and keep steps "
+                     "before the current step unchanged, including their completion cues and timers.")
         if recipe.scaled:
             lines.append(f"Scaled from {recipe.base_serves} to {recipe.serves} servings: the "
                          f"quantities below are already scaled. Scale any other amount the "
@@ -444,6 +495,11 @@ class ContextBuilder:
         for i, step in enumerate(steps):
             marker = "  <- CURRENT STEP" if visit.step == i else ""
             lines.append(f"{i + 1}. {step['text']}{marker}")
+            if step.get("done_when"):
+                lines.append(f"   Done when: {step['done_when']}")
+            if step.get("timer_seconds"):
+                lines.append(f"   Timer seconds: {step['timer_seconds']}")
+                lines.append(f"   Timer label: {step['timer_label']}")
         if visit.step is None:
             lines.append("Status: not started yet (they are looking at the ingredients).")
         elif visit.step >= total:
@@ -526,12 +582,18 @@ def cooking_state(recipe: Optional[ActiveRecipe], step: Optional[int]) -> Dict[s
     return {
         "recipe": recipe.name if recipe else None,
         "custom": bool(recipe and recipe.custom),
+        "temporary": bool(recipe and recipe.kind == "draft"),
+        "recipe_revision": recipe.revision if recipe else 0,
+        "draft_revision": recipe.draft_revision if recipe else 0,
+        "unsaved_changes": bool(recipe and recipe.unsaved_changes),
+        "saved_recipe_id": recipe.saved_recipe_id if recipe else None,
         "step": step if recipe else None,
         "total_steps": len(steps),
         "steps": [s["text"] for s in steps],
         "step_text": current.get("text"),
         "done_when": current.get("done_when"),
         "timer_seconds": current.get("timer_seconds"),
+        "timer_label": timer_label_for_step(current, recipe.name) if current.get("timer_seconds") else None,
         "ingredients": recipe.ingredients if recipe else [],
         "serves": recipe.serves if recipe else None,
         "base_serves": recipe.base_serves if recipe else None,

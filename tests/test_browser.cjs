@@ -14,7 +14,7 @@ const HIDDEN_IDS = new Set([...html.matchAll(/<[a-z]+[^>]*\sid="([^"]+)"[^>]*>/g
 const EXPORTS = ['state', 'els', 'settings', 'handle', 'stopSpeaking', 'ask', 'attachPhoto', 'clearPhoto', 'openProfile',
   'saveProfile', 'loadHistory', 'loadHistoryDetail', 'connect', 'newChat', 'renderCooking', 'renderRich', 'sendWatch',
   'recentFrames', 'openRecipeDialog', 'submitRecipe', 'addTimer', 'tickTimers', 'stopAlarm', 'handleSwipe', 'setView',
-  'sendFeedback', 'openMyRecipes', 'changeServings', 'withPrimer', 'toggleListen'];
+  'sendFeedback', 'openMyRecipes', 'changeServings', 'withPrimer', 'toggleListen', 'decideRecipeSave'];
 
 function harness(options = {}) {
   const elements = new Map();
@@ -117,6 +117,7 @@ function harness(options = {}) {
     setTimeout(fn) { timers.push(fn); }, clearTimeout() {},
     setInterval() { return ++intervalId; }, clearInterval(id) { clearedIntervals.push(id); },
   };
+  context.removeEventListener = (name, callback) => { if (windowEvents[name] === callback) delete windowEvents[name]; };
   context.window = context;
   context.document.getElementById('jumpNewest').parentElement = element('footer');
   // Expose internals and skip opening a real socket in this harness.
@@ -133,7 +134,7 @@ function harness(options = {}) {
 // A connected socket that records what the page sends.
 function online(h) {
   const sent = [];
-  h.state.ws = { readyState: 1, send(body) { sent.push(JSON.parse(body)); } };
+  h.state.ws = { readyState: 1, send(body) { sent.push(JSON.parse(body)); }, close() { this.closed = true; } };
   return sent;
 }
 const click = (el, target = {}) => el.listeners.click({ target, preventDefault() {} });
@@ -145,6 +146,7 @@ async function main() {
 {
   const h = harness(); online(h); h.flushFrames();
   assert.equal(h.body.dataset.view, 'recipe');
+  assert.ok(h.resizeObservers[0].targets.includes(h.els.stage), 'observe the visible cooking page, not only the hidden log');
   h.ask('Show me the latest prompt');
   h.nextFrame();
   assert.equal(h.root.scrollTop, 1200, 'sending jumps in recipe view too');
@@ -161,6 +163,18 @@ async function main() {
   h.root.scrollTop = 0;
   h.handle({ type: 'response' }); h.flushFrames();
   assert.equal(h.root.scrollTop, 1800, 'completion without additional text still jumps');
+  h.root.scrollHeight = 3000;
+  h.resizeObservers[0].callback(); h.flushFrames();
+  assert.equal(h.root.scrollTop, 2200, 'late cooking card layout keeps the reply visible');
+  h.root.scrollHeight = 3400;
+  h.els.coach.listeners.load(); h.flushFrames();
+  assert.equal(h.root.scrollTop, 2600, 'camera frame loading in the coach line follows to bottom');
+  h.root.scrollTop = 0;
+  h.viewport.height = 500; h.viewport.listeners.resize(); h.flushFrames();
+  assert.equal(h.root.scrollTop, 2600, 'keyboard resize follows the cooking session reply');
+  h.setView('recipe'); h.flushFrames();
+  h.resizeObservers[0].callback(); h.flushFrames();
+  assert.equal(h.root.scrollTop, 0, 'explicitly opening the recipe clears cooking view follow');
   h.setView('chat'); h.nextFrame();
   h.root.scrollHeight = 3200; h.nextFrame();
   assert.equal(h.root.scrollTop, 2400, 'conversation opening settles at the final bottom');
@@ -243,6 +257,78 @@ async function main() {
   assert.equal(h.root.scrollTop, 0, 'hidden conversation layout does not move recipe view');
 }
 {
+  // Start cooking, Next and Back keep the progress and large step visible throughout replies.
+  const h = harness(); online(h); h.settings.autoVoice = false;
+  const cooking = { recipe: 'Eggs', step: 0, total_steps: 3,
+    steps: ['Beat.', 'Fry.', 'Serve.'], step_text: 'Beat.' };
+  await h.renderCooking(cooking); h.flushFrames();
+  for (const [index, trigger] of [() => click(h.els.startCooking), () => h.ask('Start cooking'),
+    () => click(h.els.navNext), () => h.ask('next.'),
+    () => h.ask('Next step please'), () => h.handleSwipe(-120, 0),
+    () => click(h.els.navBack), () => h.ask('back.'), () => h.ask('Go back a step'),
+    () => h.ask('Previous step please'), () => h.handleSwipe(120, 0)].entries()) {
+    h.state.awaitingReply = false;
+    if (index < 2) await h.renderCooking({ ...cooking, step: null });
+    h.setView('chat'); h.flushFrames();
+    trigger(); h.flushFrames();
+    assert.equal(h.body.dataset.view, 'recipe', 'step navigation shows the cooking instructions');
+    assert.equal(h.root.scrollTop, 0, 'step navigation immediately returns to the top');
+    h.handle({ type: 'thinking' }); h.flushFrames();
+    assert.equal(h.root.scrollTop, 0, 'thinking does not pull navigation away from the step');
+    h.handle({ type: 'delta', text: 'Fry the eggs.' }); h.flushFrames();
+    assert.equal(h.root.scrollTop, 0, 'streaming preserves the top');
+    const step = index < 2 ? 0 : index < 6 ? 1 : 0;
+    h.handle({ type: 'response', message: cooking.steps[step], cooking: { ...cooking, step, step_text: cooking.steps[step] } });
+    h.flushFrames();
+    assert.equal(h.els.stepText.textContent, cooking.steps[step]);
+    assert.equal(h.els.progress.children[step].className, 'now');
+    assert.equal(h.root.scrollTop, 0, 'final answer preserves the new step at top');
+    h.root.scrollHeight += 200;
+    h.resizeObservers[0].callback(); h.els.coach.listeners.load();
+    h.viewport.listeners.resize(); h.flushFrames();
+    assert.equal(h.root.scrollTop, 0, 'late layout and keyboard changes preserve navigation at top');
+  }
+  h.ask('What should I watch for next time?'); h.flushFrames();
+  assert.equal(h.root.scrollTop, h.root.scrollHeight - h.root.clientHeight, 'ordinary questions containing next still go to bottom');
+  h.handle({ type: 'response', message: 'Watch the heat.' }); h.flushFrames();
+  assert.equal(h.root.scrollTop, h.root.scrollHeight - h.root.clientHeight, 'ordinary replies resume bottom scrolling');
+  h.root.scrollTop = 0;
+  h.ask('Should I put it back in the oven?'); h.flushFrames();
+  assert.equal(h.root.scrollTop, h.root.scrollHeight - h.root.clientHeight, 'ordinary questions containing back still go to bottom');
+}
+{
+  // Process names follow timers through navigation, reload, pause and alarms.
+  const h = harness(); online(h); h.settings.autoVoice = false; h.els.voiceOut.checked = true;
+  const cooking = { recipe: 'Spaghetti', step: 0, total_steps: 2, steps: ['Boil spaghetti.', 'Toss.'],
+    step_text: 'Boil spaghetti.', timer_seconds: 600, timer_label: 'Boiling spaghetti' };
+  await h.renderCooking(cooking);
+  assert.equal(h.els.timerBtn.textContent, 'Start Boiling spaghetti timer (10:00)');
+  click(h.els.timerBtn);
+  const first = h.state.timers[0];
+  assert.equal(first.label, 'Boiling spaghetti');
+  assert.equal(h.els.timerBtn.disabled, true, 'existing step countdown prevents a duplicate');
+  assert.match(h.els.timerBtn.textContent, /Boiling spaghetti timer:/);
+  assert.match(h.els.timerStrip.children[0].children[0].textContent, /Boiling spaghetti/);
+  await h.renderCooking({ ...cooking, step: 1, step_text: 'Toss.', timer_seconds: 120, timer_label: 'Tossing spaghetti' });
+  click(h.els.timerBtn);
+  assert.deepEqual(plain(h.state.timers.map(t => t.label)), ['Boiling spaghetti', 'Tossing spaghetti']);
+  await h.renderCooking(cooking);
+  assert.equal(h.els.timerBtn.disabled, true, 'returning to a step finds its original timer');
+  assert.equal(first.label, 'Boiling spaghetti', 'navigation preserves the running timer name');
+  click(h.els.timerStrip, { dataset: { timer: first.id } });
+  assert.ok(first.pausedLeft > 0);
+  assert.equal(first.label, 'Boiling spaghetti');
+  click(h.els.timerStrip, { dataset: { timer: first.id } });
+  assert.equal(first.pausedLeft, null);
+  const reloaded = harness({ storage: { lh_cooking_timers: h.storage.get('lh_cooking_timers') } });
+  assert.deepEqual(plain(reloaded.state.timers.map(t => t.label)), ['Boiling spaghetti', 'Tossing spaghetti']);
+  first.endAt = Date.now() - 1000; h.tickTimers();
+  assert.equal(h.els.alarmLabel.textContent, 'Boiling spaghetti');
+  assert.ok(h.speech.said.includes("Time's up: Boiling spaghetti."));
+  click(h.els.alarm);
+  assert.deepEqual(plain(h.state.timers.map(t => t.label)), ['Tossing spaghetti']);
+}
+{
   // Prep: ingredients as a checklist, servings, and a clear Start.
   const h = harness();
   const sent = online(h);
@@ -286,7 +372,7 @@ async function main() {
   const h = harness({ storage: { lh_primer_mic: 'yes' } });
   const sent = online(h);
   h.state.audioUnlocked = true;
-  const cooking = { recipe: 'Chicken Curry', step: 1, total_steps: 4, serves: 2, base_serves: 2, timer_seconds: 90,
+  const cooking = { recipe: 'Chicken Curry', step: 1, total_steps: 4, serves: 2, base_serves: 2, timer_seconds: 90, timer_label: 'Browning chicken',
     steps: ['Heat oil.', 'Brown chicken.', 'Add sauce.', 'Simmer.'], step_text: 'Brown chicken.', done_when: 'golden all over',
     ingredients: ['300 grams chicken'] };
   await h.renderCooking({ ...cooking, step: null });
@@ -304,7 +390,7 @@ async function main() {
   assert.match(h.els.log.children.at(-1).textContent, /Cooking mode/);
   assert.ok(h.els.chips.children.some(b => b.dataset.say === 'Am I doing this right?'), 'camera check is one tap away');
   assert.equal(h.els.timerBtn.hidden, false);
-  assert.equal(h.els.timerBtn.textContent, 'Start 1:30 timer');
+  assert.equal(h.els.timerBtn.textContent, 'Start Browning chicken timer (1:30)');
   click(h.els.navNext);
   assert.equal(sent.at(-1).message, 'Next');
   h.handle({ type: 'response', message: 'Step 3.' });
@@ -532,6 +618,143 @@ async function main() {
 }
 
 {
+  // A same-name revision replaces ingredients, steps and timer binding together.
+  const h = harness();
+  const original = { recipe: 'Noodles', recipe_revision: 1, step: 0, total_steps: 1,
+    steps: ['Cook with soy sauce.'], step_text: 'Cook with soy sauce.',
+    ingredients: ['200 grams noodles', '2 tablespoons soy sauce'], timer_seconds: 60, timer_label: 'Stir-frying noodles' };
+  await h.renderCooking(original);
+  h.state.checked.add(1); h.state.cameraTicked.add(1);
+  click(h.els.timerBtn);
+  assert.equal(h.els.timerBtn.disabled, true);
+  const revised = { ...original, temporary: true, recipe_revision: 2,
+    ingredients: ['200 grams noodles', '2 tablespoons tamari'],
+    steps: ['Cook with tamari.'], step_text: 'Cook with tamari.', timer_seconds: 90, timer_label: 'Tossing noodles with tamari' };
+  await h.renderCooking(revised);
+  assert.equal(h.state.checked.size, 0, 'a replacement is not already gathered');
+  assert.equal(h.state.cameraTicked.size, 0, 'old camera sightings do not apply to replacements');
+  assert.equal(h.els.recipeName.textContent, 'Noodles (session recipe)');
+  assert.equal(h.els.stepText.textContent, 'Cook with tamari.');
+  assert.equal(h.els.timerBtn.textContent, 'Start Tossing noodles with tamari timer (1:30)');
+  assert.equal(h.els.timerBtn.disabled, false, 'the old timer does not stand in for the revised step');
+  assert.equal(h.state.timers.length, 1, 'existing timers remain available to the cook');
+  assert.equal(h.state.timers[0].label, 'Stir-frying noodles', 'revisions do not rename running timers');
+  h.state.checked.add(1);
+  await h.renderCooking(revised);
+  assert.equal(h.state.checked.size, 1, 'ordinary refreshes preserve the checklist');
+}
+
+{
+  // Viewing My recipes is harmless, and the direct save button uses the same API.
+  const h = harness(); const sent = online(h);
+  const dirty = { recipe: 'Personal soup', temporary: true, saved_recipe_id: 9, recipe_revision: 2,
+    draft_revision: 2, unsaved_changes: true, step: null, total_steps: 1, steps: ['Simmer.'],
+    ingredients: ['1 cup stock'] };
+  await h.renderCooking(dirty);
+  const viewing = h.openMyRecipes();
+  const list = sent.at(-1);
+  assert.equal(list.type, 'recipes_list');
+  h.handle({ type: 'settings_result', request_id: list.request_id, recipes: [] });
+  await viewing;
+  assert.equal(h.state.cooking.unsaved_changes, true);
+  assert.equal(h.els.recipeSaveDialog.open, false);
+  click(h.els.closeMyRecipes);
+  const saving = click(h.els.saveRecipeChanges);
+  const request = sent.at(-1);
+  assert.equal(request.type, 'recipe_save');
+  assert.equal(h.els.saveRecipeChanges.disabled, true);
+  h.handle({ type: 'settings_result', request_id: request.request_id, recipe_id: 9,
+    cooking: { ...dirty, unsaved_changes: false } });
+  await saving;
+  assert.equal(h.els.saveRecipeChanges.hidden, true);
+  assert.equal(h.state.cooking.recipe, dirty.recipe);
+  assert.equal(h.els.recipeName.textContent, 'Personal soup (your recipe)');
+  assert.equal(h.els.recipeSaveStatus.textContent, 'Saved to My recipes.');
+  assert.equal(h.windowEvents.beforeunload, undefined);
+}
+
+{
+  // Finish reminders appear once; unsaved new-chat changes require a decision.
+  const h = harness(); const sent = online(h);
+  const dirty = { recipe: 'Adapted noodles', temporary: true, recipe_revision: 3, draft_revision: 3,
+    step: null, total_steps: 2, steps: ['Boil.', 'Toss.'], ingredients: ['200 grams noodles'], unsaved_changes: true };
+  await h.renderCooking(dirty);
+  assert.equal(h.els.saveRecipeChanges.hidden, false);
+  assert.ok(h.windowEvents.beforeunload);
+  const event = { preventDefault() { this.prevented = true; } };
+  h.windowEvents.beforeunload(event);
+  assert.equal(event.prevented, true);
+  assert.equal(event.returnValue, '');
+  await h.renderCooking({ ...dirty, step: 2 });
+  assert.equal(h.els.recipeSaveDialog.open, true);
+  assert.equal(h.els.recipeSaveConfirm.textContent, 'Save recipe');
+  assert.equal(h.els.recipeSaveSkip.textContent, 'Not now');
+  await h.decideRecipeSave('discard');
+  await h.renderCooking({ ...dirty, step: 2 });
+  assert.equal(h.els.recipeSaveDialog.open, false, 'the same finished version is reminded only once');
+  h.newChat();
+  assert.equal(h.els.recipeSaveDialog.open, true);
+  assert.equal(h.els.recipeSaveConfirm.textContent, 'Save and continue');
+  assert.equal(h.els.recipeSaveCancel.hidden, false);
+  await h.decideRecipeSave('cancel');
+  assert.equal(h.state.cooking.recipe, dirty.recipe);
+  h.newChat();
+  const saving = h.decideRecipeSave('save');
+  const request = sent.at(-1);
+  assert.equal(request.type, 'recipe_save');
+  assert.equal(request.expected_revision, 3);
+  h.handle({ type: 'settings_result', request_id: request.request_id, recipe_id: 7,
+    cooking: { ...dirty, step: 2, unsaved_changes: false, saved_recipe_id: 7 } });
+  assert.equal(await saving, true);
+  assert.equal(h.state.cooking.recipe, null, 'new chat continues after a successful save');
+  assert.equal(h.windowEvents.beforeunload, undefined);
+}
+
+{
+  // Failed saves keep the pending server navigation and the recipe intact.
+  const h = harness(); const sent = online(h);
+  const dirty = { recipe: 'My adapted soup', recipe_revision: 4, draft_revision: 4, temporary: true,
+    saved_recipe_id: 8, unsaved_changes: true, step: null, total_steps: 1, steps: ['Simmer.'],
+    ingredients: ['1 cup stock'], pending_leave: { token: 'leave-4', revision: 4 } };
+  await h.renderCooking(dirty);
+  assert.match(h.els.recipeSaveText.textContent, /replaces this recipe in My recipes/);
+  const saving = h.decideRecipeSave('save');
+  const first = sent.at(-1);
+  assert.equal(first.type, 'recipe_leave');
+  assert.equal(first.choice, 'save');
+  assert.equal(first.token, 'leave-4');
+  h.handle({ type: 'settings_result', request_id: first.request_id, error: 'Could not save. Try again.' });
+  assert.equal(await saving, false);
+  assert.equal(h.els.recipeSaveDialog.open, true);
+  assert.match(h.els.recipeSaveError.textContent, /Try again/);
+  assert.equal(h.state.cooking.recipe, dirty.recipe);
+  assert.equal(h.state.savePrompt.pending.token, 'leave-4');
+  const discard = h.decideRecipeSave('discard');
+  const second = sent.at(-1);
+  assert.equal(second.choice, 'discard');
+  h.handle({ type: 'settings_result', request_id: second.request_id,
+    cooking: { recipe: null, total_steps: 0, step: null, unsaved_changes: false, pending_leave: null } });
+  assert.equal(await discard, true);
+  assert.equal(h.els.recipeSaveDialog.open, false);
+  assert.equal(h.windowEvents.beforeunload, undefined);
+}
+
+{
+  // A later changed version is reminded again; viewing My recipes does not discard it.
+  const h = harness(); online(h);
+  const dirty = { recipe: 'Adapted soup', recipe_revision: 5, draft_revision: 5, unsaved_changes: true,
+    step: 1, total_steps: 1, steps: ['Simmer.'], ingredients: ['1 cup stock'] };
+  await h.renderCooking(dirty);
+  await h.decideRecipeSave('discard');
+  await h.renderCooking({ ...dirty, recipe_revision: 6, draft_revision: 6 });
+  assert.equal(h.els.recipeSaveDialog.open, true, 'a different changed version gets a new reminder');
+  await h.decideRecipeSave('cancel');
+  h.newChat();
+  await h.decideRecipeSave('discard');
+  assert.equal(h.state.cooking.recipe, null, 'leaving without saving starts the requested new chat');
+}
+
+{
   // What the camera check saw shows quietly on the card; prep ticks ingredients it can see.
   const h = harness();
   const sent = online(h);
@@ -634,7 +857,7 @@ async function main() {
   assert.equal(h.els.alarm.hidden, false, 'a finished timer takes over the screen');
   assert.equal(h.els.alarmLabel.textContent, 'Noodles');
   assert.ok(h.speech.said.includes("Time's up: Noodles."));
-  click(h.els.alarmDismiss);
+  click(h.els.alarm);
   assert.equal(h.els.alarm.hidden, true);
   assert.deepEqual(plain(h.state.timers.map(t => t.label)), ['Eggs'], 'stopping the alarm clears that timer');
   click(h.els.timerStrip, { dataset: { timer: eggs.id, action: 'remove' } });
@@ -931,4 +1154,5 @@ console.log('PASS: 31 browser behavior scenarios: bottom scrolling after layout 
   + 'permission primers, offline banner, attachments, profile notes, history, new chats and reconnects.');
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+module.exports = main();
+module.exports.catch((error) => { console.error(error); process.exit(1); });

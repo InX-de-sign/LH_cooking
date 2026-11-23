@@ -173,6 +173,12 @@ class WebSearchTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(default_responses_base("https://example.openai.azure.com/"), "https://example.openai.azure.com/openai/v1")
         self.assertEqual(default_responses_base("https://example.com/custom/v1"), "https://example.com/custom/v1")
 
+    def test_recipe_changes_reach_stateful_tools_instead_of_automatic_search(self):
+        context = {"missing_notes": True, "recipe_tools": True}
+        self.assertFalse(should_search("Make me a recipe with tofu", context))
+        self.assertFalse(should_search("Substitute the chicken with tofu", context))
+        self.assertTrue(should_search("Search online for tofu recipes", context))
+
 
 if __name__ == "__main__":
     unittest.main()

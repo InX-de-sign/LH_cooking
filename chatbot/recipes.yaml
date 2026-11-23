@@ -12,10 +12,15 @@
 #   difficulty    easy | medium | hard
 #   techniques    glossary.yaml names this recipe relies on; a technique
 #                 question asked mid-recipe can fall back to these
-#   ingredients   one line each, quantity first, spoken as written
+#   ingredients   one line each, quantity first, before kitchen preparation
+#                 Put cutting, washing, peeling, grating, thawing, melting,
+#                 mixing and cooking in steps before the ingredient is used.
+#                 Keep purchased products (e.g. canned tomatoes) and cooked
+#                 rice; state when a quantity is measured after preparation.
+#                 Total times include prep but exclude conditional thawing.
 #   steps         in order. `text` is read aloud; `done_when` is what the
 #                 cook (and the camera) should see before moving on;
-#                 `timer_seconds` is optional
+#                 `timer_seconds` is optional; every timed step needs `timer_label`
 #   facts         anything else, each tagged with a facet:
 #                 overview substitution safety equipment storage tip
 #                 doneness timing heat
@@ -36,12 +41,14 @@
   techniques: ["stir-fry", "beat eggs", "season to taste"]
   ingredients:
     - "4 eggs"
-    - "3 medium ripe tomatoes, cut into wedges"
-    - "2 spring onions, sliced, white and green parts kept apart"
+    - "3 medium ripe tomatoes"
+    - "2 spring onions"
     - "2 tablespoons neutral oil"
     - "1 teaspoon sugar"
     - "half a teaspoon salt"
   steps:
+    - text: "Rinse the tomatoes and spring onions. Cut the tomatoes into wedges and slice the spring onions, keeping the white and green parts apart."
+      done_when: "The tomatoes are in wedges and the sliced spring onion whites and greens are in separate piles."
     - text: "Crack the eggs into a bowl with a pinch of the salt and beat them until no streaks of white remain."
       done_when: "The egg is an even yellow with a little froth on top."
     - text: "Heat 1 tablespoon of oil in a wok or frying pan over medium-high heat."
@@ -49,15 +56,19 @@
     - text: "Pour in the eggs, let them set for a few seconds, then push them gently into large soft curds. Take them out while they are still slightly wet."
       done_when: "Mostly set, soft and glossy, not dry or browned."
       timer_seconds: 45
+      timer_label: "Scrambling eggs"
     - text: "Add the remaining oil and the white parts of the spring onion, and stir for about 20 seconds."
       done_when: "The spring onion smells fragrant."
       timer_seconds: 20
+      timer_label: "Stir-frying spring onion"
     - text: "Add the tomato wedges and stir-fry until they soften and release their juice, about 2 to 3 minutes."
       done_when: "The tomatoes are soft at the edges and there is a little red sauce in the pan."
       timer_seconds: 150
+      timer_label: "Stir-frying tomatoes"
     - text: "Stir in the sugar and the rest of the salt, then return the eggs and fold together until fully set, starting with about 30 seconds. Check that the egg mixture reaches 71 degrees Celsius with a food thermometer; continue cooking if needed."
       done_when: "The eggs are fully set with no liquid egg remaining and the egg mixture measures at least 71 degrees Celsius."
       timer_seconds: 30
+      timer_label: "Cooking eggs with tomatoes"
     - text: "Taste, adjust the salt, scatter the green spring onion over the top and serve."
   facts:
     - facet: overview
@@ -87,12 +98,14 @@
   techniques: ["boil pasta", "al dente", "slice garlic", "emulsify", "season to taste"]
   ingredients:
     - "200 grams dried spaghetti"
-    - "4 cloves garlic, thinly sliced"
+    - "4 cloves garlic"
     - "5 tablespoons olive oil"
     - "half a teaspoon chilli flakes"
-    - "a small handful of parsley, chopped"
+    - "a small handful of parsley"
     - "salt for the pasta water"
   steps:
+    - text: "Peel and thinly slice the garlic. Rinse and chop the parsley."
+      done_when: "The garlic is in thin slices and the parsley is chopped."
     - text: "Bring a large pot of water to a rolling boil and salt it generously."
       done_when: "Big bubbles break the surface constantly, even when you stir."
     - text: "Add the spaghetti, stir for the first minute so it does not stick, and cook it for one minute less than the packet says."
@@ -100,12 +113,15 @@
     - text: "While the pasta cooks, put the olive oil and sliced garlic in a cold frying pan and warm them over low heat."
       done_when: "The garlic is sizzling gently and turning pale gold at the edges."
       timer_seconds: 240
+      timer_label: "Warming garlic in olive oil"
     - text: "Add the chilli flakes, stir for a few seconds, then take the pan off the heat."
       timer_seconds: 10
+      timer_label: "Stirring chilli flakes"
     - text: "Before draining, scoop out a mug of the pasta water. Then drain the spaghetti."
     - text: "Put the pan back on medium heat, add the spaghetti and about half the reserved water, and toss hard for one to two minutes."
       done_when: "The oil and water have come together into a glossy sauce that clings to the pasta, with no pool of oil left in the pan."
       timer_seconds: 90
+      timer_label: "Tossing spaghetti in sauce"
     - text: "Toss in the parsley, taste for salt, and serve straight away."
   facts:
     - facet: overview
@@ -144,11 +160,14 @@
     - text: "Lay the chicken in the pan, presentation side down, and leave it alone for 5 to 6 minutes."
       done_when: "The underside is deep golden brown and releases from the pan without sticking."
       timer_seconds: 330
+      timer_label: "Searing chicken breast"
     - text: "Flip the chicken, reduce the heat to medium, add the butter, and cook for about 5 to 6 more minutes, spooning butter over the top. Check the thickest part of each breast with a food thermometer and keep cooking until both reach 74 degrees Celsius."
       done_when: "The thickest part of each breast measures at least 74 degrees Celsius on a food thermometer. Colour, clear juices and elapsed time cannot confirm safety."
       timer_seconds: 330
+      timer_label: "Butter-basting chicken"
     - text: "Move the cooked chicken to a clean board, using clean utensils, and let it rest for 5 minutes before slicing."
       timer_seconds: 300
+      timer_label: "Resting chicken"
   facts:
     - facet: overview
       text: "Pan-seared chicken breast is browned in a hot pan on one side, flipped, and finished with butter for flavour."
@@ -176,23 +195,26 @@
   difficulty: easy
   techniques: ["season to taste"]
   ingredients:
-    - "4 large tomatoes, cubed"
-    - "1 large cucumber, chopped"
-    - "1 cup chopped red onion"
-    - "1 cup chopped green pepper"
-    - "one third cup chopped parsley"
+    - "4 large tomatoes"
+    - "1 large cucumber"
+    - "1 cup red onion (measure after chopping)"
+    - "1 cup green pepper (measure after chopping)"
+    - "one third cup parsley (measure after chopping)"
     - "one third cup apple cider vinegar"
     - "1 tablespoon olive oil"
-    - "2 cloves garlic, minced"
+    - "2 cloves garlic"
     - "half a teaspoon each of salt, black pepper and sugar"
   steps:
-    - text: "Wash hands and rinse produce under running water before chopping. Combine tomatoes, cucumber, onion, pepper and parsley in a large bowl."
+    - text: "Wash hands and rinse the produce under running water. Cube the tomatoes and chop the cucumber. Chop and measure 1 cup red onion, 1 cup green pepper and one third cup parsley. Peel and mince the garlic."
+      done_when: "The vegetables and parsley are cut and measured and the garlic is minced."
+    - text: "Combine tomatoes, cucumber, onion, pepper and parsley in a large bowl."
       done_when: "Vegetables are mixed."
     - text: "In a small bowl, stir vinegar, oil, garlic, salt, pepper and sugar into a dressing."
     - text: "Mix the dressing through the vegetables."
       done_when: "Vegetables are coated."
     - text: "Cover and refrigerate for at least one hour before serving."
       timer_seconds: 3600
+      timer_label: "Chilling tomato and cucumber salad"
   facts:
     - facet: overview
       text: "This large salad makes twelve side portions and needs an hour in the fridge."
@@ -217,6 +239,7 @@
     - text: "Reduce the heat and stir often until the oats soften and thicken, about 5 minutes. Follow the oat packet if its cooking time differs."
       done_when: "Oats are tender and the porridge is creamy."
       timer_seconds: 300
+      timer_label: "Simmering oats"
     - text: "Turn off the heat. Peel and mash the banana, stir it into the porridge, and let it cool enough to eat."
   facts:
     - facet: overview
@@ -229,33 +252,37 @@
 - name: "Spicy Shrimp Glass Noodles"
   aliases: ["shrimp glass noodles", "prawn glass noodles", "spicy shrimp vermicelli", "spicy prawn vermicelli", "fried rice vermicelli with shrimp", "chinese fried spicy rice noodle and shrimp"]
   serves: 2
-  time_minutes: 25
+  time_minutes: 35
   difficulty: medium
   techniques: ["stir-fry", "season to taste"]
   ingredients:
     - "120 grams dry glass noodles, also called mung bean vermicelli"
-    - "250 grams peeled, deveined raw shrimp"
+    - "250 grams raw shrimp (weight after peeling and deveining)"
     - "2 tablespoons neutral oil"
-    - "2 shallots, thinly sliced"
-    - "3 garlic cloves, sliced"
-    - "3 spring onions, cut into short lengths"
-    - "1 small red chilli, sliced, optional"
+    - "2 shallots"
+    - "3 garlic cloves"
+    - "3 spring onions"
+    - "1 small red chilli, optional"
     - "2 tablespoons light soy sauce"
     - "1 tablespoon oyster sauce"
     - "1 teaspoon sugar"
     - "one third cup water"
   steps:
+    - text: "Peel and thinly slice the shallots; peel and slice the garlic. Rinse the spring onions and optional chilli. Cut the spring onions into short lengths, keeping whites and greens apart, and slice the chilli if using. If the shrimp are frozen, thaw them in the refrigerator following the packet directions. Peel and devein the shrimp, then weigh out the listed amount. Wash hands and utensils after handling raw shrimp."
     - text: "Soak the glass noodles according to the packet until pliable, then drain. Mix soy sauce, oyster sauce, sugar and water in a cup."
       done_when: "The noodles bend without snapping and the sauce is mixed."
     - text: "Pat the shrimp dry. Heat 1 tablespoon oil in a wok over medium-high heat and cook the shrimp in one layer, turning once, until the flesh is pearly, opaque and firm. Remove to a clean plate."
       done_when: "The shrimp flesh is pearly or white and opaque throughout."
       timer_seconds: 240
+      timer_label: "Pan-frying shrimp"
     - text: "Add the remaining oil, shallots, garlic, spring onion whites and optional chilli. Stir-fry for about one minute without burning the garlic."
       done_when: "The shallots soften and the garlic smells fragrant."
       timer_seconds: 60
+      timer_label: "Stir-frying aromatics"
     - text: "Add noodles and sauce. Toss over medium heat for 2 to 4 minutes, separating the strands, until the noodles are tender and most sauce has been absorbed. Add a splash of water if the pan dries before they soften."
       done_when: "The noodles are tender, glossy and lightly browned by the sauce, with no puddle in the pan."
       timer_seconds: 180
+      timer_label: "Stir-frying glass noodles"
     - text: "Return the cooked shrimp, add spring onion greens, toss until hot and serve immediately."
       done_when: "The shrimp is hot and evenly mixed through the noodles."
   facts:
@@ -281,17 +308,19 @@
   ingredients:
     - "3 cups cooked rice, chilled promptly after cooking"
     - "2 eggs"
-    - "2 spring onions, sliced"
+    - "2 spring onions"
     - "2 tablespoons neutral oil"
     - "1 tablespoon light soy sauce"
     - "quarter teaspoon salt, or to taste"
   steps:
+    - text: "Rinse and slice the spring onions."
     - text: "Break up the cold rice with a fork and beat the eggs in a bowl."
     - text: "Heat 1 tablespoon oil in a wok over medium-high heat. Scramble the eggs until fully set, then remove them to a plate."
       done_when: "No liquid egg remains."
     - text: "Add the remaining oil and rice; stir-fry for 3 to 4 minutes, breaking up clumps until steaming hot."
       done_when: "The rice grains are separate and hot throughout."
       timer_seconds: 210
+      timer_label: "Stir-frying rice"
     - text: "Stir in soy sauce, salt, eggs and spring onions. Toss for one minute and serve hot."
       done_when: "The sauce coats the rice evenly."
   facts:
@@ -310,20 +339,23 @@
   techniques: ["boil pasta", "stir-fry", "season to taste"]
   ingredients:
     - "200 grams dried wheat noodles"
-    - "4 garlic cloves, minced"
+    - "4 garlic cloves"
     - "2 tablespoons light soy sauce"
     - "1 teaspoon sugar"
     - "1 tablespoon neutral oil"
-    - "2 spring onions, sliced"
+    - "2 spring onions"
   steps:
+    - text: "Peel and mince the garlic. Rinse and slice the spring onions."
     - text: "Cook noodles according to the packet, drain and reserve a few tablespoons of cooking water."
       done_when: "The noodles are tender but still springy."
     - text: "Mix soy sauce and sugar. Warm oil in a pan over medium heat and stir the garlic for 30 seconds."
       done_when: "The garlic is fragrant but not brown."
       timer_seconds: 30
+      timer_label: "Frying garlic"
     - text: "Add noodles and sauce. Toss for one minute, loosening with a little reserved water if needed."
       done_when: "Each strand is coated and no dry clumps remain."
       timer_seconds: 60
+      timer_label: "Tossing noodles in sauce"
     - text: "Scatter spring onions on top and serve."
   facts:
     - facet: substitution
@@ -338,16 +370,18 @@
   techniques: ["season to taste"]
   ingredients:
     - "2 boneless white fish fillets, about 150 grams each"
-    - "20 grams ginger, cut into thin strips"
-    - "3 spring onions, cut into thin strips"
+    - "20 grams ginger"
+    - "3 spring onions"
     - "2 tablespoons light soy sauce"
     - "1 tablespoon neutral oil"
     - "2 tablespoons water"
   steps:
+    - text: "Peel the ginger and cut it into thin strips. Rinse the spring onions and cut them into thin strips."
     - text: "Put the fillets on a heatproof plate that fits inside a steamer. Scatter half the ginger and spring onions over them."
     - text: "Steam over simmering water with the lid on for about 8 to 10 minutes, then check the thickest part with a food thermometer. Continue until it reaches 63 degrees Celsius."
       done_when: "The thickest part measures at least 63 degrees Celsius."
       timer_seconds: 540
+      timer_label: "Steaming fish"
     - text: "Carefully lift out the hot plate. Mix soy sauce and water and pour around the fish; add the remaining ginger and spring onions."
     - text: "Heat oil in a small pan until shimmering, then carefully spoon it over the aromatics and serve."
       done_when: "The aromatics sizzle and smell fragrant."
@@ -363,19 +397,21 @@
   difficulty: easy
   techniques: ["stir-fry", "season to taste"]
   ingredients:
-    - "400 grams baby bok choy, halved and rinsed"
-    - "3 garlic cloves, sliced"
+    - "400 grams baby bok choy"
+    - "3 garlic cloves"
     - "1 tablespoon neutral oil"
     - "2 tablespoons water"
     - "1 tablespoon light soy sauce"
   steps:
-    - text: "Rinse between the bok choy leaves and drain well."
+    - text: "Halve the bok choy, rinse between the leaves and drain well. Peel and slice the garlic."
     - text: "Heat oil over medium-high heat and stir the garlic for 20 seconds."
       done_when: "The garlic smells fragrant but stays pale."
       timer_seconds: 20
+      timer_label: "Frying garlic"
     - text: "Add bok choy and toss for two minutes. Add water, cover and steam for two more minutes."
       done_when: "The stems are crisp-tender and the leaves have wilted."
       timer_seconds: 240
+      timer_label: "Stir-frying and steaming bok choy"
     - text: "Uncover, add soy sauce and toss briefly before serving."
   facts:
     - facet: tip
@@ -393,24 +429,27 @@
     - "garlic-butter shrimp"
     - "simple garlic butter shrimp"
   serves: 2
-  time_minutes: 15
+  time_minutes: 25
   difficulty: easy
   techniques: ["sauté", "season to taste"]
   ingredients:
-    - "300 grams peeled, deveined raw shrimp"
-    - "3 garlic cloves, minced"
+    - "300 grams raw shrimp (weight after peeling and deveining)"
+    - "3 garlic cloves"
     - "1 tablespoon neutral oil"
     - "1 tablespoon butter"
     - "1 tablespoon lemon juice"
-    - "1 tablespoon chopped parsley"
+    - "1 tablespoon parsley (measure after chopping)"
   steps:
+    - text: "Peel and mince the garlic. Rinse and chop enough parsley to measure 1 tablespoon. If the shrimp are frozen, thaw them in the refrigerator following the packet directions. Peel and devein the shrimp, then weigh out the listed amount. Wash hands and utensils after handling raw shrimp."
     - text: "Pat shrimp dry and arrange them in a single layer in a pan with warm oil over medium-high heat."
     - text: "Cook, turning once, until the shrimp are pearly, opaque and firm; transfer to a clean plate."
       done_when: "The flesh is opaque throughout."
       timer_seconds: 240
+      timer_label: "Pan-frying shrimp"
     - text: "Lower heat to medium, melt butter and stir in garlic for 30 seconds."
       done_when: "The garlic smells fragrant without browning."
       timer_seconds: 30
+      timer_label: "Frying garlic in butter"
     - text: "Return shrimp, add lemon juice and parsley, toss briefly and serve."
   facts:
     - facet: safety
@@ -424,21 +463,24 @@
   difficulty: easy
   techniques: ["stir-fry", "season to taste"]
   ingredients:
-    - "300 grams firm tofu, drained and cubed"
-    - "200 grams mushrooms, sliced"
-    - "2 garlic cloves, minced"
+    - "300 grams firm tofu"
+    - "200 grams mushrooms"
+    - "2 garlic cloves"
     - "1 tablespoon neutral oil"
     - "2 tablespoons light soy sauce"
     - "1 teaspoon sugar"
     - "2 tablespoons water"
   steps:
+    - text: "Drain the tofu and cut it into cubes. Clean and slice the mushrooms. Peel and mince the garlic."
     - text: "Pat the tofu dry. Mix soy sauce, sugar and water in a small bowl."
     - text: "Heat oil over medium-high heat. Brown tofu on two sides, then move it to a plate."
       done_when: "The tofu has light golden edges."
       timer_seconds: 300
+      timer_label: "Browning tofu"
     - text: "Cook mushrooms until they release moisture and begin to brown; stir in garlic for 30 seconds."
       done_when: "Most mushroom liquid has evaporated."
       timer_seconds: 240
+      timer_label: "Browning mushrooms"
     - text: "Return tofu, add sauce, toss until hot and serve."
   facts:
     - facet: substitution
@@ -475,19 +517,22 @@
   difficulty: easy
   techniques: ["simmer", "season to taste"]
   ingredients:
-    - "three quarters cup uncooked white rice, rinsed"
+    - "three quarters cup uncooked white rice"
     - "6 cups water or low-salt chicken stock"
     - "250 grams boneless chicken thigh"
-    - "10 grams ginger, sliced"
-    - "2 spring onions, sliced"
+    - "10 grams ginger"
+    - "2 spring onions"
     - "salt to taste"
   steps:
+    - text: "Rinse the rice and drain. Peel and slice the ginger. Rinse and slice the spring onions."
     - text: "Bring rice, water or stock, and ginger to a boil. Lower to a gentle simmer and stir occasionally for about 35 minutes."
       done_when: "The grains break down and the liquid becomes creamy."
       timer_seconds: 2100
+      timer_label: "Simmering congee"
     - text: "Add chicken thigh and simmer until its thickest part reaches 74 degrees Celsius on a food thermometer."
       done_when: "The chicken measures at least 74 degrees Celsius."
       timer_seconds: 900
+      timer_label: "Simmering chicken in congee"
     - text: "Remove chicken to a clean board, shred it, return it to the pot and stir. Add hot water if the porridge is too thick."
     - text: "Season with salt and spring onions and serve hot."
   facts:
@@ -504,16 +549,19 @@
   ingredients:
     - "3 cups water"
     - "2 tablespoons white miso paste"
-    - "150 grams soft tofu, cubed"
+    - "150 grams soft tofu"
     - "1 tablespoon dried wakame"
-    - "1 spring onion, sliced"
+    - "1 spring onion"
   steps:
+    - text: "Drain the tofu and cut it gently into cubes. Rinse and slice the spring onion."
     - text: "Bring the water to a simmer and add dried wakame. Let it expand for about 5 minutes."
       done_when: "The seaweed is soft and unfurled."
       timer_seconds: 300
+      timer_label: "Rehydrating wakame"
     - text: "Add tofu and heat gently for two minutes without stirring hard."
       done_when: "The tofu is hot but holds its shape."
       timer_seconds: 120
+      timer_label: "Heating tofu in soup"
     - text: "Turn off the heat. Stir miso with a ladle of hot broth in a cup until smooth, then return it to the pot."
     - text: "Add spring onion, taste and serve."
   facts:
@@ -529,18 +577,20 @@
   techniques: ["boil pasta", "al dente", "season to taste"]
   ingredients:
     - "200 grams dried spaghetti"
-    - "250 grams broccoli florets"
-    - "3 garlic cloves, sliced"
+    - "250 grams broccoli (weight after cutting into florets)"
+    - "3 garlic cloves"
     - "2 tablespoons olive oil"
     - "quarter teaspoon chilli flakes, optional"
     - "salt to taste"
   steps:
+    - text: "Rinse the broccoli, cut it into florets and weigh out 250 grams of florets. Peel and slice the garlic."
     - text: "Boil salted water and cook spaghetti according to the packet. Add broccoli for the last three minutes."
       done_when: "The pasta is tender with a little bite and broccoli is bright green."
     - text: "Reserve half a cup of cooking water, then drain pasta and broccoli."
     - text: "Warm oil and garlic in a pan over low heat until the garlic turns pale gold; add optional chilli."
       done_when: "The garlic is fragrant, not dark brown."
       timer_seconds: 180
+      timer_label: "Warming garlic in olive oil"
     - text: "Toss in pasta and broccoli with a splash of cooking water. Season with salt and serve."
       done_when: "A light glossy coating clings to the pasta."
   facts:
@@ -555,21 +605,24 @@
   difficulty: medium
   techniques: ["sear", "season to taste"]
   ingredients:
-    - "300 grams boneless chicken thigh, cut into bite-size pieces"
+    - "300 grams boneless chicken thigh"
     - "2 cups cooked rice"
     - "2 tablespoons light soy sauce"
     - "1 tablespoon honey"
     - "1 tablespoon water"
     - "1 tablespoon neutral oil"
-    - "1 spring onion, sliced"
+    - "1 spring onion"
   steps:
+    - text: "Rinse and slice the spring onion. On a separate board, cut the chicken into bite-size pieces, then wash hands, the board and knife before handling other ingredients."
     - text: "Mix soy sauce, honey and water. Pat chicken dry and keep raw chicken and its utensils separate from cooked rice."
     - text: "Heat oil over medium-high heat and sear the chicken, turning until browned. Check the thickest pieces with a food thermometer and continue cooking until they reach 74 degrees Celsius."
       done_when: "Every thick piece tested reaches at least 74 degrees Celsius."
       timer_seconds: 480
+      timer_label: "Searing chicken"
     - text: "Pour sauce into the pan and simmer briefly until it coats the cooked chicken."
       done_when: "The sauce looks glossy and clings to the pieces."
       timer_seconds: 90
+      timer_label: "Glazing chicken"
     - text: "Serve over hot rice and scatter spring onion on top."
   facts:
     - facet: safety
@@ -583,22 +636,26 @@
   difficulty: easy
   techniques: ["simmer", "season to taste"]
   ingredients:
-    - "2 medium tomatoes, diced"
-    - "250 grams soft tofu, cubed"
+    - "2 medium tomatoes"
+    - "250 grams soft tofu"
     - "2 cups water or vegetable stock"
-    - "1 spring onion, sliced"
+    - "1 spring onion"
     - "1 teaspoon neutral oil"
     - "salt to taste"
   steps:
+    - text: "Rinse and dice the tomatoes. Drain the tofu and cut it into cubes. Rinse and slice the spring onion."
     - text: "Heat oil in a saucepan and cook tomatoes for three minutes until they soften."
       done_when: "The tomatoes release juice."
       timer_seconds: 180
+      timer_label: "Softening tomatoes"
     - text: "Add water or stock and simmer for five minutes."
       done_when: "The broth tastes lightly of tomato."
       timer_seconds: 300
+      timer_label: "Simmering tomato broth"
     - text: "Slide in tofu and simmer gently for three minutes without breaking the cubes."
       done_when: "The tofu is hot throughout."
       timer_seconds: 180
+      timer_label: "Simmering tofu in broth"
     - text: "Season with salt, add spring onion and serve."
   facts:
     - facet: substitution
@@ -612,22 +669,25 @@
   difficulty: easy
   techniques: ["stir-fry", "season to taste"]
   ingredients:
-    - "300 grams green beans, trimmed"
-    - "3 garlic cloves, minced"
+    - "300 grams green beans"
+    - "3 garlic cloves"
     - "1 tablespoon neutral oil"
     - "2 tablespoons water"
     - "1 tablespoon light soy sauce"
   steps:
-    - text: "Rinse and dry the trimmed beans."
+    - text: "Trim the beans, rinse them and dry well. Peel and mince the garlic."
     - text: "Heat oil over medium-high heat and stir-fry beans for three minutes."
       done_when: "The beans have a few browned spots."
       timer_seconds: 180
+      timer_label: "Stir-frying green beans"
     - text: "Add water, cover and cook for about five minutes until the beans are tender."
       done_when: "A bean bends easily and is hot through the centre."
       timer_seconds: 300
+      timer_label: "Steaming green beans"
     - text: "Uncover, add garlic and soy sauce, and toss for one minute."
       done_when: "The garlic is fragrant and the pan is nearly dry."
       timer_seconds: 60
+      timer_label: "Tossing beans with garlic and soy"
   facts:
     - facet: tip
       text: "A short covered cook softens the beans before the garlic goes in, so the garlic is less likely to burn."
@@ -641,19 +701,22 @@
   techniques: ["season to taste"]
   ingredients:
     - "1 cup all-purpose flour, plus extra for dusting"
-    - "half a cup hot water, added gradually"
-    - "3 spring onions, finely sliced"
+    - "half a cup water"
+    - "3 spring onions"
     - "quarter teaspoon salt"
     - "2 tablespoons neutral oil, divided"
   steps:
-    - text: "Mix flour and salt. Gradually stir in enough hot water to form a soft, non-sticky dough; knead briefly, cover and rest for 15 minutes."
+    - text: "Rinse and finely slice the spring onions."
+    - text: "Heat the water until hot. Mix flour and salt. Gradually stir in enough hot water to form a soft, non-sticky dough; knead briefly, cover and rest for 15 minutes."
       done_when: "The dough is smooth enough to roll without cracking."
       timer_seconds: 900
+      timer_label: "Resting pancake dough"
     - text: "Divide dough in two. Roll each piece thin, brush with a little oil, scatter with spring onions, roll up into a log, coil and roll flat again."
       done_when: "Two thin, round pancakes hold the spring onions inside."
     - text: "Heat remaining oil in a pan over medium heat. Cook pancakes for about three to four minutes per side, adjusting heat to avoid scorching."
       done_when: "Both sides are golden and the centre is cooked, with no raw dough."
       timer_seconds: 420
+      timer_label: "Pan-frying scallion pancakes"
     - text: "Drain briefly, cut into wedges and serve warm."
   facts:
     - facet: tip
@@ -670,20 +733,22 @@
     - "200 grams dried spaghetti"
     - "250 grams minced beef"
     - "1 tablespoon olive oil"
-    - "1 small onion, finely diced"
-    - "1 carrot, finely diced"
-    - "2 garlic cloves, minced"
+    - "1 small onion"
+    - "1 carrot"
+    - "2 garlic cloves"
     - "400 grams canned chopped tomatoes"
     - "1 tablespoon tomato paste"
     - "1 teaspoon dried oregano"
     - "salt and black pepper to taste"
   steps:
+    - text: "Peel and finely dice the onion and carrot. Peel and mince the garlic."
     - text: "Heat olive oil in a saucepan over medium heat. Add onion and carrot and soften for 7 minutes, then stir in garlic for 30 seconds."
       done_when: "The onion is soft and the carrot has started to soften."
     - text: "Add minced beef and break it into small pieces while cooking. Stir in tomato paste, canned tomatoes and oregano. Wash utensils that touched raw beef before reusing them."
     - text: "Simmer gently for 25 minutes, stirring occasionally. Check that the beef and sauce reach at least 71 degrees Celsius with a food thermometer, then season with salt and pepper."
       done_when: "The sauce is thick, the carrot is tender and the beef reaches 71 degrees Celsius."
       timer_seconds: 1500
+      timer_label: "Simmering bolognese sauce"
     - text: "Meanwhile boil spaghetti in salted water following the packet directions. Reserve a mug of cooking water, drain, then toss spaghetti with sauce, adding a little reserved water to loosen it if needed."
   facts:
     - facet: safety
@@ -698,14 +763,15 @@
   techniques: ["boil pasta", "sear"]
   ingredients:
     - "200 grams fettuccine"
-    - "250 grams boneless chicken breast, cut into strips"
+    - "250 grams boneless chicken breast"
     - "1 tablespoon olive oil"
     - "1 tablespoon butter"
-    - "2 garlic cloves, minced"
+    - "2 garlic cloves"
     - "150 millilitres cream"
-    - "40 grams grated Parmesan"
+    - "40 grams Parmesan"
     - "salt and black pepper to taste"
   steps:
+    - text: "Peel and mince the garlic and grate the Parmesan. On a separate board, cut the chicken into strips, then wash hands, the board and knife before handling other ingredients."
     - text: "Boil fettuccine in salted water according to the packet. Reserve a mug of cooking water before draining."
     - text: "Season chicken with salt and pepper. Heat olive oil in a frying pan over medium heat and cook the strips for about 6 to 8 minutes, turning, until the thickest pieces reach 74 degrees Celsius on a food thermometer. Use clean utensils for the cooked chicken."
       done_when: "The thickest chicken pieces reach at least 74 degrees Celsius."
@@ -727,10 +793,11 @@
     - "25 grams butter"
     - "25 grams plain flour"
     - "350 millilitres milk"
-    - "120 grams grated Cheddar"
+    - "120 grams Cheddar"
     - "half teaspoon mustard, optional"
     - "salt and black pepper to taste"
   steps:
+    - text: "Grate the Cheddar."
     - text: "Boil macaroni in salted water following the packet directions, then drain."
     - text: "Melt butter in a saucepan over medium-low heat. Stir in flour and cook, stirring, for 1 minute."
     - text: "Whisk in milk a little at a time until smooth. Bring to a gentle simmer and stir for about 5 minutes until thickened."
@@ -748,14 +815,15 @@
   difficulty: easy
   techniques: ["season to taste"]
   ingredients:
-    - "1 ready-to-bake pizza dough ball, about 250 grams, thawed if frozen"
+    - "1 ready-to-bake pizza dough ball, about 250 grams"
     - "100 grams tomato passata"
-    - "125 grams mozzarella, drained and torn"
+    - "125 grams mozzarella"
     - "1 teaspoon olive oil"
-    - "6 fresh basil leaves, washed"
+    - "6 fresh basil leaves"
     - "1 tablespoon plain flour for dusting"
     - "quarter teaspoon salt"
   steps:
+    - text: "If the dough is frozen, thaw it following the packet directions before starting. Drain and tear the mozzarella. Rinse the basil leaves and pat them dry."
     - text: "Preheat the oven to the dough packet's recommended temperature, usually around 220 degrees Celsius. Lightly oil a baking tray, keeping any remaining oil for the topping."
     - text: "Dust a clean worktop with flour and stretch or roll dough into a roughly 25 centimetre round. Transfer it to the prepared tray."
     - text: "Mix passata with salt, spread over the dough leaving a small rim, then add mozzarella and the remaining olive oil."
@@ -779,9 +847,11 @@
     - "quarter teaspoon salt"
     - "1 egg"
     - "180 millilitres milk"
-    - "1 tablespoon melted butter"
+    - "1 tablespoon butter"
     - "2 teaspoons neutral oil for the pan"
   steps:
+    - text: "Melt the butter gently in a small saucepan over low heat, then take it off the heat and let it cool slightly before mixing it with the egg."
+      done_when: "The butter is liquid and has cooled slightly."
     - text: "Mix flour, baking powder, sugar and salt in a bowl. In another bowl beat the egg with milk and melted butter."
     - text: "Pour the wet mixture into the dry ingredients and stir just until combined. A few small lumps are fine; do not taste raw batter."
     - text: "Warm a lightly oiled frying pan over medium-low heat. Pour in small ladlefuls, keeping them apart. Cook until bubbles appear and the edges start to set, about 2 minutes."
@@ -848,10 +918,11 @@
   ingredients:
     - "2 eggs"
     - "1 teaspoon butter"
-    - "25 grams grated Cheddar"
+    - "25 grams Cheddar"
     - "a pinch of salt"
     - "black pepper to taste"
   steps:
+    - text: "Grate the Cheddar."
     - text: "Beat the eggs with salt and pepper until evenly mixed. Melt butter in a small non-stick frying pan over medium-low heat."
     - text: "Pour in eggs, tilt to coat the base, then gently pull set edges towards the centre, tilting so uncooked egg fills the gaps."
     - text: "When the top is nearly set, scatter cheese over half. Fold the other half over the cheese with a spatula."
@@ -865,14 +936,15 @@
 - name: "Grilled Cheese Sandwich"
   aliases: ["grilled cheese", "cheese toastie", "toasted cheese sandwich"]
   serves: 1
-  time_minutes: 10
+  time_minutes: 15
   difficulty: easy
   techniques: []
   ingredients:
     - "2 slices bread"
-    - "50 grams Cheddar, sliced"
-    - "2 teaspoons softened butter"
+    - "50 grams Cheddar"
+    - "2 teaspoons butter"
   steps:
+    - text: "Slice the Cheddar. Let the butter soften until it spreads easily."
     - text: "Butter one side of each bread slice. Put cheese between the unbuttered sides so the butter faces outwards."
     - text: "Place the sandwich in a frying pan over medium-low heat and cook about 3 minutes until the underside is golden."
     - text: "Flip carefully with a spatula. Cook the second side for about 3 minutes, lowering the heat if the bread browns before the cheese melts."
@@ -892,14 +964,15 @@
   ingredients:
     - "4 eggs"
     - "1 tablespoon olive oil"
-    - "1 small onion, diced"
-    - "1 red pepper, diced"
-    - "2 garlic cloves, minced"
+    - "1 small onion"
+    - "1 red pepper"
+    - "2 garlic cloves"
     - "400 grams canned chopped tomatoes"
     - "1 teaspoon ground cumin"
     - "1 teaspoon paprika"
     - "quarter teaspoon salt, or to taste"
   steps:
+    - text: "Peel and dice the onion. Rinse, deseed and dice the red pepper. Peel and mince the garlic."
     - text: "Heat olive oil in a frying pan with a lid over medium heat. Soften onion and pepper for about 7 minutes."
     - text: "Stir in garlic, cumin and paprika for 30 seconds. Add tomatoes and salt and simmer for about 10 minutes until thickened."
     - text: "Make four wells in the sauce and crack an egg into each. Cover and cook gently for about 7 to 10 minutes, checking and continuing as needed."
@@ -917,20 +990,22 @@
   difficulty: easy
   techniques: ["simmer"]
   ingredients:
-    - "300 grams boneless chicken thighs, cut into bite-size pieces"
+    - "300 grams boneless chicken thighs"
     - "1 tablespoon neutral oil"
-    - "1 onion, diced"
-    - "2 garlic cloves, minced"
-    - "2 teaspoons grated ginger"
+    - "1 onion"
+    - "2 garlic cloves"
+    - "2 teaspoons ginger (measure after grating)"
     - "1 tablespoon curry powder"
     - "200 grams canned chopped tomatoes"
     - "200 millilitres coconut milk"
     - "half teaspoon salt, or to taste"
   steps:
+    - text: "Peel and dice the onion and mince the garlic. Peel and grate enough ginger to measure 2 teaspoons. On a separate board, cut the chicken into bite-size pieces, then wash hands, the board and knife."
     - text: "Heat oil in a saucepan over medium heat. Soften onion for 6 minutes, then stir in garlic and ginger for 30 seconds."
     - text: "Stir in curry powder for 20 seconds. Add chicken and turn to coat, then add tomatoes, coconut milk and salt. Wash hands and utensils that touched raw chicken."
     - text: "Bring to a gentle simmer, cover loosely and cook for about 18 to 20 minutes, stirring occasionally and adding a splash of water if too thick."
       timer_seconds: 1200
+      timer_label: "Simmering chicken curry"
     - text: "Measure the thickest chicken pieces with a food thermometer. Continue cooking until they reach 74 degrees Celsius, then taste the sauce and adjust salt."
       done_when: "The chicken reaches at least 74 degrees Celsius in its thickest pieces."
   facts:
@@ -945,17 +1020,18 @@
   difficulty: easy
   techniques: ["simmer"]
   ingredients:
-    - "300 grams boneless chicken thighs, diced"
+    - "300 grams boneless chicken thighs"
     - "2 tablespoons plain yogurt"
     - "2 teaspoons garam masala, divided"
     - "2 tablespoons butter, divided"
-    - "2 garlic cloves, minced"
-    - "2 teaspoons grated ginger"
+    - "2 garlic cloves"
+    - "2 teaspoons ginger (measure after grating)"
     - "250 millilitres tomato passata"
     - "100 millilitres cream"
     - "half teaspoon paprika"
     - "half teaspoon salt, or to taste"
   steps:
+    - text: "Peel and mince the garlic and grate enough peeled ginger to measure 2 teaspoons. On a separate board, dice the chicken, then wash hands, the board and knife."
     - text: "Mix chicken with yogurt and 1 teaspoon garam masala in a bowl. Wash hands and utensils that touched raw chicken."
     - text: "Melt 1 tablespoon butter in a saucepan over medium-low heat. Stir garlic and ginger for 30 seconds, then add remaining garam masala, paprika, passata and salt. Simmer for 5 minutes."
     - text: "Add the chicken and all its yogurt mixture to the sauce. Simmer gently for about 20 minutes, stirring regularly; add a splash of water if the sauce sticks."
@@ -973,11 +1049,11 @@
   difficulty: easy
   techniques: ["simmer"]
   ingredients:
-    - "400 gram can chickpeas, drained and rinsed"
+    - "400 gram can chickpeas"
     - "1 tablespoon neutral oil"
-    - "1 onion, diced"
-    - "2 garlic cloves, minced"
-    - "2 teaspoons grated ginger"
+    - "1 onion"
+    - "2 garlic cloves"
+    - "2 teaspoons ginger (measure after grating)"
     - "1 teaspoon ground cumin"
     - "1 teaspoon garam masala"
     - "400 grams canned chopped tomatoes"
@@ -985,11 +1061,13 @@
     - "1 teaspoon lemon juice"
     - "half teaspoon salt, or to taste"
   steps:
+    - text: "Drain and rinse the canned chickpeas. Peel and dice the onion and mince the garlic. Peel and grate enough ginger to measure 2 teaspoons."
     - text: "Heat oil in a saucepan over medium heat. Soften onion for 6 minutes, then add garlic and ginger and stir for 30 seconds."
     - text: "Stir in cumin and garam masala, then add tomatoes, chickpeas, water and salt."
     - text: "Simmer gently for 15 minutes, stirring occasionally. Mash a spoonful of chickpeas against the side of the pan to thicken the sauce."
       done_when: "The chickpeas are hot throughout and the sauce coats them."
       timer_seconds: 900
+      timer_label: "Simmering chickpea curry"
     - text: "Stir in lemon juice, taste and adjust salt. Serve hot."
   facts:
     - facet: tip
@@ -1003,18 +1081,19 @@
   difficulty: easy
   techniques: ["simmer"]
   ingredients:
-    - "150 grams dried split red lentils, rinsed"
+    - "150 grams dried split red lentils"
     - "600 millilitres water"
     - "1 tablespoon neutral oil"
-    - "1 small onion, diced"
-    - "2 garlic cloves, minced"
-    - "1 teaspoon grated ginger"
+    - "1 small onion"
+    - "2 garlic cloves"
+    - "1 teaspoon ginger (measure after grating)"
     - "1 teaspoon ground cumin"
     - "half teaspoon ground turmeric"
-    - "1 tomato, diced"
+    - "1 tomato"
     - "half teaspoon salt, or to taste"
     - "1 teaspoon lemon juice"
   steps:
+    - text: "Rinse the lentils and drain. Peel and dice the onion and mince the garlic. Peel and grate enough ginger to measure 1 teaspoon. Rinse and dice the tomato."
     - text: "Put rinsed lentils, water and turmeric in a saucepan. Bring to a boil, then reduce to a gentle simmer and cook for about 20 minutes, stirring and adding water if needed."
       done_when: "The lentils are completely soft and starting to break down."
     - text: "Meanwhile heat oil in a frying pan over medium heat. Soften onion for 6 minutes, then stir in garlic, ginger and cumin for 30 seconds."
@@ -1032,18 +1111,21 @@
   difficulty: easy
   techniques: ["stir-fry", "simmer"]
   ingredients:
-    - "400 grams firm tofu, cubed"
+    - "400 grams firm tofu"
     - "150 grams minced pork"
     - "1 tablespoon neutral oil"
-    - "2 garlic cloves, minced"
-    - "1 teaspoon grated ginger"
+    - "2 garlic cloves"
+    - "1 teaspoon ginger (measure after grating)"
     - "1 tablespoon doubanjiang chilli bean paste"
     - "200 millilitres water"
     - "1 teaspoon light soy sauce"
-    - "1 teaspoon cornflour mixed with 1 tablespoon cold water"
-    - "1 spring onion, sliced"
+    - "1 teaspoon cornflour"
+    - "1 spring onion"
     - "quarter teaspoon ground Sichuan pepper, optional"
+    - "1 tablespoon cold water for the cornflour slurry"
   steps:
+    - text: "Drain the tofu and cut it into cubes. Peel and mince the garlic and grate enough peeled ginger to measure 1 teaspoon. Rinse and slice the spring onion. Mix the cornflour with 1 tablespoon cold water in a separate cup to make a slurry."
+      done_when: "The tofu is cubed, the aromatics are prepared and the cornflour slurry is mixed."
     - text: "Heat oil in a wok over medium-high heat. Add pork and break it into small pieces while cooking. Wash utensils that touched raw pork before reusing them."
     - text: "Stir in garlic, ginger and doubanjiang for 30 seconds. Add water and soy sauce and bring to a simmer."
     - text: "Gently add tofu and simmer for 6 to 8 minutes. Check the pork and sauce reach at least 71 degrees Celsius with a food thermometer."
@@ -1057,24 +1139,25 @@
 - name: "Kung Pao Chicken"
   aliases: ["kung po chicken", "gong bao chicken", "gongbao chicken"]
   serves: 2
-  time_minutes: 25
+  time_minutes: 30
   difficulty: medium
   techniques: ["stir-fry"]
   ingredients:
-    - "300 grams boneless chicken thighs, diced"
+    - "300 grams boneless chicken thighs"
     - "2 tablespoons light soy sauce, divided"
     - "2 teaspoons cornflour, divided"
     - "1 tablespoon rice vinegar"
     - "2 teaspoons sugar"
     - "3 tablespoons water"
     - "1 tablespoon neutral oil"
-    - "1 red pepper, diced"
-    - "2 garlic cloves, minced"
-    - "1 teaspoon grated ginger"
+    - "1 red pepper"
+    - "2 garlic cloves"
+    - "1 teaspoon ginger (measure after grating)"
     - "2 dried chillies, optional"
     - "30 grams roasted unsalted peanuts"
-    - "2 spring onions, sliced"
+    - "2 spring onions"
   steps:
+    - text: "Rinse, deseed and dice the red pepper. Peel and mince the garlic and grate enough peeled ginger to measure 1 teaspoon. Rinse and slice the spring onions. On a separate board, dice the chicken, then wash hands, the board and knife."
     - text: "Mix chicken with 1 tablespoon soy sauce and 1 teaspoon cornflour. In a separate bowl mix remaining soy sauce and cornflour with vinegar, sugar and water. Wash hands after handling chicken."
     - text: "Heat oil in a wok over medium-high heat. Stir-fry chicken for about 5 minutes, then add pepper, garlic, ginger and optional chillies and cook for another 3 minutes."
     - text: "Stir the sauce again and pour it into the wok. Toss and simmer until thickened, continuing until the thickest chicken pieces reach 74 degrees Celsius on a food thermometer."
@@ -1091,22 +1174,24 @@
 - name: "Sweet and Sour Chicken"
   aliases: ["sweet sour chicken", "sweet and sour chicken stir fry"]
   serves: 2
-  time_minutes: 30
+  time_minutes: 35
   difficulty: easy
   techniques: ["stir-fry"]
   ingredients:
-    - "300 grams boneless chicken breast, diced"
+    - "300 grams boneless chicken breast"
     - "1 tablespoon neutral oil"
-    - "1 red pepper, diced"
-    - "1 small onion, diced"
-    - "150 grams pineapple chunks, drained"
+    - "1 red pepper"
+    - "1 small onion"
+    - "150 grams pineapple chunks"
     - "3 tablespoons ketchup"
     - "2 tablespoons rice vinegar"
     - "1 tablespoon light soy sauce"
     - "1 tablespoon sugar"
     - "80 millilitres water"
-    - "2 teaspoons cornflour mixed with 1 tablespoon cold water"
+    - "2 teaspoons cornflour"
+    - "1 tablespoon cold water for the cornflour slurry"
   steps:
+    - text: "Rinse, deseed and dice the red pepper. Peel and dice the onion. Drain the pineapple chunks. On a separate board, dice the chicken, then wash hands, the board and knife. Mix the cornflour with 1 tablespoon cold water in a separate cup to make a slurry."
     - text: "Mix ketchup, vinegar, soy sauce, sugar and 80 millilitres water in a bowl. Keep this sauce separate from the raw chicken."
     - text: "Heat oil in a frying pan over medium-high heat. Cook chicken for about 6 minutes, turning regularly, then add onion and pepper and stir-fry for 3 minutes."
     - text: "Add pineapple and sauce and simmer for 3 minutes. Measure the thickest chicken pieces with a food thermometer and continue cooking until they reach 74 degrees Celsius."
@@ -1120,25 +1205,28 @@
 - name: "Beef and Broccoli"
   aliases: ["beef broccoli", "broccoli beef", "beef and broccoli stir fry"]
   serves: 2
-  time_minutes: 25
+  time_minutes: 30
   difficulty: easy
   techniques: ["stir-fry", "blanch", "rest meat"]
   ingredients:
-    - "250 grams beef steak, thinly sliced"
-    - "300 grams broccoli, cut into small florets"
+    - "250 grams beef steak"
+    - "300 grams broccoli"
     - "1 tablespoon neutral oil"
-    - "2 garlic cloves, minced"
-    - "1 teaspoon grated ginger"
+    - "2 garlic cloves"
+    - "1 teaspoon ginger (measure after grating)"
     - "1 tablespoon light soy sauce"
     - "1 tablespoon oyster sauce"
     - "1 teaspoon sugar"
     - "80 millilitres water"
-    - "1 teaspoon cornflour mixed with 1 tablespoon cold water"
+    - "1 teaspoon cornflour"
+    - "1 tablespoon cold water for the cornflour slurry"
   steps:
+    - text: "Rinse the broccoli and cut it into small florets. Peel and mince the garlic and grate enough peeled ginger to measure 1 teaspoon. On a separate board, thinly slice the beef, then wash hands, the board and knife. Mix the cornflour with 1 tablespoon cold water in a separate cup to make a slurry."
     - text: "Mix soy sauce, oyster sauce, sugar and 80 millilitres water. Blanch broccoli in boiling water for 2 minutes and drain well."
     - text: "Heat oil in a wok over medium-high heat. Add beef in a single layer and sear, turning, until the thickest slices reach at least 63 degrees Celsius on a food thermometer."
     - text: "Transfer beef to a clean plate and rest for at least 3 minutes. Meanwhile stir garlic and ginger in the wok for 30 seconds, add broccoli and sauce and bring to a simmer."
       timer_seconds: 180
+      timer_label: "Resting beef"
     - text: "Stir and add the cornflour slurry. Simmer until thickened, then return the rested beef using clean utensils and toss briefly to coat."
       done_when: "The broccoli is tender-crisp and the beef has reached 63 degrees Celsius followed by a 3-minute rest."
   facts:
@@ -1149,21 +1237,22 @@
 - name: "Chicken Chow Mein"
   aliases: ["chow mein", "chicken chowmein", "chicken fried noodles"]
   serves: 2
-  time_minutes: 25
+  time_minutes: 30
   difficulty: easy
   techniques: ["stir-fry"]
   ingredients:
     - "200 grams dried egg noodles"
-    - "250 grams boneless chicken breast, thinly sliced"
+    - "250 grams boneless chicken breast"
     - "2 tablespoons neutral oil, divided"
-    - "2 garlic cloves, minced"
-    - "1 carrot, cut into thin matchsticks"
-    - "150 grams cabbage, shredded"
-    - "2 spring onions, sliced"
+    - "2 garlic cloves"
+    - "1 carrot"
+    - "150 grams cabbage"
+    - "2 spring onions"
     - "1 tablespoon light soy sauce"
     - "1 tablespoon oyster sauce"
     - "2 tablespoons water"
   steps:
+    - text: "Peel the garlic and mince it. Rinse and peel the carrot and cut it into thin matchsticks. Rinse and shred the cabbage. Rinse and slice the spring onions. On a separate board, thinly slice the chicken, then wash hands, the board and knife."
     - text: "Cook egg noodles following the packet instructions, drain and loosen with a fork. Mix soy sauce, oyster sauce and water in a small bowl."
     - text: "Heat 1 tablespoon oil in a wok over medium-high heat. Stir-fry chicken until the thickest pieces reach at least 74 degrees Celsius on a food thermometer. Transfer to a clean plate with clean utensils."
     - text: "Add remaining oil, garlic, carrot and cabbage. Stir-fry for 3 to 4 minutes until the vegetables soften slightly."
@@ -1177,24 +1266,25 @@
 - name: "Shrimp Pad Thai"
   aliases: ["pad thai", "prawn pad thai", "shrimp fried rice noodles"]
   serves: 2
-  time_minutes: 30
+  time_minutes: 40
   difficulty: medium
   techniques: ["stir-fry", "beat eggs"]
   ingredients:
     - "150 grams dried flat rice noodles"
-    - "200 grams raw peeled shrimp, thawed if frozen"
-    - "2 eggs, beaten"
+    - "200 grams raw shrimp (weight after peeling)"
+    - "2 eggs"
     - "2 tablespoons neutral oil, divided"
-    - "2 garlic cloves, minced"
+    - "2 garlic cloves"
     - "2 tablespoons tamarind puree, ready-to-use, not concentrate"
     - "1 tablespoon fish sauce"
     - "1 tablespoon sugar"
     - "3 tablespoons water"
-    - "100 grams bean sprouts, rinsed"
-    - "2 spring onions, sliced"
-    - "20 grams roasted peanuts, crushed"
-    - "half a lime, cut into wedges"
+    - "100 grams bean sprouts"
+    - "2 spring onions"
+    - "20 grams roasted peanuts"
+    - "half a lime"
   steps:
+    - text: "Rinse the bean sprouts and spring onions and slice the spring onions. Peel and mince the garlic. Crush the roasted peanuts and cut the half lime into wedges. Crack the eggs into a bowl and beat until evenly mixed. If the shrimp are frozen, thaw them in the refrigerator following the packet directions. Peel the shrimp, then weigh out the listed amount. Wash hands and utensils after handling raw shrimp."
     - text: "Prepare rice noodles following their packet instructions and drain. Mix tamarind puree, fish sauce, sugar and water in a bowl."
     - text: "Heat 1 tablespoon oil in a wok over medium-high heat. Cook shrimp, turning, until pearly and opaque throughout. Transfer to a clean plate."
     - text: "Add remaining oil and garlic, stir briefly, then add beaten eggs and scramble until fully set, reaching 71 degrees Celsius on a food thermometer."
@@ -1212,15 +1302,16 @@
   difficulty: easy
   techniques: ["sear", "simmer"]
   ingredients:
-    - "2 salmon fillets, about 150 grams each, thawed if frozen"
+    - "2 salmon fillets, about 150 grams each"
     - "1 teaspoon neutral oil"
     - "2 tablespoons light soy sauce"
     - "1 tablespoon honey"
     - "1 tablespoon rice vinegar"
     - "2 tablespoons water"
-    - "1 teaspoon grated ginger"
-    - "1 spring onion, sliced"
+    - "1 teaspoon ginger (measure after grating)"
+    - "1 spring onion"
   steps:
+    - text: "Peel and grate enough ginger to measure 1 teaspoon. Rinse and slice the spring onion. If the salmon is frozen, thaw it in the refrigerator following the packet directions."
     - text: "Pat salmon dry. In a bowl mix soy sauce, honey, rice vinegar, water and ginger. Keep this sauce separate from the raw fish."
     - text: "Heat oil in a non-stick frying pan over medium heat. Add salmon skin-side down if it has skin and cook about 4 minutes, then turn carefully."
     - text: "Pour the sauce around the salmon and simmer gently for about 3 to 5 minutes, spooning sauce over the fish. Continue until the thickest part of each fillet reaches at least 63 degrees Celsius on a food thermometer."
@@ -1238,13 +1329,13 @@
   difficulty: medium
   techniques: ["stir-fry"]
   ingredients:
-    - "150 grams uncooked rice, rinsed"
+    - "150 grams uncooked rice"
     - "water for rice, following packet directions"
     - "2 eggs"
-    - "1 carrot, cut into thin matchsticks"
-    - "1 courgette, cut into thin matchsticks"
-    - "100 grams spinach, washed"
-    - "100 grams mushrooms, sliced"
+    - "1 carrot"
+    - "1 courgette"
+    - "100 grams spinach"
+    - "100 grams mushrooms"
     - "1 tablespoon neutral oil, divided"
     - "2 teaspoons sesame oil"
     - "1 tablespoon light soy sauce"
@@ -1253,6 +1344,7 @@
     - "1 teaspoon sugar"
     - "2 teaspoons water for sauce"
   steps:
+    - text: "Rinse the rice and drain. Rinse and peel the carrot and cut it into thin matchsticks. Rinse the courgette and cut it into thin matchsticks. Wash and drain the spinach. Clean and slice the mushrooms."
     - text: "Cook rice with water following the packet or rice cooker directions. Mix gochujang, vinegar, sugar and 2 teaspoons water separately for the serving sauce."
     - text: "Use a little neutral oil to stir-fry carrot and courgette over medium heat until tender-crisp, then move to a plate. Cook mushrooms in a little more oil until softened, then wilt spinach in the same pan. Season the cooked vegetables with soy sauce and sesame oil."
     - text: "Use the remaining neutral oil to fry eggs over medium-low heat until both whites and yolks are firm."
@@ -1272,18 +1364,19 @@
   ingredients:
     - "250 grams minced beef"
     - "1 teaspoon neutral oil"
-    - "1 small onion, diced"
+    - "1 small onion"
     - "1 teaspoon ground cumin"
     - "1 teaspoon paprika"
     - "1 tablespoon tomato paste"
     - "80 millilitres water"
     - "quarter teaspoon salt"
     - "6 small tortillas"
-    - "1 tomato, diced"
-    - "50 grams lettuce, washed and shredded"
-    - "40 grams grated Cheddar"
+    - "1 tomato"
+    - "50 grams lettuce"
+    - "40 grams Cheddar"
   steps:
-    - text: "Wash and prepare tomato and lettuce before handling raw beef, and keep them on a clean plate. Heat oil in a frying pan over medium heat and soften onion for 5 minutes."
+    - text: "Wash the tomato and lettuce. Dice the tomato and shred the lettuce, then keep them on a clean plate. Peel and dice the onion and grate the Cheddar before handling raw beef."
+    - text: "Heat oil in a frying pan over medium heat and soften onion for 5 minutes."
     - text: "Add beef and break it into small pieces as it cooks. Stir in cumin, paprika, tomato paste, salt and water. Wash utensils that touched raw beef."
     - text: "Simmer for 5 to 8 minutes until the filling is thick and the beef reaches at least 71 degrees Celsius on a food thermometer. Warm tortillas following the packet directions."
       done_when: "The beef filling reaches at least 71 degrees Celsius."
@@ -1300,17 +1393,18 @@
   difficulty: easy
   techniques: ["simmer"]
   ingredients:
-    - "100 grams uncooked rice, rinsed"
+    - "100 grams uncooked rice"
     - "water for rice, following packet directions"
-    - "400 gram can black beans, drained and rinsed"
+    - "400 gram can black beans"
     - "1 teaspoon neutral oil"
-    - "1 small onion, diced"
+    - "1 small onion"
     - "1 teaspoon ground cumin"
     - "100 grams tomato salsa"
     - "2 large flour tortillas"
-    - "50 grams grated Cheddar"
-    - "1 avocado, peeled, stone removed and flesh sliced"
+    - "50 grams Cheddar"
+    - "1 avocado"
   steps:
+    - text: "Rinse the rice and drain. Drain and rinse the canned black beans. Peel and dice the onion and grate the Cheddar. Peel the avocado, remove its stone and slice the flesh."
     - text: "Cook rice with water following the packet directions. Meanwhile heat oil in a frying pan over medium heat and soften onion for 5 minutes."
     - text: "Add cumin, beans and salsa and simmer for 5 minutes until hot throughout. Mash some beans with a spoon if the filling seems loose."
     - text: "Warm tortillas following the packet directions. Divide rice, hot bean filling, cheese and avocado between the centres, leaving space at the edges."
@@ -1329,20 +1423,22 @@
   ingredients:
     - "250 grams minced beef"
     - "1 tablespoon neutral oil"
-    - "1 onion, diced"
-    - "2 garlic cloves, minced"
+    - "1 onion"
+    - "2 garlic cloves"
     - "1 teaspoon ground cumin"
     - "1 teaspoon paprika"
     - "half teaspoon chilli powder, or to taste"
     - "400 grams canned chopped tomatoes"
-    - "400 gram can kidney beans, drained and rinsed"
+    - "400 gram can kidney beans"
     - "100 millilitres water"
     - "half teaspoon salt, or to taste"
   steps:
+    - text: "Peel and dice the onion and mince the garlic. Drain and rinse the canned kidney beans."
     - text: "Heat oil in a saucepan over medium heat and soften onion for 6 minutes. Stir in garlic for 30 seconds."
     - text: "Add beef and break it into small pieces while cooking. Stir in cumin, paprika and chilli powder, then tomatoes, canned kidney beans, water and salt. Wash utensils that touched raw beef."
     - text: "Simmer gently for about 25 minutes, stirring occasionally and adding a splash of water if it sticks. Check the beef and sauce reach at least 71 degrees Celsius on a food thermometer."
       timer_seconds: 1500
+      timer_label: "Simmering chilli con carne"
       done_when: "The sauce is thickened and the beef reaches at least 71 degrees Celsius."
     - text: "Taste the sauce, adjust salt and chilli if desired, and serve hot. This recipe uses canned beans; do not replace them with uncooked dried kidney beans."
   facts:
@@ -1359,13 +1455,14 @@
   ingredients:
     - "250 grams boneless chicken breast"
     - "1 litre chicken stock"
-    - "1 carrot, thinly sliced"
-    - "1 celery stalk, thinly sliced"
-    - "1 small onion, diced"
+    - "1 carrot"
+    - "1 celery stalk"
+    - "1 small onion"
     - "100 grams dried egg noodles"
     - "black pepper to taste"
     - "salt to taste, if needed"
   steps:
+    - text: "Rinse and peel the carrot and thinly slice it. Rinse and thinly slice the celery. Peel and dice the onion."
     - text: "Put stock, carrot, celery and onion in a saucepan and bring to a simmer. Add chicken, then wash hands and utensils that touched the raw meat."
     - text: "Simmer gently for about 15 to 20 minutes until vegetables are tender and the thickest part of the chicken reaches at least 74 degrees Celsius on a food thermometer."
       done_when: "The chicken reaches at least 74 degrees Celsius in its thickest part."
@@ -1384,17 +1481,19 @@
   techniques: ["simmer"]
   ingredients:
     - "1 tablespoon olive oil"
-    - "1 small onion, finely diced"
-    - "2 garlic cloves, minced"
+    - "1 small onion"
+    - "2 garlic cloves"
     - "400 grams canned chopped tomatoes"
     - "300 millilitres vegetable stock"
     - "half teaspoon sugar, optional"
     - "2 tablespoons cream, optional"
     - "salt and black pepper to taste"
   steps:
+    - text: "Peel and finely dice the onion. Peel and mince the garlic."
     - text: "Heat olive oil in a saucepan over medium heat. Soften onion for about 6 minutes, then stir garlic for 30 seconds."
     - text: "Add tomatoes, stock and optional sugar. Bring to a gentle simmer and cook for 15 minutes, stirring occasionally."
       timer_seconds: 900
+      timer_label: "Simmering tomato soup"
     - text: "For a chunky soup, crush softened tomato pieces with a spoon. For a smoother soup, take the pan off the heat and use a hand blender with its head fully submerged to avoid hot splashes."
     - text: "Stir in optional cream, return to low heat until hot throughout, then taste and adjust salt and pepper."
       done_when: "The onion is tender and the soup is hot throughout."
@@ -1410,18 +1509,20 @@
   difficulty: easy
   techniques: ["stir-fry"]
   ingredients:
-    - "150 grams broccoli, cut into small florets"
-    - "1 carrot, thinly sliced"
-    - "1 red pepper, sliced"
-    - "100 grams mushrooms, sliced"
-    - "2 garlic cloves, minced"
+    - "150 grams broccoli"
+    - "1 carrot"
+    - "1 red pepper"
+    - "100 grams mushrooms"
+    - "2 garlic cloves"
     - "1 tablespoon neutral oil"
     - "1 tablespoon light soy sauce"
     - "1 teaspoon sesame oil"
     - "3 tablespoons water"
-    - "1 teaspoon cornflour mixed with 1 tablespoon cold water"
+    - "1 teaspoon cornflour"
+    - "1 tablespoon cold water for the cornflour slurry"
   steps:
-    - text: "Wash and cut vegetables before heating the pan. Mix soy sauce, sesame oil and 3 tablespoons water in a small bowl."
+    - text: "Rinse the broccoli and cut it into small florets. Rinse and peel the carrot and thinly slice it. Rinse, deseed and slice the red pepper. Clean and slice the mushrooms. Peel and mince the garlic. Mix the cornflour with 1 tablespoon cold water in a separate cup to make a slurry."
+    - text: "Mix soy sauce, sesame oil and 3 tablespoons water in a small bowl."
     - text: "Heat neutral oil in a wok over medium-high heat. Stir-fry broccoli and carrot for 2 minutes. Add mushrooms and pepper and stir-fry for 3 more minutes."
     - text: "Stir in garlic for 30 seconds, then add the sauce. Cover for 1 to 2 minutes until the broccoli is tender-crisp."
     - text: "Stir and add the cornflour slurry, then toss over heat until the sauce thickens and coats the vegetables. Serve hot."
@@ -1438,13 +1539,13 @@
   difficulty: easy
   techniques: ["simmer"]
   ingredients:
-    - "500 grams potatoes, peeled and cut into 4 centimetre chunks"
+    - "500 grams potatoes"
     - "2 tablespoons neutral oil"
     - "half teaspoon salt, divided"
     - "black pepper to taste"
     - "half teaspoon dried rosemary, optional"
   steps:
-    - text: "Preheat the oven to 220 degrees Celsius. Put potatoes in a saucepan, cover with cold water, add half the salt and bring to a boil."
+    - text: "Preheat the oven to 220 degrees Celsius. Wash and peel the potatoes and cut them into 4 centimetre chunks. Put potatoes in a saucepan, cover with cold water, add half the salt and bring to a boil."
     - text: "Simmer for about 8 minutes until the edges soften but the centres remain firm. Drain carefully, let steam escape, then shake gently in the dry pan to roughen the edges."
     - text: "Spread potatoes on a baking tray, coat with oil, remaining salt, pepper and optional rosemary. Roast for about 40 minutes, turning halfway with a spatula."
     - text: "Check that the outsides are crisp and golden and a fork slides easily through the centres. Continue roasting if needed, then remove the tray with oven gloves and serve."
@@ -1461,21 +1562,22 @@
   difficulty: easy
   techniques: ["beat eggs"]
   ingredients:
-    - "3 medium ripe bananas, peeled"
+    - "3 medium ripe bananas"
     - "200 grams plain flour"
     - "1 teaspoon baking powder"
     - "half teaspoon bicarbonate of soda"
     - "quarter teaspoon salt"
     - "100 grams sugar"
     - "2 eggs"
-    - "80 grams butter, melted and cooled slightly"
+    - "80 grams butter"
     - "1 teaspoon vanilla extract"
     - "1 teaspoon neutral oil for greasing the tin"
   steps:
-    - text: "Preheat the oven to 175 degrees Celsius. Lightly oil a 900 gram loaf tin and line it with baking paper. Mash bananas in a mixing bowl."
+    - text: "Preheat the oven to 175 degrees Celsius. Lightly oil a 900 gram loaf tin and line it with baking paper. Peel the bananas and mash them in a mixing bowl. Melt the butter gently in a small saucepan over low heat, then take it off the heat and let it cool slightly."
     - text: "Beat eggs, sugar, melted butter and vanilla into the mashed bananas. In another bowl mix flour, baking powder, bicarbonate of soda and salt. Do not taste raw batter."
     - text: "Fold dry ingredients into the banana mixture just until no dry flour remains, then scrape into the prepared tin. Bake for about 50 to 60 minutes."
       timer_seconds: 3000
+      timer_label: "Baking banana bread"
     - text: "Check a skewer inserted into the centre comes out without wet batter; bake longer if needed, loosely covering with foil if the top browns too quickly. Use oven gloves to remove the tin, cool for 10 minutes, then lift onto a rack and cool for at least 15 minutes before slicing."
       done_when: "The loaf centre is set and a skewer comes out with no wet batter."
   facts:

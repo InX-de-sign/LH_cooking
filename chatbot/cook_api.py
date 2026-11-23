@@ -206,7 +206,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str = Query(None),
                 await websocket.send_json({"type": "pong"})
                 continue
             if kind in ("profile_get", "profile_save", "history_list", "history_detail",
-                        "recipes_list", "recipe_favorite", "set_servings"):
+                        "recipes_list", "recipe_favorite", "set_servings", "recipe_save", "recipe_leave"):
                 request_id = data.get("request_id")
                 if not isinstance(request_id, str) or not 1 <= len(request_id) <= 64:
                     continue
@@ -227,6 +227,11 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str = Query(None),
                         favorite = await asyncio.to_thread(assistant.store.set_custom_favorite, session_id,
                                                            data.get("recipe_id"), bool(data.get("favorite")))
                         result = {"recipe_id": data.get("recipe_id"), "favorite": favorite}
+                    elif kind == "recipe_save":
+                        result = await asyncio.to_thread(assistant.save_recipe, session_id, data.get("expected_revision"))
+                    elif kind == "recipe_leave":
+                        result = await assistant.resolve_recipe_leave(
+                            session_id, data.get("token"), data.get("expected_revision"), data.get("choice"))
                     else:
                         result = {"cooking": await asyncio.to_thread(assistant.set_servings, session_id,
                                                                      data.get("servings"))}

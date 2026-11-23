@@ -35,13 +35,16 @@ import json
 import logging
 import os
 import re
+import sqlite3
 import time
+import uuid
 from typing import Any, Dict, List, Optional
 
 from context_builder import ContextBuilder, cooking_state, detect_navigation
+from timer_labels import clean_timer_label, timer_label_for_step
 from conversation_state import MAX_SERVINGS, RATINGS, ConversationStore
 from knowledge_base import KnowledgeBase, classify_facet
-from recipe_import import RecipeImportError, fetch_recipe_page, parse_recipe
+from recipe_import import RecipeImportError, fetch_recipe_page, parse_recipe, validate_working_recipe
 from vision import VisionProvider, VisionRequest, load_vision_provider, to_data_url, wants_vision
 
 logging.basicConfig(level=logging.INFO)
@@ -100,6 +103,9 @@ class CookingAssistant:
         self.vision = vision or load_vision_provider()
         # Latest camera check per chat (memory only; photos are never kept).
         self.observations: Dict[str, Dict[str, Any]] = {}
+        # Pending leave actions are scoped to a chat. Uploaded photos stay in
+        # memory only while a save reminder is awaiting a decision.
+        self.pending_leaves: Dict[str, Dict[str, Any]] = {}
 
         from enhanced_rag_openai import EnhancedRAGWithOpenAI
         self.model = EnhancedRAGWithOpenAI()
@@ -110,7 +116,66 @@ class CookingAssistant:
     # -- session ------------------------------------------------------------
     def cooking_state(self, user_id: str) -> Dict[str, Any]:
         visit = self.store.current_visit(user_id)
-        return cooking_state(self.context.active_recipe(visit), visit.step)
+        state = cooking_state(self.context.active_recipe(visit), visit.step)
+        pending = self.pending_leaves.get(visit.session_id)
+        if pending and (pending["revision"] != visit.recipe_revision or time.time() - pending["at"] > 1800):
+            self.pending_leaves.pop(visit.session_id, None)
+            pending = None
+        state["pending_leave"] = ({"token": pending["token"], "revision": pending["revision"]}
+                                  if pending else None)
+        return state
+
+    def save_recipe(self, user_id: str, expected_revision: Any) -> Dict[str, Any]:
+        visit = self.store.current_visit(user_id)
+        recipe = self.context.active_recipe(visit)
+        if recipe is None:
+            raise ValueError("There is no recipe to save.")
+        try:
+            custom_id = self.store.save_working_recipe(visit, recipe.snapshot(), expected_revision)
+        except sqlite3.Error as exc:
+            logger.warning("Saving working recipe failed: %s", type(exc).__name__)
+            raise ValueError("Could not save your recipe. Your changes are still here; please try again.") from exc
+        return {"recipe_id": custom_id, "cooking": self.cooking_state(user_id)}
+
+    def _guard_recipe_leave(self, user_id: str, action: Dict[str, Any]) -> bool:
+        visit = self.store.current_visit(user_id)
+        recipe = self.context.active_recipe(visit)
+        if recipe is None or not recipe.unsaved_changes:
+            return False
+        self.pending_leaves[visit.session_id] = {
+            "token": uuid.uuid4().hex, "revision": visit.recipe_revision, "at": time.time(), "action": action}
+        return True
+
+    async def resolve_recipe_leave(self, user_id: str, token: str, expected_revision: Any,
+                                   choice: str) -> Dict[str, Any]:
+        visit = self.store.current_visit(user_id)
+        pending = self.pending_leaves.get(visit.session_id)
+        if choice == "cancel":
+            if pending and token == pending["token"]:
+                self.pending_leaves.pop(visit.session_id, None)
+            return self._result(user_id, "Kept your current recipe.")
+        if (not pending or token != pending["token"] or type(expected_revision) is not int or
+                expected_revision != visit.recipe_revision or expected_revision != pending["revision"] or
+                time.time() - pending["at"] > 1800):
+            raise ValueError("The recipe changed or this reminder expired. Review the current recipe and try again.")
+        if choice not in ("save", "discard"):
+            raise ValueError("Choose save, discard or cancel.")
+        if choice == "save":
+            await asyncio.to_thread(self.save_recipe, user_id, expected_revision)
+        action = pending["action"]
+        if action["kind"] == "tool":
+            result = await asyncio.to_thread(self.run_tool, user_id, action["name"], action["args"], None, True)
+            if not result.get("ok"):
+                raise ValueError(result.get("error", "Could not switch recipes."))
+            response = self._result(user_id, "Stopped cooking." if action["name"] == "stop_recipe" else "Recipe changed.")
+        elif action["kind"] == "open":
+            response = await self.open_saved_recipe(user_id, action["recipe_id"], allow_replace=True)
+        else:
+            response = await self.import_recipe(user_id, action["text"], action["image"],
+                                                url=action["url"], allow_replace=True)
+        self.pending_leaves.pop(visit.session_id, None)
+        response["cooking"] = self.cooking_state(user_id)
+        return response
 
     @property
     def watch_available(self) -> bool:
@@ -143,10 +208,54 @@ class CookingAssistant:
 
     # -- tools the model can call ---------------------------------------------
     def run_tool(self, user_id: str, name: str, args: Dict[str, Any],
-                 actions: Optional[Dict[str, list]] = None) -> Dict[str, Any]:
+                 actions: Optional[Dict[str, list]] = None, allow_replace: bool = False) -> Dict[str, Any]:
         """Run one tool. ``actions`` collects cards and timers for the phone."""
         actions = actions if actions is not None else {"suggestions": [], "timers": []}
         visit = self.store.current_visit(user_id)
+        if name == "save_recipe":
+            try:
+                return {"ok": True, **self.save_recipe(user_id, args.get("expected_revision")),
+                        "status": "Saved to My recipes."}
+            except ValueError as exc:
+                return {"ok": False, "error": str(exc)}
+        if name == "update_recipe":
+            try:
+                revision = args.get("expected_revision")
+                if type(revision) is not int or revision != visit.recipe_revision:
+                    raise ValueError("The recipe changed. Use the current recipe revision before trying again.")
+                reason = args.get("reason")
+                if not isinstance(reason, str) or not reason.strip() or len(reason) > 500:
+                    raise ValueError("Explain the recipe change in at most 500 characters.")
+                recipe_data = validate_working_recipe(args.get("recipe"))
+                current = self.context.active_recipe(visit)
+                if current and args.get("new_recipe") is True:
+                    if not allow_replace and self._guard_recipe_leave(user_id, {"kind": "tool", "name": name, "args": args}):
+                        return {"ok": False, "save_required": True,
+                                "status": "Unsaved changes: use the on-screen reminder before starting the new dish."}
+                    self.store.set_recipe(visit, None, None)
+                    revision, current = visit.recipe_revision, None
+                if current:
+                    if recipe_data.get("serves") != current.serves:
+                        raise ValueError("Keep the current serving count when revising. Use scale_recipe for serving changes.")
+                    completed = visit.step or 0
+                    if completed >= len(current.steps):
+                        raise ValueError("This recipe is finished. Choose a new recipe before making changes.")
+                    fields = ("text", "done_when", "timer_seconds", "timer_label")
+                    old_steps = [{k: s.get(k) for k in fields} for s in current.steps[:completed]]
+                    new_steps = [{k: s.get(k) for k in fields} for s in recipe_data["steps"][:completed]]
+                    if new_steps != old_steps or len(recipe_data["steps"]) <= completed:
+                        raise ValueError("Keep completed steps unchanged and retain a current step; revise only current and future steps.")
+                self.store.set_recipe_draft(visit, recipe_data, reason.strip(), revision)
+            except (RecipeImportError, ValueError) as exc:
+                return {"ok": False, "error": str(exc)}
+            # A prior camera verdict no longer describes the revised instructions.
+            self.observations.pop(visit.session_id, None)
+            recipe = self.context.active_recipe(visit)
+            return {"ok": True, "recipe": recipe.name, "revision": visit.recipe_revision,
+                    "temporary": True, "serves": recipe.serves, "ingredients": recipe.ingredients,
+                    "steps": recipe.steps, "step": visit.step,
+                    "status": "Working recipe updated for this chat. Briefly explain the change; "
+                              "the screen already shows the updated ingredients and steps."}
         if name == "suggest_recipes":
             catalog = {r["id"]: r for r in self.knowledge.recipes()}
             cards, unknown = [], []
@@ -164,7 +273,13 @@ class CookingAssistant:
             return {"ok": bool(cards), "shown": [c["name"] for c in cards],
                     **({"not_in_catalog": unknown} if unknown else {})}
         if name == "start_timer":
-            label = " ".join(str(args.get("label") or "Timer").split())[:40] or "Timer"
+            label = clean_timer_label(args.get("label"))
+            if not label:
+                recipe = self.context.active_recipe(visit)
+                if recipe and visit.step is not None and 0 <= visit.step < len(recipe.steps):
+                    label = timer_label_for_step(recipe.steps[visit.step], recipe.name)
+                else:
+                    return {"ok": False, "error": "Give the timer a process name, such as Boiling spaghetti."}
             try:
                 seconds = int(args.get("seconds"))
             except (TypeError, ValueError):
@@ -196,6 +311,9 @@ class CookingAssistant:
                 close = difflib.get_close_matches(wanted, names, n=2, cutoff=0.3)
                 return {"ok": False, "error": f"{wanted!r} is not in the catalog.",
                         "closest_catalog_recipes": close}
+            if not allow_replace and self._guard_recipe_leave(user_id, {"kind": "tool", "name": name, "args": args}):
+                return {"ok": False, "save_required": True,
+                        "status": "Unsaved changes: the app is asking whether to save before switching. Do not claim the dish changed."}
             self.store.set_recipe(visit, subject.id, subject.name)
             recipe = self.context.active_recipe(visit)
             # "The first one, for 4 people": choose and scale in one call.
@@ -232,8 +350,12 @@ class CookingAssistant:
             self.store.set_step(visit, number - 1)
             step = recipe.steps[number - 1]
             return {"ok": True, "step": number, "of": total, "text": step["text"],
-                    "done_when": step.get("done_when"), "timer_seconds": step.get("timer_seconds")}
+                    "done_when": step.get("done_when"), "timer_seconds": step.get("timer_seconds"),
+                    "timer_label": step.get("timer_label")}
         if name == "stop_recipe":
+            if not allow_replace and self._guard_recipe_leave(user_id, {"kind": "tool", "name": name, "args": args}):
+                return {"ok": False, "save_required": True,
+                        "status": "Unsaved changes: the app is asking whether to save before stopping. The recipe is still active."}
             self.store.set_recipe(visit, None, None)
             return {"ok": True, "status": "No recipe is active now."}
         if name == "update_cook_profile":
@@ -306,6 +428,7 @@ class CookingAssistant:
                 "history": history,
                 "images": images,
                 "tools": None if turn.nav else _tools(),
+                "recipe_tools": bool(self.model.available and not turn.nav),
                 "tool_handler": tool_handler,
                 "missing_notes": not turn.facts and not turn.observation,
             }
@@ -343,8 +466,10 @@ class CookingAssistant:
 
     # -- uploaded recipes -------------------------------------------------------
     async def import_recipe(self, user_id: str, text: str = "", image: Optional[tuple] = None,
-                            on_delta=None, url: str = "") -> Dict[str, Any]:
+                            on_delta=None, url: str = "", allow_replace: bool = False) -> Dict[str, Any]:
         """Parse an uploaded recipe (text, photo or web link), make it active, present it."""
+        if not allow_replace and self._guard_recipe_leave(user_id, {"kind": "import", "text": text, "image": image, "url": url}):
+            return self._result(user_id, "Save your current changes before opening another recipe?")
         if not self.model.available:
             return self._result(user_id, "Reading an uploaded recipe needs the AI model. "
                                          "Add your API key in the launcher's settings.")
@@ -365,11 +490,14 @@ class CookingAssistant:
             user_id, on_delta=on_delta, display_text=f"Uploaded recipe: {recipe['name']}",
             allow_nav=False)
 
-    async def open_saved_recipe(self, user_id: str, custom_id: Any, on_delta=None) -> Dict[str, Any]:
+    async def open_saved_recipe(self, user_id: str, custom_id: Any, on_delta=None,
+                                allow_replace: bool = False) -> Dict[str, Any]:
         """Cook one of this browser's uploaded recipes again."""
         data = self.store.custom_recipe(custom_id, user_id) if type(custom_id) is int else None
         if data is None:
             return self._result(user_id, "I couldn't find that saved recipe.")
+        if not allow_replace and self._guard_recipe_leave(user_id, {"kind": "open", "recipe_id": custom_id}):
+            return self._result(user_id, "Save your current changes before opening another recipe?")
         visit = self.store.current_visit(user_id)
         await asyncio.to_thread(self.store.set_recipe, visit, None, data["name"], custom_id)
         return await self.process_message(
