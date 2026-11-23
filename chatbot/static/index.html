@@ -197,7 +197,7 @@ body[data-stage="cook"] .step-card > .panel, body[data-stage="done"] .step-card 
 .chat-view { display: flex; flex-direction: column; gap: 10px; }
 .chat-head { display: flex; align-items: center; gap: 10px; }
 .chat-head h2 { margin: 0 auto 0 0; font: 600 1.3rem/1.2 var(--display); }
-body[data-view="chat"] .step-card, body[data-view="chat"] .coach { display: none; }
+body[data-view="chat"] .step-card, body[data-view="chat"] #coach { display: none; }
 .log { display: flex; flex-direction: column; gap: 8px; }
 .msg { max-width: 88%; padding: 9px 13px; border-radius: 16px; line-height: 1.45; }
 .msg.coach { align-self: flex-start; background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
@@ -229,6 +229,7 @@ body[data-view="chat"] .step-card, body[data-view="chat"] .coach { display: none
   transform: translateY(calc(-1 * var(--kb)));   /* iPhone keyboard: stay above it */
 }
 .dock-inner { max-width: 680px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; }
+.jump-newest { position: absolute; top: -56px; right: var(--pad-r); box-shadow: 0 2px 10px #0002; }
 .chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
 .chips button { flex: none; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 8px 16px; min-height: 44px; white-space: nowrap; }
 /* A roomy typing box: 56px tall, large text, grows to about 5 lines. */
@@ -481,6 +482,9 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
 </main>
 
 <footer class="dock">
+  <button class="icon-button jump-newest" id="jumpNewest" type="button" aria-label="Go to newest message" title="Go to newest message" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14m-6-6 6 6 6-6"></path></svg>
+  </button>
   <div class="dock-inner">
     <div class="chips" id="chips" hidden></div>
     <div class="attachment" id="attachment" hidden>
@@ -673,7 +677,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
 (() => {
   const $ = (id) => document.getElementById(id);
   const ids = [
-    "conn", "menuButton", "offlineBanner", "offlineText", "retryNow", "timerStrip", "stage", "log",
+    "conn", "menuButton", "offlineBanner", "offlineText", "retryNow", "timerStrip", "stage", "log", "jumpNewest",
     "camToggle", "camera", "video", "camOff", "camBadge", "watchDot", "watchStatus",
     "coach", "youSaid", "coachLine", "coachActions", "chatView", "closeChat", "keyboardToggle", "chatButton", "toast",
     "introDialog", "introNext", "introSkip", "introDots", "introButton",
@@ -897,8 +901,10 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
         if (!state.speechPending) afterSpeaking();
       } else if (!state.muteReply) speakReply(data.message);
       state.replyBubble = null; state.replyText = ""; state.streamed = false;
+      scrollLog();
     } else if (data.type === "response") {
       state.awaitingReply = false;
+      scrollLog(true);
     }
     if (data.image_error) addNote(`Image not used: ${data.image_error}`);
   }
@@ -1154,6 +1160,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     if (state.ws && state.ws.readyState === WebSocket.OPEN) state.ws.send(body);
     else { state.queue.push(body); addNote("Not connected yet. Your message will send when the connection is back."); }
     if (photo) clearPhoto();
+    scrollLog(true);
     return true;
   }
   els.textForm.addEventListener("submit", (e) => {
@@ -1380,15 +1387,56 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     clearTimeout(state.toastTimer);
     state.toastTimer = setTimeout(() => { els.toast.hidden = true; }, 4000);
   }
-  // In the conversation view the page itself scrolls; keep the newest in sight.
-  function scrollLog() {
-    if (document.body.dataset.view === "chat") window.scrollTo?.(0, document.body.scrollHeight);
+  // The page is the scroll container. Coalesce streamed updates until layout.
+  let logScrollPending = false;
+  let logScrollView = null;
+  function updateJumpNewest() {
+    const root = document.scrollingElement || document.documentElement;
+    const remaining = root.scrollHeight - root.clientHeight - root.scrollTop;
+    els.jumpNewest.hidden = document.body.dataset.view !== "chat" || remaining <= 64;
+  }
+  function jumpToNewest() {
+    if (document.body.dataset.view !== "chat") return;
+    scrollPageToBottom();
+  }
+  function scrollPageToBottom() {
+    const root = document.scrollingElement || document.documentElement;
+    const height = Math.max(root.scrollHeight, document.body.scrollHeight || 0);
+    window.scrollTo({ top: height, behavior: "instant" });
+    updateJumpNewest();
+  }
+  function scrollLog(force = false) {
+    const view = document.body.dataset.view;
+    if (view !== "chat" && force !== true) return;
+    logScrollView = view;
+    if (logScrollPending) return;
+    logScrollPending = true;
+    requestAnimationFrame(() => {
+      if (document.body.dataset.view === logScrollView) scrollPageToBottom();
+      // The composer, keyboard and response can change layout in the same frame.
+      // Re-read the height on the next frame instead of keeping a stale target.
+      requestAnimationFrame(() => {
+        logScrollPending = false;
+        if (document.body.dataset.view === logScrollView) scrollPageToBottom();
+      });
+    });
+  }
+  els.jumpNewest.addEventListener("click", jumpToNewest);
+  window.addEventListener("scroll", updateJumpNewest, { passive: true });
+  window.addEventListener("resize", () => { updateJumpNewest(); scrollLog(); });
+  // Images can finish loading after the message's initial layout.
+  els.log.addEventListener("load", scrollLog, true);
+  if (window.ResizeObserver) {
+    const chatResize = new ResizeObserver(scrollLog);
+    chatResize.observe(els.log);
+    chatResize.observe(els.jumpNewest.parentElement);
   }
   // The coach line under the card: only the newest reply, as large readable text.
   function showCoach(text, level) {
     els.coachLine.className = level ? `coach-line alert ${level}` : "coach-line";
     renderRich(els.coachLine, text);
     els.coachLine.hidden = !text;
+    scrollLog(true);
   }
 
   // The coach writes short paragraphs, "- " bullets and "1. " numbered steps,
@@ -1476,6 +1524,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     line.className = "typing-label"; line.textContent = label;
     els.coachLine.replaceChildren(dots, line);
     els.coachLine.hidden = false;
+    scrollLog(true);
   }
   function hideTyping() { state.typingEl?.remove(); state.typingEl = null; }
 
@@ -1484,6 +1533,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     document.body.dataset.view = view;
     els.chatView.hidden = view !== "chat";
     els.chatButton.setAttribute("aria-pressed", String(view === "chat"));
+    updateJumpNewest();
     if (view === "chat") scrollLog(); else window.scrollTo?.(0, 0);
   }
   els.chatButton.addEventListener("click", () => setView(document.body.dataset.view === "chat" ? "recipe" : "chat"));
@@ -1494,6 +1544,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     els.textForm.hidden = !on;
     els.keyboardToggle.setAttribute("aria-pressed", String(on));
     if (on) els.textInput.focus?.();
+    scrollLog();
   }
   els.keyboardToggle.addEventListener("click", () => showKeyboard(els.textForm.hidden));
   // The typing box grows with what you write; Enter sends, Shift+Enter adds a line.
@@ -1501,6 +1552,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     const box = els.textInput;
     box.style.height = "auto";
     if (box.scrollHeight) box.style.height = `${box.scrollHeight + 3}px`;
+    scrollLog();
   }
   els.textInput.addEventListener("input", fitTextInput);
   els.textInput.addEventListener("keydown", (e) => {
@@ -1516,6 +1568,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     if (!vv) return;
     const covered = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
     document.documentElement.style.setProperty("--kb", `${Math.round(covered)}px`);
+    scrollLog();
   }
   window.visualViewport?.addEventListener("resize", fitKeyboard);
   window.visualViewport?.addEventListener("scroll", fitKeyboard);

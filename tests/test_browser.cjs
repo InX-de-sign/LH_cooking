@@ -20,6 +20,7 @@ function harness(options = {}) {
   const elements = new Map();
   const images = [], revoked = [], draws = [];
   const sockets = [], windowEvents = {}, clearedIntervals = [], recognitions = [];
+  const animationFrames = [], scrollCalls = [], resizeObservers = [];
   const storage = new Map(Object.entries({ lh_cooking_client_id: 'test', lh_intro_seen: 'yes', ...(options.storage || {}) }));
   function element(tag) {
     const classes = new Set();
@@ -27,6 +28,7 @@ function harness(options = {}) {
       textContent: '', innerHTML: '', dataset: {}, checked: false, children: [], attrs: {},
       value: '', hidden: false, listeners: {}, open: false, disabled: false,
       options: [], tagName: (tag || '').toUpperCase(),
+      scrollHeight: 2000, clientHeight: 800, scrollTop: 0,
       style: { setProperty(name, value) { this[name] = value; } },
       showModal() { this.open = true; }, close() { this.open = false; },
       classList: {
@@ -85,6 +87,19 @@ function harness(options = {}) {
     history: { replaceState() {} }, URLSearchParams,
     fetch: async () => ({ json: async () => ({ recipes: options.recipes || [] }) }),
     addEventListener(name, fn) { windowEvents[name] = fn; },
+    requestAnimationFrame(fn) { animationFrames.push(fn); },
+    scrollTo(position, y) {
+      const root = context.document.documentElement;
+      const top = typeof position === 'object' ? position.top : y;
+      scrollCalls.push(top);
+      root.scrollTop = Math.max(0, Math.min(top, root.scrollHeight - root.clientHeight));
+    },
+    ResizeObserver: class {
+      constructor(callback) { this.callback = callback; this.targets = []; resizeObservers.push(this); }
+      observe(target) { assert.ok(target); this.targets.push(target); }
+    },
+    visualViewport: { height: 800, offsetTop: 0, listeners: {}, addEventListener(name, fn) { this.listeners[name] = fn; } },
+    innerHeight: 800,
     URL: class extends URL {
       static createObjectURL() { return 'blob:test-photo'; }
       static revokeObjectURL(url) { revoked.push(url); }
@@ -103,13 +118,17 @@ function harness(options = {}) {
     setInterval() { return ++intervalId; }, clearInterval(id) { clearedIntervals.push(id); },
   };
   context.window = context;
+  context.document.getElementById('jumpNewest').parentElement = element('footer');
   // Expose internals and skip opening a real socket in this harness.
   const instrumented = source.replace(/\n  connect\(\);\n\}\)\(\);/,
     `\n  window.test = { ${EXPORTS.join(', ')} };\n})();`);
   assert.notEqual(instrumented, source);
   vm.runInNewContext(instrumented, context);
   return { ...context.test, speech, timers, images, revoked, draws, sockets, windowEvents, clearedIntervals,
-           recognitions, storage, body: context.document.body, root: context.document.documentElement };
+           recognitions, storage, body: context.document.body, root: context.document.documentElement,
+           scrollCalls, resizeObservers, viewport: context.visualViewport,
+           nextFrame() { const frame = animationFrames.splice(0); frame.forEach(fn => fn()); },
+           flushFrames() { while (animationFrames.length) animationFrames.shift()(); } };
 }
 // A connected socket that records what the page sends.
 function online(h) {
@@ -123,6 +142,106 @@ const button = (dataset) => ({ closest: () => ({ dataset }), dataset });
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
 async function main() {
+{
+  const h = harness(); online(h); h.flushFrames();
+  assert.equal(h.body.dataset.view, 'recipe');
+  h.ask('Show me the latest prompt');
+  h.nextFrame();
+  assert.equal(h.root.scrollTop, 1200, 'sending jumps in recipe view too');
+  h.root.scrollHeight = 2600;
+  h.nextFrame();
+  assert.equal(h.root.scrollTop, 1800, 'second frame uses height after composer/layout changes');
+  assert.equal(h.body.dataset.view, 'recipe', 'sending preserves the selected view');
+  h.root.scrollTop = 0;
+  h.handle({ type: 'thinking' }); h.flushFrames();
+  assert.equal(h.root.scrollTop, 1800, 'thinking is visible in recipe view');
+  h.root.scrollTop = 0;
+  h.handle({ type: 'response', message: 'Here is the newest reply.' }); h.flushFrames();
+  assert.equal(h.root.scrollTop, 1800, 'completed reply jumps in recipe view');
+  h.root.scrollTop = 0;
+  h.handle({ type: 'response' }); h.flushFrames();
+  assert.equal(h.root.scrollTop, 1800, 'completion without additional text still jumps');
+  h.setView('chat'); h.nextFrame();
+  h.root.scrollHeight = 3200; h.nextFrame();
+  assert.equal(h.root.scrollTop, 2400, 'conversation opening settles at the final bottom');
+}
+{
+  // The recipe coach panel and AI bubbles share the coach class. A broad
+  // conversation-view hiding rule would hide the replies despite correct DOM.
+  const css = html.match(/<style>([\s\S]*?)<\/style>/)[1];
+  assert.doesNotMatch(css, /body\[data-view="chat"\]\s+\.coach\s*\{[^}]*display:\s*none/,
+    'conversation view must not hide AI bubbles through their shared coach class');
+  const h = harness(); online(h); h.setView('chat');
+  h.ask('How do I cook eggs?');
+  h.handle({ type: 'thinking' });
+  h.handle({ type: 'delta', text: 'Beat the eggs.' });
+  const streamed = h.els.log.children.find(el => el.className === 'msg coach');
+  assert.ok(streamed);
+  assert.equal(streamed.children[0].children[0], 'Beat the eggs.');
+  h.handle({ type: 'response', message: 'Beat the eggs. Then fry them.' });
+  assert.equal(h.els.log.children.filter(el => el.className === 'msg coach').length, 1);
+  assert.equal(streamed.children[0].children[0], 'Beat the eggs. Then fry them.');
+  h.setView('recipe'); h.setView('chat');
+  assert.equal(h.els.log.children[0].textContent, 'How do I cook eggs?');
+  assert.ok(h.els.log.children.includes(streamed), 'AI reply survives switching views');
+  h.handle({ type: 'response', message: 'Serve warm.' });
+  assert.equal(h.els.log.children.at(-1).children[0].children[0], 'Serve warm.');
+}
+{
+  const h = harness(); online(h);
+  h.flushFrames();
+  h.scrollCalls.length = 0; // Ignore the initial recipe view's scroll to top.
+  assert.equal(h.scrollCalls.length, 0, 'recipe view does not auto-scroll');
+  h.setView('chat');
+  assert.equal(h.scrollCalls.length, 0, 'wait for layout before scrolling');
+  h.flushFrames();
+  assert.equal(h.root.scrollTop, 1200);
+  assert.equal(h.els.jumpNewest.hidden, true);
+  const scrollUp = () => { h.root.scrollTop = 100; h.windowEvents.scroll(); };
+  scrollUp();
+  assert.equal(h.els.jumpNewest.hidden, false);
+  click(h.els.jumpNewest);
+  assert.equal(h.root.scrollTop, 1200, 'arrow jumps immediately');
+  assert.equal(h.els.jumpNewest.hidden, true);
+  scrollUp();
+  assert.equal(h.ask('Help me cook'), true);
+  h.flushFrames();
+  assert.equal(h.root.scrollTop, 1200, 'sending overrides earlier scroll position');
+  scrollUp(); h.handle({ type: 'thinking' }); h.flushFrames();
+  assert.equal(h.root.scrollTop, 1200, 'typing indicator jumps to newest');
+  scrollUp();
+  const before = h.scrollCalls.length;
+  h.handle({ type: 'delta', text: 'Heat ' });
+  h.handle({ type: 'delta', text: 'the pan.' });
+  h.root.scrollHeight = 2400;
+  h.flushFrames();
+  assert.equal(h.scrollCalls.length, before + 2, 'stream updates coalesce into one two-frame layout scroll');
+  assert.equal(h.root.scrollTop, 1600);
+  scrollUp(); h.handle({ type: 'response', message: 'Heat the pan. Then add oil.' }); h.flushFrames();
+  assert.equal(h.root.scrollTop, 1600, 'final streamed response also jumps');
+  scrollUp(); h.handle({ type: 'response', message: 'Ready.' }); h.flushFrames();
+  assert.equal(h.root.scrollTop, 1600, 'non-streamed response jumps');
+  scrollUp(); h.root.scrollHeight = 2800; h.els.log.listeners.load(); h.flushFrames();
+  assert.equal(h.root.scrollTop, 2000, 'delayed image load jumps after new layout');
+  scrollUp(); h.resizeObservers[0].callback(); h.flushFrames();
+  assert.equal(h.root.scrollTop, 2000, 'log or dock resize keeps newest visible');
+  scrollUp(); h.viewport.height = 500; h.viewport.listeners.resize(); h.flushFrames();
+  assert.equal(h.root.style['--kb'], '300px');
+  assert.equal(h.root.scrollTop, 2000, 'keyboard layout change jumps to newest');
+  scrollUp(); h.els.textInput.scrollHeight = 120; h.els.textInput.listeners.input(); h.flushFrames();
+  assert.equal(h.els.textInput.style.height, '123px');
+  assert.equal(h.root.scrollTop, 2000, 'multiline composer resize jumps after layout');
+  h.root.scrollTop = 1936; h.windowEvents.scroll();
+  assert.equal(h.els.jumpNewest.hidden, true, '64px threshold is inclusive');
+  h.root.scrollTop = 1935; h.windowEvents.scroll();
+  assert.equal(h.els.jumpNewest.hidden, false);
+  h.handle({ type: 'delta', text: 'Queued update' });
+  h.setView('recipe'); h.flushFrames();
+  assert.equal(h.root.scrollTop, 0, 'queued scroll does not affect recipe view');
+  assert.equal(h.els.jumpNewest.hidden, true);
+  h.els.log.listeners.load(); h.resizeObservers[0].callback(); h.flushFrames();
+  assert.equal(h.root.scrollTop, 0, 'hidden conversation layout does not move recipe view');
+}
 {
   // Prep: ingredients as a checklist, servings, and a clear Start.
   const h = harness();
@@ -807,7 +926,7 @@ async function main() {
   assert.notEqual(h.sockets.at(-1).url, current.url, 'restoring a closed page from browser cache starts fresh');
 }
 
-console.log('PASS: 28 browser behavior scenarios: stages, checklist, servings, cooking mode, swipes, voice defaults, idea cards, coach line, conversation view, keyboard toggle, intro, camera-check bursts and status, '
+console.log('PASS: 31 browser behavior scenarios: bottom scrolling after layout in both views, conversation reply visibility, auto-scroll and jump-to-newest, stages, checklist, servings, cooking mode, swipes, voice defaults, idea cards, coach line, conversation view, keyboard toggle, intro, camera-check bursts and status, '
   + 'formatted replies, list speech, camera frames, watch alerts, timers and alarm, recipe upload, my recipes, settings, '
   + 'permission primers, offline banner, attachments, profile notes, history, new chats and reconnects.');
 }
