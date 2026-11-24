@@ -425,13 +425,10 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
       <div class="category-tabs" id="recipeCategories" role="group" aria-label="Recipe category"></div>
       <div class="recipe-toolbar">
         <span id="recipeCount" aria-live="polite"></span>
-        <div class="view-switch" role="group" aria-label="Recipe layout">
-          <button class="icon-button" id="cardView" type="button" aria-label="Card layout" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="4" y="3" width="9" height="18" rx="2"/><rect x="17" y="6" width="3" height="15" rx="1"/></svg></button>
-          <button class="icon-button" id="gridView" type="button" aria-label="Grid layout" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button>
-        </div>
       </div>
       <p id="recipeSearchStatus" class="muted" role="status" hidden></p>
-      <div class="recipe-picks" id="recipePicks" hidden></div>
+      <div class="recipe-picks" id="recipePicks" data-layout="cards" hidden></div>
+      <button class="btn" id="seeMoreRecipes" type="button" aria-controls="recipePicks" hidden>See more</button>
     </div>
 
     <!-- Prep -->
@@ -724,7 +721,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     "introDialog", "introNext", "introSkip", "introDots", "introButton",
     "stepCard", "recipeName", "stepCount", "progress",
     "choosePanel", "ideaCards", "emptyActions", "ideasButton", "uploadRecipeInline", "myRecipesInline",
-    "recipeSearchLabel", "recipeSearch", "recipeSearchStatus", "recipePicks", "recipeCategories", "recipeCount", "cardView", "gridView", "favoritesInline",
+    "recipeSearchLabel", "recipeSearch", "recipeSearchStatus", "recipePicks", "recipeCategories", "recipeCount", "seeMoreRecipes", "favoritesInline",
     "recipeHero", "recipeHeroImage", "recipePersonalBadge", "detailFavorite", "myRecipesTitle", "libraryHelp",
     "prepPanel", "recipeDetails", "servingsRow", "servingsDown", "servingsValue", "servingsUp", "prepFooter", "placementTip", "startCooking",
     "ingredientsPanel", "ingredientsCount", "ingredientsList", "stepsPanel", "stepsList",
@@ -1915,14 +1912,13 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     return recipesLoaded;
   }
   let browseCategory = CATEGORIES.includes(storeGet("lh_recipe_category")) ? storeGet("lh_recipe_category") : "All";
-  let browseLayout = ["cards", "grid"].includes(storeGet("lh_recipe_layout")) ? storeGet("lh_recipe_layout")
-    : window.matchMedia?.("(min-width: 700px)").matches ? "grid" : "cards";
-  function setBrowseLayout(layout) { browseLayout = layout; storeSet("lh_recipe_layout", layout); renderRecipePicks(); }
+  const desktopRecipes = window.matchMedia("(min-width: 700px)");
+  let visibleRecipeLimit = 6;
   function renderRecipePicks() {
     els.recipeCategories.replaceChildren(...CATEGORIES.map(category => {
       const b = document.createElement("button"); b.type = "button"; b.textContent = category;
       b.setAttribute("aria-pressed", String(browseCategory === category));
-      b.addEventListener("click", () => { browseCategory = category; storeSet("lh_recipe_category", category); renderRecipePicks(); });
+      b.addEventListener("click", () => { browseCategory = category; visibleRecipeLimit = 6; storeSet("lh_recipe_category", category); renderRecipePicks(); });
       return b;
     }));
     const terms = els.recipeSearch.value.toLowerCase().trim().split(/\s+/).filter(Boolean);
@@ -1932,18 +1928,18 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
       const text = [r.name, ...(r.aliases || []), ...(r.ingredients || [])].join(" ").toLowerCase();
       return categoryMatch && terms.every(term => text.includes(term));
     });
-    els.recipePicks.dataset.layout = browseLayout;
-    els.cardView.setAttribute("aria-pressed", String(browseLayout === "cards"));
-    els.gridView.setAttribute("aria-pressed", String(browseLayout === "grid"));
-    els.recipePicks.replaceChildren(...matches.map(recipeCard)); els.recipePicks.hidden = !matches.length;
+    const visible = desktopRecipes.matches ? matches.slice(0, visibleRecipeLimit) : matches;
+    els.recipePicks.dataset.layout = desktopRecipes.matches ? "grid" : "cards";
+    els.recipePicks.replaceChildren(...visible.map(recipeCard)); els.recipePicks.hidden = !matches.length;
+    els.seeMoreRecipes.hidden = !desktopRecipes.matches || matches.length <= visibleRecipeLimit;
     els.recipeCount.textContent = `${matches.length} ${matches.length === 1 ? "recipe" : "recipes"}`;
     els.recipeSearchStatus.textContent = !matches.length ? browseCategory === "Personal" && !terms.length
       ? "Save or upload a recipe to build your personal collection." : "No recipes found. Try another dish, ingredient or category." : "";
     els.recipeSearchStatus.hidden = Boolean(matches.length);
   }
-  els.recipeSearch.addEventListener("input", () => renderRecipePicks());
-  els.cardView.addEventListener("click", () => setBrowseLayout("cards"));
-  els.gridView.addEventListener("click", () => setBrowseLayout("grid"));
+  els.recipeSearch.addEventListener("input", () => { visibleRecipeLimit = 6; renderRecipePicks(); });
+  els.seeMoreRecipes.addEventListener("click", () => { visibleRecipeLimit += 6; renderRecipePicks(); });
+  desktopRecipes.addEventListener("change", () => renderRecipePicks());
 
   async function renderCooking(c) {
     const previous = state.cooking;

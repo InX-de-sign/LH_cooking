@@ -21,6 +21,8 @@ function harness(options = {}) {
   const images = [], revoked = [], draws = [];
   const sockets = [], windowEvents = {}, clearedIntervals = [], recognitions = [];
   const animationFrames = [], scrollCalls = [], resizeObservers = [];
+  const desktopMedia = { matches: (options.width || 390) >= 700, listeners: {},
+    addEventListener(name, fn) { this.listeners[name] = fn; } };
   const storage = new Map(Object.entries({ lh_cooking_client_id: 'test', lh_intro_seen: 'yes', ...(options.storage || {}) }));
   function element(tag) {
     const classes = new Set();
@@ -100,6 +102,7 @@ function harness(options = {}) {
     },
     visualViewport: { height: 800, offsetTop: 0, listeners: {}, addEventListener(name, fn) { this.listeners[name] = fn; } },
     innerHeight: 800,
+    matchMedia(query) { assert.equal(query, '(min-width: 700px)'); return desktopMedia; },
     URL: class extends URL {
       static createObjectURL() { return 'blob:test-photo'; }
       static revokeObjectURL(url) { revoked.push(url); }
@@ -128,6 +131,7 @@ function harness(options = {}) {
   return { ...context.test, speech, timers, images, revoked, draws, sockets, windowEvents, clearedIntervals,
            recognitions, storage, body: context.document.body, root: context.document.documentElement,
            scrollCalls, resizeObservers, viewport: context.visualViewport,
+           resizeTo(width) { desktopMedia.matches = width >= 700; desktopMedia.listeners.change?.(); },
            nextFrame() { const frame = animationFrames.splice(0); frame.forEach(fn => fn()); },
            flushFrames() { while (animationFrames.length) animationFrames.shift()(); } };
 }
@@ -143,6 +147,55 @@ const button = (dataset) => ({ closest: () => ({ dataset }), dataset });
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
 async function main() {
+{
+  const recipes = Array.from({ length: 13 }, (_, i) => ({ id: i + 1,
+    name: `Soup ${i + 1}`, slug: `soup-${i + 1}`, category: 'Soup' }));
+  const choose = { recipe: null, step: null, total_steps: 0 };
+  for (const count of [0, 1, 6, 7, 13]) {
+    const h = harness({ recipes: recipes.slice(0, count), width: 700 }); online(h);
+    await h.renderCooking(choose);
+    assert.equal(h.els.recipePicks.dataset.layout, 'grid');
+    assert.equal(h.els.recipePicks.children.length, Math.min(count, 6));
+    assert.equal(h.els.recipePicks.hidden, count === 0);
+    assert.equal(h.els.seeMoreRecipes.hidden, count <= 6);
+    assert.equal(h.els.recipeCount.textContent, `${count} ${count === 1 ? 'recipe' : 'recipes'}`);
+    if (count > 6) {
+      click(h.els.seeMoreRecipes);
+      assert.equal(h.els.recipePicks.children.length, Math.min(count, 12));
+      assert.equal(h.els.seeMoreRecipes.hidden, count <= 12);
+      if (count > 12) {
+        click(h.els.seeMoreRecipes);
+        assert.equal(h.els.recipePicks.children.length, 13);
+        assert.equal(h.els.seeMoreRecipes.hidden, true);
+      }
+    }
+  }
+  const h = harness({ recipes, width: 1200 }); const sent = online(h);
+  await h.renderCooking(choose);
+  click(h.els.seeMoreRecipes);
+  const hearting = click(h.els.recipePicks.children[0].children[1]);
+  h.handle({ type: 'settings_result', request_id: sent.at(-1).request_id, favorite: true }); await hearting;
+  assert.equal(h.els.recipePicks.children.length, 12, 'favourite update preserves expansion');
+  await h.renderCooking({ recipe: 'Soup 1', step: null, total_steps: 1 });
+  await h.renderCooking(choose);
+  assert.equal(h.els.recipePicks.children.length, 12, 'returning from details preserves expansion');
+  h.resizeTo(699);
+  assert.equal(h.els.recipePicks.dataset.layout, 'cards');
+  assert.equal(h.els.recipePicks.children.length, 13, 'phone exposes every match');
+  assert.equal(h.els.seeMoreRecipes.hidden, true);
+  h.resizeTo(700);
+  assert.equal(h.els.recipePicks.children.length, 12, 'desktop expansion survives resize');
+  click(h.els.recipeCategories.children.find(b => b.textContent === 'Soup'));
+  assert.equal(h.els.recipePicks.children.length, 6, 'category change resets expansion');
+  click(h.els.seeMoreRecipes);
+  h.els.recipeSearch.value = 'Soup'; h.els.recipeSearch.listeners.input();
+  assert.equal(h.els.recipePicks.children.length, 6, 'search resets expansion');
+  h.resizeTo(390);
+  assert.equal(h.els.recipePicks.children.length, 13);
+  assert.equal(h.els.recipeSearch.value, 'Soup');
+  assert.equal(h.els.recipeCategories.children.find(b => b.textContent === 'Soup').getAttribute('aria-pressed'), 'true');
+  assert.equal(h.els.seeMoreRecipes.hidden, true);
+}
 {
   // Both ideas requests keep the discovery results at the top throughout replies.
   const h = harness(); const sent = online(h); h.settings.autoVoice = false;
@@ -176,7 +229,7 @@ async function main() {
   assert.equal(h.root.scrollTop, h.root.scrollHeight - h.root.clientHeight, 'ordinary replies follow newest');
 }
 {
-  // Discovery filters combine, layouts persist, hearts do not start cooking.
+  // Discovery filters combine, cards stay in one row, hearts do not start cooking.
   const recipes = [
     { id: 1, name: 'Garlic Noodles', slug: 'garlic-noodles', category: 'Main course', ingredients: ['garlic'], card_image: '/noodles.webp' },
     { id: 2, name: 'Tomato Soup', slug: 'tomato-soup', category: 'Soup', ingredients: ['tomatoes'] },
@@ -195,10 +248,9 @@ async function main() {
   h.els.recipeSearch.value = 'chicken'; h.els.recipeSearch.listeners.input();
   assert.equal(h.els.recipePicks.children[0].dataset.recipe, 'Chicken Soup');
   assert.equal(h.els.recipeCount.textContent, '1 recipe');
-  click(h.els.gridView);
-  assert.equal(h.els.recipePicks.dataset.layout, 'grid');
+  assert.equal(h.els.recipePicks.dataset.layout, 'cards');
+  assert.equal(/id="(?:cardView|gridView)"/.test(html), false, 'discovery has no layout switch');
   assert.equal(h.storage.get('lh_recipe_category'), 'Soup');
-  assert.equal(h.storage.get('lh_recipe_layout'), 'grid');
   const before = JSON.stringify(h.state.cooking);
   const hearting = click(h.els.recipePicks.children[0].children[1]);
   const request = sent.at(-1);
@@ -207,9 +259,9 @@ async function main() {
   assert.equal(JSON.stringify(h.state.cooking), before, 'favouriting does not change cooking state');
   assert.equal(sent.filter(r => r.type === 'ask' || r.type === 'recipe_open').length, 0);
   assert.equal(h.els.recipePicks.children[0].children[1].getAttribute('aria-pressed'), 'true');
-  const restored = harness({ recipes, storage: Object.fromEntries(h.storage) });
+  const restored = harness({ recipes, storage: { ...Object.fromEntries(h.storage), lh_recipe_layout: 'grid' } });
   await restored.renderCooking({ recipe: null, step: null, total_steps: 0 });
-  assert.equal(restored.els.recipePicks.dataset.layout, 'grid');
+  assert.equal(restored.els.recipePicks.dataset.layout, 'cards', 'old grid preference cannot restore multiple rows');
   assert.equal(restored.els.recipePicks.children.length, 2);
   const favorites = h.openMyRecipes('favorites');
   h.handle({ type: 'settings_result', request_id: sent.at(-1).request_id, recipes: [
@@ -1298,7 +1350,7 @@ async function main() {
   assert.notEqual(h.sockets.at(-1).url, current.url, 'restoring a closed page from browser cache starts fresh');
 }
 
-console.log('PASS: browser behavior scenarios: category/search filters, persistent card/grid layouts, favourites and personal badges, image fallback, bottom scrolling after layout in both views, conversation reply visibility, auto-scroll and jump-to-newest, stages, checklist, servings, cooking mode, swipes, voice defaults, idea cards, coach line, conversation view, keyboard toggle, intro, camera-check bursts and status, '
+console.log('PASS: browser behavior scenarios: category/search filters, horizontal recipe cards and legacy grid preference, favourites and personal badges, image fallback, bottom scrolling after layout in both views, conversation reply visibility, auto-scroll and jump-to-newest, stages, checklist, servings, cooking mode, swipes, voice defaults, idea cards, coach line, conversation view, keyboard toggle, intro, camera-check bursts and status, '
   + 'formatted replies, list speech, camera frames, watch alerts, timers and alarm, recipe upload, my recipes, settings, '
   + 'permission primers, offline banner, attachments, profile notes, history, new chats and reconnects.');
 }
