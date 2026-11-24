@@ -19,10 +19,16 @@ the only exception), which is why production runs behind Caddy.
 
 import asyncio
 import logging
+import mimetypes
 import os
 import sqlite3
 import time
 import uuid
+
+# The server image's Python (3.10, no /etc/mime.types) doesn't know .webp, so
+# recipe photos went out as text/plain. Register the types the app serves.
+mimetypes.add_type("image/webp", ".webp")
+mimetypes.add_type("application/manifest+json", ".webmanifest")
 
 import base64
 import secrets

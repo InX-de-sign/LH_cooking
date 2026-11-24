@@ -367,10 +367,12 @@ def build_bundle(settings, remote, root=ROOT):
     root = Path(root).resolve()
     names = ["docker-compose.lighthouse.yml", "Caddyfile", "chatbot/Dockerfile",
              "chatbot/.dockerignore", "chatbot/requirements.txt", "chatbot/recipes.yaml", "chatbot/glossary.yaml"]
+    # Code plus the data files it loads at startup (recipe_presentation.json).
     names += [str(path.relative_to(root)).replace("\\", "/") for path in sorted((root / "chatbot").glob("*.py"))]
+    names += [str(path.relative_to(root)).replace("\\", "/") for path in sorted((root / "chatbot").glob("*.json"))]
     names += [str(path.relative_to(root)).replace("\\", "/") for path in sorted((root / "chatbot" / "static").rglob("*"))
-              if path.is_file() and path.suffix.lower() in {".html", ".js", ".css", ".svg", ".png", ".jpg", ".ico",
-                                                            ".woff2", ".webmanifest"}]
+              if path.is_file() and path.suffix.lower() in {".html", ".js", ".css", ".svg", ".png", ".jpg", ".jpeg",
+                                                            ".webp", ".ico", ".woff2", ".webmanifest"}]
     env = {key: settings[key] for key in settings if key in MODEL_KEYS}
     env["DOMAIN"] = remote.domain
     output = io.BytesIO()
