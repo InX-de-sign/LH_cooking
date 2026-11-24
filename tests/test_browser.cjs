@@ -144,6 +144,38 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
 
 async function main() {
 {
+  // Both ideas requests keep the discovery results at the top throughout replies.
+  const h = harness(); const sent = online(h); h.settings.autoVoice = false;
+  await h.renderCooking({ recipe: null, step: null, total_steps: 0 });
+  h.flushFrames();
+  for (const message of ['Give me 2 ideas for what to cook', 'Give me 2 different ideas']) {
+    h.root.scrollTop = 900;
+    click(h.els.ideasButton); h.flushFrames();
+    assert.equal(sent.at(-1).message, message);
+    assert.equal(Object.hasOwn(sent.at(-1), 'scrollTop'), false, 'scroll preference stays client-only');
+    assert.equal(h.root.scrollTop, 0, 'request returns discovery to top');
+    h.handle({ type: 'thinking' }); h.flushFrames();
+    assert.equal(h.root.scrollTop, 0, 'loading stays at top');
+    h.handle({ type: 'delta', text: 'Try these recipes.' }); h.flushFrames();
+    assert.equal(h.root.scrollTop, 0, 'streaming stays at top');
+    h.handle({ type: 'response', message: 'Try these recipes.',
+      cooking: { recipe: null, step: null, total_steps: 0 },
+      suggestions: [{ name: 'Egg Fried Rice' }, { name: 'Mapo Tofu' }] });
+    await Promise.resolve(); h.flushFrames();
+    assert.equal(h.els.ideaCards.hidden, false);
+    assert.equal(h.els.ideasButton.textContent, '2 different ideas');
+    assert.equal(h.root.scrollTop, 0, 'completed suggestions stay at top');
+    h.root.scrollHeight += 200;
+    h.resizeObservers[0].callback(); h.els.coach.listeners.load();
+    h.viewport.listeners.resize(); h.flushFrames();
+    assert.equal(h.root.scrollTop, 0, 'late layout and keyboard changes stay at top');
+  }
+  h.ask('Can I use tofu?'); h.flushFrames();
+  assert.equal(h.root.scrollTop, h.root.scrollHeight - h.root.clientHeight, 'ordinary prompts resume bottom scrolling');
+  h.handle({ type: 'response', message: 'Yes.' }); h.flushFrames();
+  assert.equal(h.root.scrollTop, h.root.scrollHeight - h.root.clientHeight, 'ordinary replies follow newest');
+}
+{
   // Discovery filters combine, layouts persist, hearts do not start cooking.
   const recipes = [
     { id: 1, name: 'Garlic Noodles', slug: 'garlic-noodles', category: 'Main course', ingredients: ['garlic'], card_image: '/noodles.webp' },

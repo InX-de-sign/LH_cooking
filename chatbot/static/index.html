@@ -1293,8 +1293,8 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     const nextStep = Boolean(state.cooking.recipe) && /^(?:(?:ok(?:ay)?|yes)[,\s]+)?(?:please\s+)?(?:next(?:\s+step)?|(?:go|move)(?:\s+on)?\s+to\s+(?:the\s+)?next(?:\s+step)?|what['’]?s\s+next)(?:\s+please)?[.!?]*$/i.test(text);
     const previousStep = Boolean(state.cooking.recipe) && /^(?:(?:ok(?:ay)?|yes)[,\s]+)?(?:please\s+)?(?:(?:go\s+)?back(?:\s+(?:a|one)\s+step)?|previous(?:\s+step)?|step\s+before|before\s+that)(?:\s+please)?[.!?]*$/i.test(text);
     const startStep = Boolean(state.cooking.recipe) && /^start(?:\s+cooking)?[.!?]*$/i.test(text);
-    if (nextStep || previousStep || startStep) setView("recipe");
-    logScrollTop = nextStep || previousStep || startStep;
+    if (nextStep || previousStep || startStep || options.scrollTop) setView("recipe");
+    logScrollTop = nextStep || previousStep || startStep || Boolean(options.scrollTop);
     unlockAudio(); stopSpeaking(); state.muteReply = false;
     state.awaitingReply = true;
     const bubble = addMsg("cook", text);
@@ -1904,7 +1904,7 @@ dialog button:disabled { cursor: wait; opacity: 0.6; }
     if (name) ask(`Let's make ${name}`, { noFrames: true, openRecipe: true });
   });
   els.ideasButton.addEventListener("click", () => ask(state.suggestions?.length
-    ? "Give me 2 different ideas" : "Give me 2 ideas for what to cook", { noFrames: true }));
+    ? "Give me 2 different ideas" : "Give me 2 ideas for what to cook", { noFrames: true, scrollTop: true }));
 
   let recipesLoaded = null;
   let recipeOptions = [];
